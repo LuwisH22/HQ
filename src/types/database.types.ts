@@ -25,6 +25,8 @@ export interface Database {
           tagline: string | null
           logo_url: string | null
           timezone: string
+          /** Sole source of truth for ownership. Never derived from a role. */
+          owner_id: string
           created_at: string
           updated_at: string
           deleted_at: string | null
@@ -114,6 +116,7 @@ export interface Database {
           description: string | null
           rank: number
           is_system: boolean
+          created_by: string | null
           created_at: string
           updated_at: string
         }
@@ -281,6 +284,49 @@ export interface Database {
           },
         ]
       }
+      member_roles: {
+        Row: {
+          member_id: string
+          role_id: string
+          assigned_by: string | null
+          assigned_at: string
+        }
+        Insert: {
+          member_id: string
+          role_id: string
+          assigned_by?: string | null
+          assigned_at?: string
+        }
+        Update: {
+          member_id?: string
+          role_id?: string
+          assigned_by?: string | null
+          assigned_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'member_roles_member_id_fkey'
+            columns: ['member_id']
+            isOneToOne: false
+            referencedRelation: 'organization_members'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'member_roles_role_id_fkey'
+            columns: ['role_id']
+            isOneToOne: false
+            referencedRelation: 'roles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'member_roles_assigned_by_fkey'
+            columns: ['assigned_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<never, never>
     Functions: {
@@ -303,6 +349,34 @@ export interface Database {
           p_expires_in_days?: number
         }
         Returns: Database['public']['Tables']['invitations']['Row']
+      }
+      is_org_owner: { Args: { p_organization_id: string }; Returns: boolean }
+      create_role: {
+        Args: {
+          p_organization_id: string
+          p_name: string
+          p_description?: string | null
+          p_rank?: number
+        }
+        Returns: string
+      }
+      update_role: {
+        Args: { p_role_id: string; p_name: string; p_description?: string | null }
+        Returns: undefined
+      }
+      set_role_rank: { Args: { p_role_id: string; p_rank: number }; Returns: undefined }
+      delete_role: { Args: { p_role_id: string }; Returns: undefined }
+      set_role_permissions: {
+        Args: { p_role_id: string; p_permission_keys: string[] }
+        Returns: undefined
+      }
+      assign_role_to_member: {
+        Args: { p_member_id: string; p_role_id: string }
+        Returns: undefined
+      }
+      unassign_role_from_member: {
+        Args: { p_member_id: string; p_role_id: string }
+        Returns: undefined
       }
     }
     Enums: {
@@ -328,3 +402,4 @@ export type PermissionRow = Tables<'permissions'>
 export type OrganizationMemberRow = Tables<'organization_members'>
 export type InvitationRow = Tables<'invitations'>
 export type AuditLogRow = Tables<'audit_logs'>
+export type MemberRoleRow = Tables<'member_roles'>

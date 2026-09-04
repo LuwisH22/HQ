@@ -9,8 +9,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -42,7 +41,9 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
   const canManage = usePermission('members.manage')
   const canRemove = usePermission('members.remove')
 
-  const actorRank = membership?.role.rank
+  // The owner outranks every possible role; otherwise authority is the most
+  // authoritative role held. Mirrors my_role_rank() in Postgres.
+  const actorRank = membership?.isOwner ? -1 : membership?.role.rank
   const isSelf = membership?.membershipId === member.id
   const mayAct = canActOnRank(actorRank, member.role.rank, { isSelf })
   const presence = presenceFrom(member.profile.lastSeenAt)
@@ -58,10 +59,19 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
     ])
   }
 
-  const roleMutation = useMutation({
-    mutationFn: (roleId: string) => organizationService.updateMemberRole(member.id, roleId),
+  const assignMutation = useMutation({
+    mutationFn: (roleId: string) => organizationService.assignRole(member.id, roleId),
     onSuccess: async () => {
-      toast.success(`${displayNameFor(member.profile)} role updated.`)
+      toast.success(`${displayNameFor(member.profile)} role added.`)
+      await invalidate()
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+
+  const unassignMutation = useMutation({
+    mutationFn: (roleId: string) => organizationService.unassignRole(member.id, roleId),
+    onSuccess: async () => {
+      toast.success(`${displayNameFor(member.profile)} role removed.`)
       await invalidate()
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -86,7 +96,7 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
     onError: (error) => toast.error(errorMessage(error)),
   })
 
-  const busy = roleMutation.isPending || statusMutation.isPending || removeMutation.isPending
+  const busy = assignMutation.isPending || unassignMutation.isPending || statusMutation.isPending || removeMutation.isPending
   const showMenu = (canManage || canRemove) && mayAct && !isSelf
 
   // Only roles at or below the viewer's own authority may be assigned.
@@ -126,6 +136,20 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
         {member.role.name}
       </Badge>
 
+      {/* Additional roles. The primary badge above is only the most
+          authoritative one; permissions are the union of them all. */}
+      {member.roles.length > 1 ? (
+        <span className="hidden shrink-0 gap-1 sm:flex">
+          {member.roles
+            .filter((role) => role.id !== member.role.id)
+            .map((role) => (
+              <Badge key={role.id} variant="secondary">
+                {role.name}
+              </Badge>
+            ))}
+        </span>
+      ) : null}
+
       {showMenu ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -142,19 +166,27 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
           <DropdownMenuContent align="end" className="w-52">
             {canManage && assignableRoles.length > 0 ? (
               <>
-                <DropdownMenuLabel>Change role</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={member.role.id}
-                  onValueChange={(roleId) => {
-                    if (roleId !== member.role.id) roleMutation.mutate(roleId)
-                  }}
-                >
-                  {assignableRoles.map((role) => (
-                    <DropdownMenuRadioItem key={role.id} value={role.id}>
+                <DropdownMenuLabel>Roles</DropdownMenuLabel>
+                {/* A member may hold several roles; their permissions are the
+                    union. Unchecking the last one is refused by the database,
+                    so the final held role is not offered as removable. */}
+                {assignableRoles.map((role) => {
+                  const held = member.roles.some((r) => r.id === role.id)
+                  const isLastHeld = held && member.roles.length === 1
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={role.id}
+                      checked={held}
+                      disabled={isLastHeld}
+                      onCheckedChange={(next: boolean) => {
+                        if (next && !held) assignMutation.mutate(role.id)
+                        else if (!next && held && !isLastHeld) unassignMutation.mutate(role.id)
+                      }}
+                    >
                       {role.name}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
+                    </DropdownMenuCheckboxItem>
+                  )
+                })}
                 <DropdownMenuSeparator />
               </>
             ) : null}

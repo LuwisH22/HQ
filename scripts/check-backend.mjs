@@ -140,6 +140,16 @@ const HELPERS = [
   ['create_invitation', { p_organization_id: ORG, p_email: 'x@y.z', p_role_id: ORG, p_token: 't' }],
   ['accept_invitation', { p_token: 'nope' }],
   ['revoke_invitation', { p_invitation_id: ORG }],
+  // Phase 1.5 · B1. Every one of these can change who may do what, so an
+  // anonymous caller must not reach them at all.
+  ['is_org_owner', { p_organization_id: ORG }],
+  ['create_role', { p_organization_id: ORG, p_name: 'probe', p_rank: 900 }],
+  ['update_role', { p_role_id: ORG, p_name: 'probe' }],
+  ['set_role_rank', { p_role_id: ORG, p_rank: 900 }],
+  ['delete_role', { p_role_id: ORG }],
+  ['set_role_permissions', { p_role_id: ORG, p_permission_keys: ['organization.view'] }],
+  ['assign_role_to_member', { p_member_id: ORG, p_role_id: ORG }],
+  ['unassign_role_from_member', { p_member_id: ORG, p_role_id: ORG }],
 ]
 for (const [fn, args] of HELPERS) {
   const { error } = await supabase.rpc(fn, args)

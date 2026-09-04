@@ -137,15 +137,25 @@ const org = (orgs ?? [])[0]
 
 const { data: roles, error: roleError } = await supabase
   .from('roles')
-  .select('id, key, rank, is_system')
+  .select('id, key, rank, is_system, created_by')
   .eq('organization_id', org?.id ?? '')
   .order('rank')
 check('roles readable', !roleError, roleError?.message ?? '')
-check('exactly 6 roles materialised', (roles ?? []).length === 6, `got ${String((roles ?? []).length)}`)
-check('all marked is_system', (roles ?? []).every((r) => r.is_system === true))
+
+// Custom roles are a first-class feature now, so the organization may hold any
+// number of them. What must remain true is that the six provisioned roles are
+// present and correctly ranked — not that nothing else exists.
+const provisioned = (roles ?? []).filter((r) => r.is_system === true)
+check('the six provisioned roles are present', provisioned.length === 6,
+  `${String(provisioned.length)} provisioned, ${String((roles ?? []).length)} total`)
 check(
-  'ranks match the templates',
-  JSON.stringify((roles ?? []).map((r) => [r.key, r.rank])) === JSON.stringify(EXPECTED_TEMPLATES),
+  'provisioned ranks are unchanged',
+  JSON.stringify(provisioned.map((r) => [r.key, r.rank])) === JSON.stringify(EXPECTED_TEMPLATES),
+)
+check(
+  'custom roles are not marked as provisioned',
+  (roles ?? []).every((r) => r.is_system === true || r.created_by !== null),
+  'is_system marks provenance only; it grants nothing',
 )
 
 // --- role -> permission matrix --------------------------------------------
@@ -199,7 +209,13 @@ check('caller is a member', Boolean(self))
 
 const { data: audit } = await supabase.from('audit_logs').select('action, summary').order('created_at', { ascending: false }).limit(5)
 check('audit log readable with audit.read', Array.isArray(audit), `${String((audit ?? []).length)} entr(y|ies)`)
-check('bootstrap recorded organization.created', (audit ?? []).some((a) => a.action === 'organization.created'))
+// Query for it rather than hoping it is still in the most recent few rows —
+// every invitation and role edit pushes it further down the log.
+const { count: bootstrapCount } = await supabase
+  .from('audit_logs')
+  .select('*', { count: 'exact', head: true })
+  .eq('action', 'organization.created')
+check('bootstrap recorded organization.created', (bootstrapCount ?? 0) >= 1)
 
 // --- guards (every one of these MUST be refused) --------------------------
 console.log('\nprivilege guards (each write below must be refused)')
@@ -210,7 +226,11 @@ if (self && playerRole) {
     .from('organization_members')
     .update({ role_id: playerRole.id })
     .eq('id', self.id)
-  check('last owner cannot be demoted', Boolean(error), error ? error.message.slice(0, 60) : 'ACCEPTED — GUARD FAILED')
+  check(
+    'derived primary role is not client-writable',
+    Boolean(error),
+    error ? error.message.slice(0, 60) : 'ACCEPTED — DERIVED COLUMN IS WRITABLE',
+  )
 }
 if (self) {
   const { error } = await supabase
@@ -244,6 +264,167 @@ if (self) {
     p_owner_id: userId,
   })
   check('bootstrap_organization not callable by a member', Boolean(error), error ? `blocked (${error.code ?? ''})` : 'ACCEPTED — SELF-SERVE ORGS POSSIBLE')
+}
+
+// --- B1 · ownership and the dynamic role model -----------------------------
+console.log('\nB1 · ownership is a column, not a role')
+
+const { data: orgRow } = await supabase
+  .from('organizations')
+  .select('id, owner_id')
+  .eq('id', org?.id ?? '')
+  .maybeSingle()
+
+check('organizations.owner_id is readable', Boolean(orgRow?.owner_id))
+check('caller is the recorded owner', orgRow?.owner_id === userId)
+
+// The owner short-circuit means authority survives any role edit.
+check('owner resolves to the whole catalogue', mineKeys.length === srcKeys.length,
+  `${String(mineKeys.length)}/${String(srcKeys.length)}`)
+
+const primaryRole = (roles ?? []).find((r) => r.id === self?.role_id)
+const { data: myAssignments } = await supabase
+  .from('member_roles')
+  .select('role_id')
+  .eq('member_id', self?.id ?? '')
+check('member_roles is populated for the owner', (myAssignments ?? []).length >= 1,
+  `${String((myAssignments ?? []).length)} role(s)`)
+check(
+  'derived primary role agrees with member_roles',
+  (myAssignments ?? []).some((a) => a.role_id === self?.role_id),
+  primaryRole ? `primary = ${primaryRole.key}` : 'no primary role',
+)
+
+console.log('\nB1 · name independence (creates a probe role, then removes it)')
+
+let probeRoleId = null
+{
+  // Deliberately named "Owner": if names carried meaning, this would be a
+  // privilege escalation.
+  const { data, error } = await supabase.rpc('create_role', {
+    p_organization_id: org?.id,
+    p_name: 'Owner',
+    p_description: 'verify-live probe; safe to delete',
+    p_rank: 900,
+  })
+  probeRoleId = typeof data === 'string' ? data : null
+  check('owner can create a custom role', !error && Boolean(probeRoleId), error?.message ?? '')
+}
+
+if (probeRoleId) {
+  const { data: after } = await supabase
+    .from('organizations')
+    .select('owner_id')
+    .eq('id', org?.id ?? '')
+    .maybeSingle()
+  check('creating a role named "Owner" does not move ownership', after?.owner_id === userId)
+
+  const { data: probePerms } = await supabase
+    .from('role_permissions')
+    .select('permission_key')
+    .eq('role_id', probeRoleId)
+  check('a role named "Owner" grants nothing by itself', (probePerms ?? []).length === 0,
+    `${String((probePerms ?? []).length)} permission(s)`)
+
+  {
+    const { error } = await supabase.rpc('update_role', {
+      p_role_id: probeRoleId,
+      p_name: 'Renamed Probe',
+      p_description: 'still harmless',
+    })
+    check('roles can be renamed', !error, error?.message ?? '')
+  }
+
+  {
+    const { data: after2 } = await supabase
+      .from('organizations')
+      .select('owner_id')
+      .eq('id', org?.id ?? '')
+      .maybeSingle()
+    check('renaming a role changes nothing about ownership', after2?.owner_id === userId)
+  }
+
+  // Delegation safety: an unknown key must be refused outright.
+  {
+    const { error } = await supabase.rpc('set_role_permissions', {
+      p_role_id: probeRoleId,
+      p_permission_keys: ['not.a_real_permission'],
+    })
+    check('unknown permission keys are refused', Boolean(error),
+      error ? error.message.slice(0, 50) : 'ACCEPTED — CATALOGUE NOT ENFORCED')
+  }
+
+  // A permission the owner does hold may be delegated.
+  {
+    const { error } = await supabase.rpc('set_role_permissions', {
+      p_role_id: probeRoleId,
+      p_permission_keys: ['organization.view'],
+    })
+    check('owner can delegate a permission they hold', !error, error?.message ?? '')
+  }
+}
+
+console.log('\nB1 · multi-role and the one-role minimum')
+
+if (probeRoleId && self) {
+  {
+    const { error } = await supabase.rpc('assign_role_to_member', {
+      p_member_id: self.id,
+      p_role_id: probeRoleId,
+    })
+    check('a second role can be assigned to a member', !error, error?.message ?? '')
+  }
+
+  const { data: nowRoles } = await supabase
+    .from('member_roles')
+    .select('role_id')
+    .eq('member_id', self.id)
+  check('member now holds multiple roles', (nowRoles ?? []).length >= 2,
+    `${String((nowRoles ?? []).length)} role(s)`)
+
+  const { data: memberAfter } = await supabase
+    .from('organization_members')
+    .select('role_id')
+    .eq('id', self.id)
+    .maybeSingle()
+  check(
+    'primary role stays the most authoritative one',
+    memberAfter?.role_id === self.role_id,
+    'rank 900 probe did not become primary',
+  )
+
+  {
+    const { error } = await supabase.rpc('unassign_role_from_member', {
+      p_member_id: self.id,
+      p_role_id: probeRoleId,
+    })
+    check('the extra role can be removed again', !error, error?.message ?? '')
+  }
+
+  // With one role left, removing it must be refused.
+  {
+    const { error } = await supabase.rpc('unassign_role_from_member', {
+      p_member_id: self.id,
+      p_role_id: self.role_id,
+    })
+    check('a member cannot be stripped of their last role', Boolean(error),
+      error ? error.message.slice(0, 50) : 'ACCEPTED — MEMBER LEFT ROLE-LESS')
+  }
+}
+
+console.log('\nB1 · member_roles is not directly writable')
+{
+  const { error } = await supabase
+    .from('member_roles')
+    .insert({ member_id: self?.id, role_id: probeRoleId })
+  check('member_roles has no client insert policy', Boolean(error),
+    error ? `blocked (${error.code ?? ''})` : 'ACCEPTED — ASSIGNMENT BYPASSES HIERARCHY')
+}
+
+// --- Clean up --------------------------------------------------------------
+if (probeRoleId) {
+  const { error } = await supabase.rpc('delete_role', { p_role_id: probeRoleId })
+  check('probe role deleted (cleanup)', !error, error?.message ?? '')
 }
 
 await supabase.auth.signOut()

@@ -128,16 +128,23 @@ describe('member CRUD', () => {
 })
 
 describe('authorization rules mirror the database guards', () => {
-  it('refuses to demote the last remaining owner', async () => {
+  it("lets the owner's roles change without affecting their authority", async () => {
+    // Ownership is a column on the organization, not a role. Demoting the
+    // owner is therefore harmless, and must not reduce what they can do —
+    // otherwise an administrator could lock an owner out of their own
+    // organization by editing roles.
     const members = await demoOrganizationService.listMembers('any')
     const owner = members.find((m) => m.role.key === 'owner')!
     const playerRole = (await demoOrganizationService.listRoles('any')).find(
       (r) => r.key === 'player',
     )!
 
-    await expect(demoOrganizationService.updateMemberRole(owner.id, playerRole.id)).rejects.toThrow(
-      /at least one active owner/i,
-    )
+    await demoOrganizationService.updateMemberRole(owner.id, playerRole.id)
+
+    const membership = await demoOrganizationService.getCurrentMembership('any')
+    expect(membership?.isOwner).toBe(true)
+    expect(membership?.role.key).toBe('player')
+    expect(membership?.permissions.can('organization.delete')).toBe(true)
   })
 
   it('refuses to suspend the last remaining owner', async () => {
@@ -145,7 +152,7 @@ describe('authorization rules mirror the database guards', () => {
     const owner = members.find((m) => m.role.key === 'owner')!
 
     await expect(demoOrganizationService.updateMemberStatus(owner.id, 'suspended')).rejects.toThrow(
-      /at least one active owner/i,
+      /owner cannot be deactivated/i,
     )
   })
 
@@ -154,7 +161,7 @@ describe('authorization rules mirror the database guards', () => {
     const owner = members.find((m) => m.role.key === 'owner')!
 
     await expect(demoOrganizationService.removeMember(owner.id)).rejects.toThrow(
-      /at least one active owner/i,
+      /owner cannot be removed/i,
     )
   })
 

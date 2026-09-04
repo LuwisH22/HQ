@@ -58,7 +58,10 @@ export interface OrganizationMember {
   organizationId: string
   status: MemberStatus
   joinedAt: string
+  /** Derived primary role: the most authoritative role held. Display only. */
   role: MemberRole
+  /** Every role held, most authoritative first. Source of truth. */
+  roles: MemberRole[]
   profile: MemberProfileSummary
 }
 
@@ -68,8 +71,22 @@ export interface CurrentMembership {
   organizationId: string
   status: MemberStatus
   joinedAt: string
+  /** Derived primary role. Authority comes from `permissions` and `rank`. */
   role: MemberRole
+  roles: MemberRole[]
+  /**
+   * Ownership is a column on the organization, never a role. The owner
+   * implicitly holds every permission, so no role edit can lock them out.
+   */
+  isOwner: boolean
   permissions: PermissionSet
+}
+
+/** Fields a role editor may set. `rank` is the only hierarchy signal. */
+export interface RoleInput {
+  name: string
+  description: string | null
+  rank: number
 }
 
 /** One capability, and which roles currently grant it. */
@@ -170,6 +187,18 @@ export interface OrganizationService {
   updateMemberStatus(membershipId: string, status: MemberStatus): Promise<void>
   removeMember(membershipId: string): Promise<void>
   updateOrganization(organizationId: string, patch: OrganizationPatch): Promise<OrganizationSummary>
+
+  // --- Role management (Phase 1.5 · B1) ---
+  // Every one of these is a SECURITY DEFINER routine in Postgres that
+  // re-checks permission, hierarchy and delegation. These wrappers exist for
+  // ergonomics, not for enforcement.
+  createRole(organizationId: string, input: RoleInput): Promise<string>
+  updateRole(roleId: string, name: string, description: string | null): Promise<void>
+  setRoleRank(roleId: string, rank: number): Promise<void>
+  deleteRole(roleId: string): Promise<void>
+  setRolePermissions(roleId: string, permissionKeys: readonly string[]): Promise<void>
+  assignRole(membershipId: string, roleId: string): Promise<void>
+  unassignRole(membershipId: string, roleId: string): Promise<void>
 }
 
 export interface ProfileService {

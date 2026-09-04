@@ -45,7 +45,7 @@ test('changes a member role and keeps it after a reload', async ({ page }) => {
 
   const row = page.getByRole('listitem').filter({ hasText: 'noorx' })
   await row.getByRole('button', { name: /Actions for/ }).click()
-  await page.getByRole('menuitemradio', { name: 'Coach' }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Coach' }).click()
 
   await expect(row.getByText('Coach')).toBeVisible()
 
@@ -65,12 +65,12 @@ test('creates an invitation and lists it as pending', async ({ page }) => {
   await expect(page.getByText('e2e.recruit@lfg.test')).toBeVisible()
 })
 
-test('refuses to demote the last owner, matching the database guard', async ({ page }) => {
+test('offers no self-management actions on your own row', async ({ page }) => {
   await enterDemo(page)
   await page.goto('/#/members')
 
-  // The owner is the signed-in user, so their row offers no actions menu —
-  // which is also what stops the last owner being demoted from the UI.
+  // Your own row offers no actions menu. Ownership itself is protected by
+  // organizations.owner_id, not by anything on this screen.
   const ownRow = page.getByRole('listitem').filter({ hasText: 'demo.owner@lfg.test' })
   await expect(ownRow).toHaveCount(1)
   await expect(ownRow.getByText('You', { exact: true })).toBeVisible()

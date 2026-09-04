@@ -1,27 +1,52 @@
-import { Fragment, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Check, Shield } from '@phosphor-icons/react'
+import { Fragment, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { Check, Crown, PencilSimple, Plus, Shield, Trash } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CardSkeleton, ErrorState, ForbiddenState } from '@/components/common/states'
 import { organizationService } from '@/services/organization.service'
-import type { PermissionMatrixRow } from '@/services/organization.service'
+import type { MemberRole, PermissionMatrixRow } from '@/services/organization.service'
 import { queryKeys } from '@/lib/query-keys'
+import { errorMessage } from '@/lib/errors'
 import { useWorkspace } from '@/hooks/use-workspace'
 import { usePermission } from '@/hooks/use-permission'
+import { RoleEditorDialog } from './RoleEditorDialog'
 
 /**
- * Read-only view of the permission matrix.
+ * Role management.
  *
- * Editing roles is possible in the database today — the RLS policies and grants
- * for `roles` and `role_permissions` are in place — but the editing UI is
- * deliberately out of Phase 1 scope. Showing the matrix now means an admin can
- * see exactly what each role grants without guessing from role names.
+ * Role names are free text and carry no authority whatsoever — a role called
+ * "Owner" grants nothing, and renaming one changes nothing. Two things decide
+ * what a member may do: `rank`, which orders authority, and the permissions
+ * attached to each role they hold.
+ *
+ * Ownership is deliberately absent from this screen. It lives on the
+ * organization itself, so it survives any rename, reorder or deletion here.
  */
 export function RolesSettings() {
-  const { organization } = useWorkspace()
+  const { organization, membership } = useWorkspace()
   const canView = usePermission('roles.view')
+  const canManage = usePermission('roles.manage')
   const organizationId = organization?.id
+  const queryClient = useQueryClient()
+
+  const [editing, setEditing] = useState<MemberRole | null>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
+
+  // -1 for the owner, so every role sits below them.
+  const actorRank = membership?.isOwner ? -1 : (membership?.role.rank ?? 1000)
+
+  const deleteMutation = useMutation({
+    mutationFn: (roleId: string) => organizationService.deleteRole(roleId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.roles.all(organizationId ?? '') })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.permissions.catalog() })
+      toast.success('Role deleted.')
+    },
+    onError: (error: unknown) => toast.error(errorMessage(error)),
+  })
 
   const rolesQuery = useQuery({
     queryKey: queryKeys.roles.all(organizationId ?? 'none'),
@@ -79,30 +104,95 @@ export function RolesSettings() {
           <Shield className="text-muted-foreground size-3.5" aria-hidden="true" />
           <CardTitle className="flex-1">Roles</CardTitle>
           <Badge variant="outline">{roles.length}</Badge>
+          {canManage ? (
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditing(null)
+                setEditorOpen(true)
+              }}
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+              New role
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent>
-          <ul className="divide-border divide-y">
-            {roles.map((role) => (
-              <li key={role.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm leading-tight font-medium">{role.name}</p>
-                    {role.isSystem ? <Badge variant="secondary">System</Badge> : null}
+          <ul className="divide-border divide-y" aria-label="Roles">
+            {roles.map((role) => {
+              // You may only manage roles strictly below your own authority.
+              // Postgres enforces the same rule; this only hides what would fail.
+              const manageable = canManage && role.rank > actorRank
+              return (
+                <li key={role.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm leading-tight font-medium">{role.name}</p>
+                      {role.isSystem ? <Badge variant="secondary">Provisioned</Badge> : null}
+                    </div>
+                    {role.description ? (
+                      <p className="text-2xs text-muted-foreground mt-0.5 leading-relaxed">
+                        {role.description}
+                      </p>
+                    ) : null}
                   </div>
-                  {role.description ? (
-                    <p className="text-2xs text-muted-foreground mt-0.5 leading-relaxed">
-                      {role.description}
-                    </p>
+                  <span className="text-2xs text-muted-foreground shrink-0 font-mono">
+                    rank {role.rank}
+                  </span>
+                  {manageable ? (
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Edit ${role.name}`}
+                        onClick={() => {
+                          setEditing(role)
+                          setEditorOpen(true)
+                        }}
+                      >
+                        <PencilSimple className="size-3.5" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Delete ${role.name}`}
+                        loading={deleteMutation.isPending && deleteMutation.variables === role.id}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Delete the role "${role.name}"? Members who hold no other role must be reassigned first.`,
+                            )
+                          ) {
+                            deleteMutation.mutate(role.id)
+                          }
+                        }}
+                      >
+                        <Trash className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    </div>
                   ) : null}
-                </div>
-                <span className="text-2xs text-muted-foreground shrink-0 font-mono">
-                  rank {role.rank}
-                </span>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
+
+          <p className="text-2xs text-muted-foreground mt-3 flex items-start gap-1.5 leading-relaxed">
+            <Crown className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+            Ownership is a property of the organization, not of a role. Renaming or deleting a role
+            never changes who owns this workspace.
+          </p>
         </CardContent>
       </Card>
+
+      {organizationId ? (
+        <RoleEditorDialog
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          role={editing}
+          matrix={matrixQuery.data ?? []}
+          organizationId={organizationId}
+        />
+      ) : null}
 
       <Card>
         <CardHeader>

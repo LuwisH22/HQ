@@ -45,6 +45,13 @@ export const demoOrganizationService: OrganizationService = {
   updateMemberStatus: unreachable,
   removeMember: unreachable,
   updateOrganization: unreachable,
+  createRole: unreachable,
+  updateRole: unreachable,
+  setRoleRank: unreachable,
+  deleteRole: unreachable,
+  setRolePermissions: unreachable,
+  assignRole: unreachable,
+  unassignRole: unreachable,
 }
 
 export const demoProfileService: ProfileService = {

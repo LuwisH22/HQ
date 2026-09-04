@@ -52,6 +52,12 @@ export interface DemoRole {
 }
 
 export interface DemoMember {
+  /**
+   * Every role held. Optional so a store written before Phase 1.5 still
+   * loads: readers fall back to `[roleId]`, which is exactly what the old
+   * single-role shape meant.
+   */
+  roleIds?: string[]
   id: string
   organizationId: string
   userId: string

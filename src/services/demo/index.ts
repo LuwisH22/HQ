@@ -1,5 +1,11 @@
 import { AppError } from '@/lib/errors'
-import { canActOnRank, canGrantRank, isPermission, PermissionSet } from '@/lib/permissions'
+import {
+  canActOnRank,
+  canGrantRank,
+  isPermission,
+  PERMISSIONS,
+  PermissionSet,
+} from '@/lib/permissions'
 import { endDemoSession, isDemoSessionActive, startDemoSession } from '@/lib/demo-mode'
 import type { MemberStatus } from '@/types/database.types'
 import type {
@@ -96,10 +102,52 @@ function memberOf(userId: string): DemoMember | undefined {
   return db().members.find((m) => m.userId === userId)
 }
 
+/**
+ * Every role a member holds, most authoritative first.
+ *
+ * `roleId` is the derived primary role, mirroring the trigger-maintained
+ * column in Postgres. `roleIds` is the source of truth.
+ */
+function rolesOf(member: DemoMember): string[] {
+  const ids = member.roleIds ?? [member.roleId]
+  return [...ids].sort((a, b) => roleById(a).rank - roleById(b).rank)
+}
+
+/** Keeps the derived primary role in step, as tg_sync_primary_role does. */
+function syncPrimaryRole(member: DemoMember): void {
+  const first = rolesOf(member)[0]
+  if (first) member.roleId = first
+}
+
+/** True when the member owns the organization. Never derived from a role. */
+function isOwnerUser(userId: string): boolean {
+  return userId === DEMO_OWNER_PROFILE_ID
+}
+
+/** Effective rank: -1 for the owner, else the most authoritative role held. */
+function rankOfMember(member: DemoMember): number {
+  if (isOwnerUser(member.userId)) return -1
+  const ranks = rolesOf(member).map((id) => roleById(id).rank)
+  return ranks.length > 0 ? Math.min(...ranks) : 1000
+}
+
 function currentRank(): number | null {
   const membership = memberOf(requireCurrentUserId())
   if (!membership || membership.status !== 'active') return null
-  return roleById(membership.roleId).rank
+  return rankOfMember(membership)
+}
+
+function permissionsForMember(member: DemoMember): PermissionSet {
+  // The owner implicitly holds everything, so no permission edit can lock
+  // them out of their own organization.
+  if (isOwnerUser(member.userId)) return new PermissionSet(PERMISSIONS)
+
+  const held = new Set(rolesOf(member))
+  const keys = db()
+    .rolePermissions.filter((rp) => held.has(rp.roleId))
+    .map((rp) => rp.permissionKey)
+    .filter(isPermission)
+  return new PermissionSet(keys)
 }
 
 function permissionsFor(roleId: string): PermissionSet {
@@ -113,16 +161,27 @@ function permissionsFor(roleId: string): PermissionSet {
 /** Mirrors `has_org_permission`. */
 function assertPermission(permission: Parameters<PermissionSet['can']>[0], message: string): void {
   const membership = memberOf(requireCurrentUserId())
-  if (!membership || !permissionsFor(membership.roleId).can(permission)) {
+  if (!membership || !permissionsForMember(membership).can(permission)) {
     throw new AppError('forbidden', message)
   }
+}
+
+/** Mirrors assert_can_manage_role: strictly below the actor's authority. */
+function assertCanManageRole(roleId: string): DemoRole {
+  assertPermission('roles.manage', 'You do not have permission to manage roles.')
+  const role = roleById(roleId)
+  const actorRank = currentRank() ?? 1000
+  if (role.rank <= actorRank) {
+    throw new AppError('forbidden', 'You can only manage roles below your own authority')
+  }
+  return role
 }
 
 /** Mirrors the rank and last-owner guards in `tg_guard_member_changes`. */
 function assertCanActOnMember(target: DemoMember, options: { newRoleId?: string } = {}): void {
   const actorId = requireCurrentUserId()
   const actorRank = currentRank()
-  const targetRank = roleById(target.roleId).rank
+  const targetRank = rankOfMember(target)
   const isSelf = target.userId === actorId
 
   if (actorRank === null) {
@@ -140,15 +199,24 @@ function assertCanActOnMember(target: DemoMember, options: { newRoleId?: string 
     }
   }
 
-  // The organization must always retain at least one active owner.
-  if (targetRank === 0) {
-    const otherActiveOwners = db().members.filter(
-      (m) => m.id !== target.id && m.status === 'active' && roleById(m.roleId).rank === 0,
-    ).length
-    if (otherActiveOwners === 0) {
-      throw new AppError('validation', 'The organization must keep at least one active owner')
-    }
-  }
+  // Nothing about ownership is checked here: ownership is a property of the
+  // organization, not of a role, so changing the owner's roles costs them
+  // nothing. Removal and deactivation are guarded by assertOwnerSurvives.
+}
+
+/**
+ * Mirrors the owner branch of `tg_guard_member_changes`: the owner cannot be
+ * removed or deactivated, by anyone, including themselves. There is exactly
+ * one owner, named on the organization, so the only way out is a transfer.
+ */
+function assertOwnerSurvives(target: DemoMember, action: 'remove' | 'deactivate'): void {
+  if (!isOwnerUser(target.userId)) return
+  throw new AppError(
+    'validation',
+    action === 'remove'
+      ? 'The organization owner cannot be removed. Transfer ownership first.'
+      : 'The organization owner cannot be deactivated. Transfer ownership first.',
+  )
 }
 
 function displayName(userId: string | null): string {
@@ -266,7 +334,9 @@ export const demoOrganizationService: OrganizationService = {
       status: membership.status,
       joinedAt: membership.joinedAt,
       role: toMemberRole(roleById(membership.roleId)),
-      permissions: permissionsFor(membership.roleId),
+      roles: rolesOf(membership).map((id) => toMemberRole(roleById(id))),
+      isOwner: isOwnerUser(membership.userId),
+      permissions: permissionsForMember(membership),
     }
   },
 
@@ -285,6 +355,7 @@ export const demoOrganizationService: OrganizationService = {
           status: member.status,
           joinedAt: member.joinedAt,
           role: toMemberRole(roleById(member.roleId)),
+          roles: rolesOf(member).map((id) => toMemberRole(roleById(id))),
           profile: {
             id: profile.id,
             email: profile.email,
@@ -332,12 +403,166 @@ export const demoOrganizationService: OrganizationService = {
     assertCanActOnMember(member, { newRoleId: roleId })
 
     const previous = roleById(member.roleId).name
-    member.roleId = roleId
+    member.roleIds = [roleId]
+    syncPrimaryRole(member)
     recordAudit(
       'member.role_changed',
       'organization_member',
       member.id,
       `${displayName(member.userId)} changed from ${previous} to ${roleById(roleId).name}`,
+    )
+    persist()
+  },
+
+  async createRole(_organizationId, input) {
+    await latency()
+    assertPermission('roles.manage', 'You do not have permission to manage roles.')
+
+    const actorRank = currentRank() ?? 1000
+    if (input.rank <= actorRank) {
+      throw new AppError('forbidden', 'You cannot create a role at or above your own authority')
+    }
+
+    const id = crypto.randomUUID()
+    const organizationId = db().organization.id
+    db().roles.push({
+      id,
+      organizationId,
+      key: `custom_${id.slice(0, 8)}`,
+      name: input.name,
+      description: input.description,
+      rank: input.rank,
+      isSystem: false,
+    })
+    recordAudit('role.created', 'role', id, `Role ${input.name} created`)
+    persist()
+    return id
+  },
+
+  async updateRole(roleId, name, description) {
+    await latency()
+    const role = assertCanManageRole(roleId)
+    const previous = role.name
+    role.name = name
+    role.description = description
+    recordAudit('role.updated', 'role', roleId, `Role renamed from ${previous} to ${name}`)
+    persist()
+  },
+
+  async setRoleRank(roleId, rank) {
+    await latency()
+    const role = assertCanManageRole(roleId)
+    const actorRank = currentRank() ?? 1000
+    if (rank <= actorRank) {
+      throw new AppError('forbidden', 'You cannot move a role to or above your own authority')
+    }
+    role.rank = rank
+    for (const member of db().members) syncPrimaryRole(member)
+    recordAudit('role.updated', 'role', roleId, `Role ${role.name} moved to rank ${String(rank)}`)
+    persist()
+  },
+
+  async deleteRole(roleId) {
+    await latency()
+    const role = assertCanManageRole(roleId)
+
+    const stranded = db().members.filter((m) => {
+      const held = rolesOf(m)
+      return held.includes(roleId) && held.length === 1
+    }).length
+    if (stranded > 0) {
+      throw new AppError(
+        'validation',
+        `Cannot delete this role: ${String(stranded)} member(s) hold no other role.`,
+      )
+    }
+
+    for (const member of db().members) {
+      member.roleIds = rolesOf(member).filter((id) => id !== roleId)
+      syncPrimaryRole(member)
+    }
+    const store = db()
+    store.roles = store.roles.filter((r) => r.id !== roleId)
+    store.rolePermissions = store.rolePermissions.filter((rp) => rp.roleId !== roleId)
+    recordAudit('role.deleted', 'role', roleId, `Role ${role.name} deleted`)
+    persist()
+  },
+
+  async setRolePermissions(roleId, permissionKeys) {
+    await latency()
+    const role = assertCanManageRole(roleId)
+
+    const actor = memberOf(requireCurrentUserId())
+    const held = actor ? permissionsForMember(actor) : PermissionSet.empty()
+    const existing = new Set(
+      db()
+        .rolePermissions.filter((rp) => rp.roleId === roleId)
+        .map((rp) => rp.permissionKey),
+    )
+
+    for (const key of permissionKeys) {
+      if (!isPermission(key)) {
+        throw new AppError('validation', `Unknown permission ${key}`)
+      }
+      // Delegation safety: you cannot grant what you do not hold.
+      if (!existing.has(key) && !held.can(key)) {
+        throw new AppError('forbidden', `You cannot grant a permission you do not hold: ${key}`)
+      }
+    }
+
+    const store = db()
+    store.rolePermissions = store.rolePermissions.filter((rp) => rp.roleId !== roleId)
+    for (const key of permissionKeys) {
+      if (isPermission(key)) store.rolePermissions.push({ roleId, permissionKey: key })
+    }
+    recordAudit('role.permissions_changed', 'role', roleId, `Permissions updated for ${role.name}`)
+    persist()
+  },
+
+  async assignRole(membershipId, roleId) {
+    await latency()
+    assertPermission('members.manage', 'You do not have permission to manage members.')
+
+    const member = db().members.find((m) => m.id === membershipId)
+    if (!member) throw new AppError('not_found', 'That member no longer exists.')
+
+    assertCanActOnMember(member, { newRoleId: roleId })
+
+    const held = rolesOf(member)
+    if (!held.includes(roleId)) {
+      member.roleIds = [...held, roleId]
+      syncPrimaryRole(member)
+      recordAudit(
+        'member.role_changed',
+        'organization_member',
+        member.id,
+        `Role ${roleById(roleId).name} assigned`,
+      )
+      persist()
+    }
+  },
+
+  async unassignRole(membershipId, roleId) {
+    await latency()
+    assertPermission('members.manage', 'You do not have permission to manage members.')
+
+    const member = db().members.find((m) => m.id === membershipId)
+    if (!member) throw new AppError('not_found', 'That member no longer exists.')
+
+    assertCanActOnMember(member)
+
+    const remaining = rolesOf(member).filter((id) => id !== roleId)
+    if (remaining.length === 0) {
+      throw new AppError('validation', 'A member must keep at least one role')
+    }
+
+    member.roleIds = remaining
+    syncPrimaryRole(member)
+    recordAudit(
+      'member.role_changed',
+      'organization_member',
+      member.id,
+      `Role ${roleById(roleId).name} removed`,
     )
     persist()
   },
@@ -350,6 +575,7 @@ export const demoOrganizationService: OrganizationService = {
     if (!member) throw new AppError('not_found', 'That member no longer exists.')
 
     assertCanActOnMember(member)
+    if (status !== 'active') assertOwnerSurvives(member, 'deactivate')
 
     member.status = status
     recordAudit(
@@ -372,6 +598,7 @@ export const demoOrganizationService: OrganizationService = {
       assertPermission('members.remove', 'You do not have permission to remove members.')
     }
     assertCanActOnMember(member)
+    assertOwnerSurvives(member, 'remove')
 
     const name = displayName(member.userId)
     database.members = database.members.filter((m) => m.id !== membershipId)
