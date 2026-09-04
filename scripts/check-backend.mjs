@@ -171,6 +171,10 @@ const HELPERS = [
   ['reorder_channels', { p_organization_id: ORG, p_ids: [ORG] }],
   ['set_channel_override', { p_channel_id: ORG, p_role_id: ORG,
                              p_permission_key: 'channels.view', p_effect: 'allow' }],
+  // Phase 2 · C1.
+  ['delete_message', { p_message_id: ORG, p_reason: 'probe' }],
+  ['pin_message', { p_message_id: ORG, p_pinned: true }],
+  ['can_join_channel_topic', { p_topic: 'channel:' + ORG, p_permission: 'channels.view' }],
 ]
 for (const [fn, args] of HELPERS) {
   const { error } = await supabase.rpc(fn, args)

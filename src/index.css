@@ -268,3 +268,19 @@
     background: var(--primary);
   }
 }
+
+/* Typing indicator dots. Small vertical travel and a low opacity floor: it
+   should read as activity at the edge of vision, not compete with the
+   conversation. */
+@keyframes lfg-typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 0.9;
+    transform: translateY(-2px);
+  }
+}

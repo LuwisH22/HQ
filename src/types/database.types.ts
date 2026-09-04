@@ -436,6 +436,48 @@ export interface Database {
           },
         ]
       }
+      messages: {
+        Row: {
+          id: string
+          channel_id: string
+          author_id: string | null
+          body: string
+          pinned_at: string | null
+          pinned_by: string | null
+          edited_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          created_at: string
+        }
+        /**
+         * Unlike the channel tables, messages are inserted directly: the
+         * INSERT policy checks author_id against auth.uid(), so a forged
+         * author is refused by the database rather than by this type.
+         */
+        Insert: {
+          channel_id: string
+          author_id: string
+          body: string
+        }
+        /** A trigger refuses every column but the body from a client. */
+        Update: { body: string }
+        Relationships: [
+          {
+            foreignKeyName: 'messages_channel_id_fkey'
+            columns: ['channel_id']
+            isOneToOne: false
+            referencedRelation: 'channels'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'messages_author_id_fkey'
+            columns: ['author_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<never, never>
     Functions: {
@@ -542,6 +584,18 @@ export interface Database {
         Args: { p_organization_id: string; p_ids: string[] }
         Returns: undefined
       }
+      delete_message: {
+        Args: { p_message_id: string; p_reason?: string | null }
+        Returns: undefined
+      }
+      pin_message: {
+        Args: { p_message_id: string; p_pinned?: boolean }
+        Returns: undefined
+      }
+      can_join_channel_topic: {
+        Args: { p_topic: string; p_permission: string }
+        Returns: boolean
+      }
       set_channel_override: {
         Args: {
           p_channel_id: string
@@ -581,3 +635,4 @@ export type ModerationActionRow = Tables<'moderation_actions'>
 export type ChannelRow = Tables<'channels'>
 export type ChannelCategoryRow = Tables<'channel_categories'>
 export type ChannelOverrideRow = Tables<'channel_permission_overrides'>
+export type MessageRow = Tables<'messages'>

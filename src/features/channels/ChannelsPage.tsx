@@ -19,8 +19,8 @@ import { usePermission } from '@/hooks/use-permission'
  * Allow for are absent from the response, not filtered out afterwards. There
  * is nothing to hide client-side and nothing to guess.
  *
- * Reading and writing messages is Phase 2; this is the structure they will
- * hang from.
+ * Selecting one opens its conversation; reactions, threads and unread state
+ * are still to come.
  */
 export function ChannelsPage() {
   const { organization } = useWorkspace()
@@ -52,7 +52,11 @@ export function ChannelsPage() {
         name: category.name,
         channels: channels.filter((c) => c.categoryId === category.id),
       })),
-      { id: 'uncategorised', name: 'Uncategorised', channels: channels.filter((c) => !c.categoryId) },
+      {
+        id: 'uncategorised',
+        name: 'Uncategorised',
+        channels: channels.filter((c) => !c.categoryId),
+      },
     ].filter((group) => group.channels.length > 0)
   }, [categoriesQuery.data, channelsQuery.data])
 
@@ -62,7 +66,7 @@ export function ChannelsPage() {
     <div className="space-y-4">
       <PageHeader
         title="Channels"
-        description="Where the organization talks. Messaging arrives in Phase 2."
+        description="Where the organization talks. Pick a channel to open the conversation."
         actions={
           canManage ? (
             <Button asChild size="sm" variant="outline">
@@ -109,22 +113,30 @@ export function ChannelsPage() {
             <CardContent>
               <ul className="divide-border divide-y" aria-label={`${group.name} channels`}>
                 {group.channels.map((channel) => (
-                  <li key={channel.id} className="flex items-center gap-3 py-2.5">
-                    {channel.isPrivate ? (
-                      <LockSimple
-                        className="text-muted-foreground size-3.5 shrink-0"
-                        aria-label="Private channel"
-                      />
-                    ) : (
-                      <Hash className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm leading-tight font-medium">{channel.name}</p>
-                      {channel.topic ? (
-                        <p className="text-2xs text-muted-foreground truncate">{channel.topic}</p>
-                      ) : null}
-                    </div>
-                    {channel.isPrivate ? <Badge variant="secondary">Private</Badge> : null}
+                  <li key={channel.id}>
+                    <Link
+                      to={`/channels/${channel.key}`}
+                      className="hover:bg-elevated -mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors duration-[140ms]"
+                    >
+                      {channel.isPrivate ? (
+                        <LockSimple
+                          className="text-muted-foreground size-3.5 shrink-0"
+                          aria-label="Private channel"
+                        />
+                      ) : (
+                        <Hash
+                          className="text-muted-foreground size-3.5 shrink-0"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm leading-tight font-medium">{channel.name}</p>
+                        {channel.topic ? (
+                          <p className="text-2xs text-muted-foreground truncate">{channel.topic}</p>
+                        ) : null}
+                      </div>
+                      {channel.isPrivate ? <Badge variant="secondary">Private</Badge> : null}
+                    </Link>
                   </li>
                 ))}
               </ul>

@@ -21,8 +21,20 @@ test.beforeEach(async ({ page }) => {
   await restoreMember(page)
 })
 
+/**
+ * A one-member organization is a legitimate state, not a failure: the second
+ * account can be removed at any time from the Supabase dashboard. Skipping
+ * says so out loud, where a green run would quietly claim moderation had been
+ * exercised when there was nobody to moderate.
+ */
+async function requireSecondMember(page: Page): Promise<void> {
+  const present = await otherMemberRow(page).count()
+  test.skip(present === 0, 'the organization has no member other than the owner')
+}
+
 async function restoreMember(page: Page): Promise<void> {
   const row = otherMemberRow(page)
+  if ((await row.count()) === 0) return
   const banned = await row.getByText('Banned').count()
   const suspended = await row.getByText(/Suspended/).count()
   if (banned === 0 && suspended === 0) return
@@ -46,6 +58,8 @@ function otherMemberRow(page: Page) {
 }
 
 test('suspends a member with a reason, then lifts it', async ({ page }) => {
+  await requireSecondMember(page)
+
   const row = otherMemberRow(page)
   await expect(row).toBeVisible()
 
@@ -73,6 +87,8 @@ test('suspends a member with a reason, then lifts it', async ({ page }) => {
 })
 
 test('requires typing BAN before it will ban, then lifts the ban', async ({ page }) => {
+  await requireSecondMember(page)
+
   const row = otherMemberRow(page)
 
   await row.getByRole('button', { name: /Actions for/ }).click()

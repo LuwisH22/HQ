@@ -579,7 +579,10 @@ if (otherMember) {
       error ? `blocked (${error.code ?? ''})` : 'ACCEPTED — HISTORY IS WRITABLE')
   }
 } else {
-  check('a second member exists to moderate', false, 'SKIPPED — only one member')
+  // A single-member organization is a legitimate state, not a security
+  // failure. The moderation rules are covered by the unit suite regardless;
+  // this section only adds live confirmation when there is somebody to act on.
+  console.log('  SKIP  moderation of another member                          no second member present')
 }
 
 console.log('\nB2 · who may be moderated')
@@ -834,6 +837,111 @@ console.log('\nB3 · archive is reversible, delete is not')
   const { data } = await supabase
     .from('channels').select('archived_at').eq('id', probePublic).maybeSingle()
   check('archived_at cleared again', data?.archived_at === null)
+}
+
+console.log('\nC1 · messages')
+
+let probeMessage = null
+
+{
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ channel_id: probePublic, author_id: userId, body: 'verify-live probe message' })
+    .select('id, body, author_id, edited_at, deleted_at')
+    .single()
+  probeMessage = data?.id ?? null
+  check('a message can be sent', !error && Boolean(probeMessage), error?.message ?? '')
+  check('it is attributed to the sender', data?.author_id === userId)
+  check('it starts unedited and undeleted', data?.edited_at === null && data?.deleted_at === null)
+}
+
+console.log('\nC1 · a message cannot be posted under another name')
+{
+  const { error } = await supabase
+    .from('messages')
+    .insert({ channel_id: probePublic, author_id: org?.id, body: 'forged author' })
+  check('author_id is checked against the session', Boolean(error),
+    error ? `blocked (${error.code ?? ''})` : 'ACCEPTED — IMPERSONATION POSSIBLE')
+}
+
+console.log('\nC1 · only the body may be edited by a client')
+{
+  const { error } = await supabase
+    .from('messages')
+    .update({ body: 'edited by verify-live' })
+    .eq('id', probeMessage)
+  check('the author can edit their own body', !error, error?.message ?? '')
+
+  const { data } = await supabase
+    .from('messages').select('body, edited_at').eq('id', probeMessage).maybeSingle()
+  check('edited_at is stamped by the database', Boolean(data?.edited_at), data?.edited_at ?? '')
+}
+for (const [label, patch] of [
+  ['channel_id', { channel_id: probePrivate }],
+  ['pinned_at', { pinned_at: new Date().toISOString() }],
+  ['deleted_at', { deleted_at: new Date().toISOString() }],
+  ['author_id', { author_id: org?.id }],
+]) {
+  const { error } = await supabase.from('messages').update(patch).eq('id', probeMessage)
+  check(`${label} cannot be written by a client`, Boolean(error),
+    error ? 'refused' : 'ACCEPTED — COLUMN IS WRITABLE')
+}
+
+console.log('\nC1 · pin and delete go through the routines')
+{
+  const { error } = await supabase.rpc('pin_message', { p_message_id: probeMessage, p_pinned: true })
+  check('pin_message succeeds with messages.pin', !error, error?.message ?? '')
+
+  const { data } = await supabase
+    .from('messages').select('pinned_at').eq('id', probeMessage).maybeSingle()
+  check('pinned_at recorded', Boolean(data?.pinned_at))
+}
+{
+  const { error } = await supabase.rpc('delete_message', { p_message_id: probeMessage })
+  check('delete_message succeeds for the author', !error, error?.message ?? '')
+
+  const { data } = await supabase
+    .from('messages').select('body, deleted_at').eq('id', probeMessage).maybeSingle()
+  check('the row survives, the words do not', data?.body === '' && data?.deleted_at !== null,
+    `body length ${String((data?.body ?? '').length)}`)
+}
+{
+  const { error } = await supabase.rpc('delete_message', { p_message_id: probeMessage })
+  check('deleting twice is refused', Boolean(error),
+    error ? error.message.slice(0, 40) : 'ACCEPTED')
+}
+
+console.log('\nC1 · realtime topic authorization')
+{
+  const { data, error } = await supabase.rpc('can_join_channel_topic', {
+    p_topic: `channel:${String(probePublic)}`,
+    p_permission: 'channels.view',
+  })
+  check('a topic for a visible channel is joinable', !error && data === true, String(data))
+}
+for (const [label, topic] of [
+  ['a malformed topic', 'not-a-channel-topic'],
+  ['a topic with a non-uuid id', 'channel:not-a-uuid'],
+  ['a topic for a channel that does not exist',
+   'channel:00000000-0000-4000-8000-000000000000'],
+]) {
+  const { data, error } = await supabase.rpc('can_join_channel_topic', {
+    p_topic: topic,
+    p_permission: 'channels.view',
+  })
+  // A refusal, never an exception: raising would let a caller tell "bad
+  // format" from "no access" by the error they get back.
+  check(`${label} is refused without raising`, !error && data === false,
+    error ? `RAISED: ${error.message.slice(0, 30)}` : String(data))
+}
+
+console.log('\nC1 · messages are not writable in a channel you cannot reach')
+{
+  const { error } = await supabase
+    .from('messages')
+    .insert({ channel_id: '00000000-0000-4000-8000-000000000000', author_id: userId, body: 'x' })
+  check('posting into an unknown channel is refused', Boolean(error),
+    error ? `blocked (${error.code ?? ''})` : 'ACCEPTED')
 }
 
 console.log('\nB3 · cleanup')

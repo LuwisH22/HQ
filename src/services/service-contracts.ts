@@ -320,6 +320,47 @@ export interface ChannelService {
   ): Promise<void>
 }
 
+// --- Messages (Phase 2 · C1) -----------------------------------------------
+
+export interface Message {
+  id: string
+  channelId: string
+  /** null once the author has been removed from the organization. */
+  authorId: string | null
+  /** Empty for a deleted message: the row survives, the words do not. */
+  body: string
+  authorName: string
+  authorAvatarUrl: string | null
+  pinnedAt: string | null
+  editedAt: string | null
+  deletedAt: string | null
+  createdAt: string
+}
+
+export interface MessagePage {
+  /** Oldest first, the way a transcript reads. */
+  messages: Message[]
+  hasMore: boolean
+}
+
+/**
+ * Reads inherit channel visibility from the `channels` policy, so a message
+ * from a channel the caller cannot see is absent rather than filtered. Sending
+ * and editing go straight to the table; removal and pinning are routines,
+ * because those leave an audit trail.
+ */
+export interface MessageService {
+  /** `before` is the createdAt of the oldest message already held. */
+  list(channelId: string, before?: string): Promise<MessagePage>
+  getById(messageId: string): Promise<Message | null>
+  send(channelId: string, body: string): Promise<Message>
+  /** Authors only. `messages.moderate` confers removal, never rewriting. */
+  edit(messageId: string, body: string): Promise<void>
+  /** Soft delete: the author's own, or anyone's with `messages.moderate`. */
+  remove(messageId: string, reason?: string): Promise<void>
+  setPinned(messageId: string, pinned: boolean): Promise<void>
+}
+
 export interface ProfileService {
   getMine(): Promise<Profile | null>
   update(patch: ProfilePatch): Promise<Profile>

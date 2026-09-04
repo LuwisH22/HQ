@@ -16,7 +16,7 @@ import type { InvitationStatus, MemberStatus } from '@/types/database.types'
 const STORAGE_KEY = 'lfg-hq-demo-db'
 // Bumped when the seed shape changes, so a stale store is discarded rather
 // than half-migrated.
-const SCHEMA_VERSION = 4
+const SCHEMA_VERSION = 5
 
 // --- Row shapes (camelCase; the demo layer sits above the SQL naming) -------
 
@@ -111,6 +111,7 @@ export interface DemoDatabase {
   channelCategories: DemoChannelCategory[]
   channels: DemoChannel[]
   channelOverrides: DemoChannelOverride[]
+  messages: DemoMessage[]
 }
 
 export interface DemoChannelCategory {
@@ -130,6 +131,17 @@ export interface DemoChannel {
   position: number
   isPrivate: boolean
   archivedAt: string | null
+}
+
+export interface DemoMessage {
+  id: string
+  channelId: string
+  authorId: string | null
+  body: string
+  pinnedAt: string | null
+  editedAt: string | null
+  deletedAt: string | null
+  createdAt: string
 }
 
 export interface DemoChannelOverride {
@@ -178,6 +190,7 @@ const GROUP = {
   invitation: 5,
   category: 6,
   channel: 7,
+  message: 8,
 } as const
 
 const ROLE_KEYS = ['owner', 'admin', 'manager', 'coach', 'player', 'staff'] as const
@@ -615,6 +628,28 @@ function buildSeed(): DemoDatabase {
       },
     ],
     channelOverrides: [],
+    messages: [
+      {
+        id: demoId(GROUP.message, 0),
+        channelId: demoId(GROUP.channel, 1),
+        authorId: DEMO_OWNER_PROFILE_ID,
+        body: 'Scrim block moved to 19:00 CET. Same opponent.',
+        pinnedAt: null,
+        editedAt: null,
+        deletedAt: null,
+        createdAt: new Date(Date.now() - 45 * 60_000).toISOString(),
+      },
+      {
+        id: demoId(GROUP.message, 1),
+        channelId: demoId(GROUP.channel, 1),
+        authorId: demoId(GROUP.profile, 1),
+        body: 'Confirmed. VOD review straight after.',
+        pinnedAt: null,
+        editedAt: null,
+        deletedAt: null,
+        createdAt: new Date(Date.now() - 40 * 60_000).toISOString(),
+      },
+    ],
     currentUserId: null,
     organization: {
       id: ORG_ID,

@@ -2,6 +2,7 @@ import type {
   AuditService,
   AuthService,
   ChannelService,
+  MessageService,
   InvitationService,
   OrganizationService,
   ProfileService,
@@ -72,6 +73,15 @@ export const demoChannelService: ChannelService = {
   reorderChannels: unreachable,
   listOverrides: unreachable,
   setOverride: unreachable,
+}
+
+export const demoMessageService: MessageService = {
+  list: unreachable,
+  getById: unreachable,
+  send: unreachable,
+  edit: unreachable,
+  remove: unreachable,
+  setPinned: unreachable,
 }
 
 export const demoProfileService: ProfileService = {

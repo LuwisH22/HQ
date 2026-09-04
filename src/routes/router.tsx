@@ -48,6 +48,10 @@ const MessagesPage = lazy(() =>
 const ChannelsPage = lazy(() =>
   import('@/features/channels/ChannelsPage').then((m) => ({ default: m.ChannelsPage })),
 )
+
+const ChannelChatPage = lazy(() =>
+  import('@/features/channels/ChannelChatPage').then((m) => ({ default: m.ChannelChatPage })),
+)
 const ProjectsPage = lazy(() =>
   import('@/features/placeholder/pages').then((m) => ({ default: m.ProjectsPage })),
 )
@@ -98,6 +102,7 @@ export const router = createHashRouter([
           { index: true, element: <DashboardPage /> },
           { path: 'messages', element: <MessagesPage /> },
           { path: 'channels', element: <ChannelsPage /> },
+          { path: 'channels/:channelKey', element: <ChannelChatPage /> },
           { path: 'projects', element: <ProjectsPage /> },
           { path: 'calendar', element: <CalendarPage /> },
           { path: 'teams', element: <TeamsPage /> },

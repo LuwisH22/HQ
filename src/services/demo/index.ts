@@ -16,6 +16,8 @@ import type {
   AuthService,
   Channel,
   ChannelService,
+  Message,
+  MessageService,
   CurrentMembership,
   Invitation,
   InvitationService,
@@ -37,6 +39,7 @@ import {
   DEMO_OWNER_PROFILE_ID,
   type DemoChannel,
   type DemoMember,
+  type DemoMessage,
   type DemoRole,
 } from './demo-database'
 import { PERMISSION_CATALOG } from './permission-catalog'
@@ -1159,6 +1162,168 @@ export const demoChannelService: ChannelService = {
       'channel',
       channelId,
       `${permissionKey} on ${channel.name} for ${role.name}: ${effect ?? 'inherit'}`,
+    )
+    persist()
+  },
+}
+
+// --- Messages (Phase 2 · C1) -----------------------------------------------
+
+const MESSAGE_PAGE = 50
+
+/** Visibility is inherited from the channel, exactly as the RLS policy does. */
+function assertCanReadChannel(channelId: string): DemoChannel {
+  const channel = channelById(channelId)
+  const member = memberOf(requireCurrentUserId())
+  if (!member || !canInChannel(channel, member, 'channels.view')) {
+    throw new AppError('forbidden', 'You do not have access to that channel')
+  }
+  return channel
+}
+
+function toMessage(m: DemoMessage): Message {
+  const profile = db().profiles.find((p) => p.id === m.authorId)
+  return {
+    id: m.id,
+    channelId: m.channelId,
+    authorId: m.authorId,
+    // A deleted message keeps its row so replies survive; the body is gone.
+    body: m.deletedAt === null ? m.body : '',
+    authorName:
+      profile?.displayName ?? profile?.fullName ?? profile?.email ?? 'Removed member',
+    authorAvatarUrl: profile?.avatarUrl ?? null,
+    pinnedAt: m.pinnedAt,
+    editedAt: m.editedAt,
+    deletedAt: m.deletedAt,
+    createdAt: m.createdAt,
+  }
+}
+
+export const demoMessageService: MessageService = {
+  async list(channelId, before) {
+    await latency()
+    assertCanReadChannel(channelId)
+
+    const all = db()
+      .messages.filter((m) => m.channelId === channelId)
+      .filter((m) => (before ? m.createdAt < before : true))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+
+    const page = all.slice(0, MESSAGE_PAGE)
+    return { messages: page.map(toMessage).reverse(), hasMore: all.length > MESSAGE_PAGE }
+  },
+
+  async getById(messageId) {
+    await latency()
+    const message = db().messages.find((m) => m.id === messageId)
+    if (!message) return null
+    assertCanReadChannel(message.channelId)
+    return toMessage(message)
+  },
+
+  async send(channelId, body) {
+    await latency()
+    const channel = channelById(channelId)
+    const member = memberOf(requireCurrentUserId())
+    if (!member || !canInChannel(channel, member, 'messages.send')) {
+      throw new AppError('forbidden', 'You cannot post in that channel')
+    }
+
+    const trimmed = body.trim()
+    if (trimmed === '') throw new AppError('validation', 'A message cannot be empty')
+    if (trimmed.length > 4000) throw new AppError('validation', 'That message is too long')
+
+    const message: DemoMessage = {
+      id: crypto.randomUUID(),
+      channelId,
+      // Taken from the session, never from the caller.
+      authorId: member.userId,
+      body: trimmed,
+      pinnedAt: null,
+      editedAt: null,
+      deletedAt: null,
+      createdAt: new Date().toISOString(),
+    }
+    db().messages.push(message)
+    persist()
+    return toMessage(message)
+  },
+
+  async edit(messageId, body) {
+    await latency()
+    const message = db().messages.find((m) => m.id === messageId)
+    if (!message) throw new AppError('not_found', 'That message no longer exists.')
+    if (message.deletedAt !== null) {
+      throw new AppError('validation', 'A deleted message cannot be edited')
+    }
+
+    // Editing belongs to the author. messages.moderate confers the power to
+    // remove someone's message, never to rewrite their words.
+    if (message.authorId !== requireCurrentUserId()) {
+      throw new AppError('forbidden', 'You can only edit your own messages')
+    }
+
+    const trimmed = body.trim()
+    if (trimmed === '') throw new AppError('validation', 'A message cannot be empty')
+
+    message.body = trimmed
+    message.editedAt = new Date().toISOString()
+    persist()
+  },
+
+  async remove(messageId, reason) {
+    await latency()
+    const message = db().messages.find((m) => m.id === messageId)
+    if (!message) throw new AppError('not_found', 'That message no longer exists.')
+    if (message.deletedAt !== null) {
+      throw new AppError('validation', 'That message has already been deleted')
+    }
+
+    const channel = assertCanReadChannel(message.channelId)
+    const member = memberOf(requireCurrentUserId())
+    const isAuthor = message.authorId === requireCurrentUserId()
+    const canModerate = Boolean(member && canInChannel(channel, member, 'messages.moderate'))
+
+    if (!isAuthor && !canModerate) {
+      throw new AppError('forbidden', 'You can only delete your own messages')
+    }
+
+    message.body = ''
+    message.deletedAt = new Date().toISOString()
+
+    // Only moderation is worth a permanent record; auditing every author
+    // tidying up their own typo would bury the entries that matter.
+    if (!isAuthor) {
+      recordAudit(
+        'message.deleted',
+        'message',
+        messageId,
+        `Message removed from ${channel.name}${reason ? `: ${reason}` : ''}`,
+      )
+    }
+    persist()
+  },
+
+  async setPinned(messageId, pinned) {
+    await latency()
+    const message = db().messages.find((m) => m.id === messageId)
+    if (!message) throw new AppError('not_found', 'That message no longer exists.')
+    if (message.deletedAt !== null) {
+      throw new AppError('validation', 'A deleted message cannot be pinned')
+    }
+
+    const channel = channelById(message.channelId)
+    const member = memberOf(requireCurrentUserId())
+    if (!member || !canInChannel(channel, member, 'messages.pin')) {
+      throw new AppError('forbidden', 'You do not have permission to pin messages here')
+    }
+
+    message.pinnedAt = pinned ? new Date().toISOString() : null
+    recordAudit(
+      pinned ? 'message.pinned' : 'message.unpinned',
+      'message',
+      messageId,
+      `${pinned ? 'Pinned' : 'Unpinned'} a message in ${channel.name}`,
     )
     persist()
   },
