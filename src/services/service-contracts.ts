@@ -241,6 +241,85 @@ export interface ModerationResult {
   warning: string | null
 }
 
+// --- Channels (Phase 1.5 · B3) ---------------------------------------------
+
+export type OverrideEffect = 'allow' | 'deny'
+
+export interface ChannelCategory {
+  id: string
+  organizationId: string
+  name: string
+  position: number
+}
+
+export interface Channel {
+  id: string
+  organizationId: string
+  /** null is a real state: an uncategorised channel. */
+  categoryId: string | null
+  /** URL slug. Carries no authorization meaning, exactly like roles.key. */
+  key: string
+  name: string
+  topic: string | null
+  position: number
+  /** Private channels are allow-lists: invisible without an explicit ALLOW. */
+  isPrivate: boolean
+  archivedAt: string | null
+}
+
+export interface ChannelInput {
+  name: string
+  topic: string | null
+  categoryId: string | null
+  isPrivate: boolean
+}
+
+/** Every field optional: null means "leave this alone". */
+export interface ChannelPatch {
+  name?: string | null
+  topic?: string | null
+  categoryId?: string | null
+  isPrivate?: boolean | null
+  archived?: boolean | null
+}
+
+export interface ChannelOverride {
+  channelId: string
+  roleId: string
+  permissionKey: string
+  effect: OverrideEffect
+}
+
+/**
+ * Reads are scoped by RLS through `can_in_channel`, so a channel the caller
+ * may not see is absent rather than filtered. Writes go through SECURITY
+ * DEFINER routines; none of these tables has a client write policy.
+ */
+export interface ChannelService {
+  listCategories(organizationId: string): Promise<ChannelCategory[]>
+  listChannels(organizationId: string): Promise<Channel[]>
+
+  createCategory(organizationId: string, name: string): Promise<string>
+  updateCategory(categoryId: string, name: string): Promise<void>
+  deleteCategory(categoryId: string): Promise<void>
+  reorderCategories(organizationId: string, ids: readonly string[]): Promise<void>
+
+  createChannel(organizationId: string, input: ChannelInput): Promise<string>
+  updateChannel(channelId: string, patch: ChannelPatch): Promise<void>
+  /** Permanent. Archiving via updateChannel is the reversible alternative. */
+  deleteChannel(channelId: string): Promise<void>
+  reorderChannels(organizationId: string, ids: readonly string[]): Promise<void>
+
+  listOverrides(channelId: string): Promise<ChannelOverride[]>
+  /** `effect: null` clears the override, returning that role to inherit. */
+  setOverride(
+    channelId: string,
+    roleId: string,
+    permissionKey: string,
+    effect: OverrideEffect | null,
+  ): Promise<void>
+}
+
 export interface ProfileService {
   getMine(): Promise<Profile | null>
   update(patch: ProfilePatch): Promise<Profile>

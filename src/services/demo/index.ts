@@ -14,6 +14,8 @@ import type {
   AuditService,
   AuthIdentity,
   AuthService,
+  Channel,
+  ChannelService,
   CurrentMembership,
   Invitation,
   InvitationService,
@@ -33,6 +35,7 @@ import {
   recordAudit,
   resetDemoDatabase,
   DEMO_OWNER_PROFILE_ID,
+  type DemoChannel,
   type DemoMember,
   type DemoRole,
 } from './demo-database'
@@ -863,6 +866,303 @@ export const demoProfileService: ProfileService = {
 }
 
 // --- Invitations -----------------------------------------------------------
+
+// --- Channels (Phase 1.5 · B3) ---------------------------------------------
+
+/** The safe subset, mirroring the CHECK constraint on the override table. */
+const OVERRIDABLE = ['channels.view', 'messages.send', 'messages.pin', 'messages.moderate']
+
+/**
+ * Faithful port of `can_in_channel()`.
+ *
+ *   1. effectively active member?   no  -> denied   (B2 gate comes first)
+ *   2. owner?                       yes -> allowed  (owner_id, not a role)
+ *   3. any held role DENIES?        yes -> denied
+ *   4. any held role ALLOWS?        yes -> allowed
+ *   5. channel is private?          yes -> denied   (allow-list only)
+ *   6. otherwise inherit the organization-level answer
+ *
+ * Deny beats Allow beats Inherit. With several roles held, one DENY is enough.
+ */
+function canInChannel(channel: DemoChannel, member: DemoMember, permission: Permission): boolean {
+  if (!effectivelyActive(member)) return false
+  if (isOwnerUser(member.userId)) return true
+
+  const held = new Set(rolesOf(member))
+  const overrides = db().channelOverrides.filter(
+    (o) => o.channelId === channel.id && o.permissionKey === permission && held.has(o.roleId),
+  )
+
+  if (overrides.some((o) => o.effect === 'deny')) return false
+  if (overrides.some((o) => o.effect === 'allow')) return true
+
+  // An override is scoped to this channel and nothing else, so a private
+  // channel without an explicit ALLOW has nothing to inherit.
+  if (channel.isPrivate) return false
+
+  return permissionsForMember(member).can(permission)
+}
+
+/** Channels the signed-in demo user may see. */
+function visibleChannels(): DemoChannel[] {
+  const member = memberOf(requireCurrentUserId())
+  if (!member) return []
+  return db()
+    .channels.filter((c) => canInChannel(c, member, 'channels.view'))
+    .sort((a, b) => a.position - b.position)
+}
+
+function channelById(channelId: string): DemoChannel {
+  const channel = db().channels.find((c) => c.id === channelId)
+  if (!channel) throw new AppError('not_found', 'That channel no longer exists.')
+  return channel
+}
+
+function assertCanManageChannels(): void {
+  assertPermission('channels.manage', 'You do not have permission to manage channels.')
+}
+
+function toChannel(c: DemoChannel): Channel {
+  return {
+    id: c.id,
+    organizationId: c.organizationId,
+    categoryId: c.categoryId,
+    key: c.key,
+    name: c.name,
+    topic: c.topic,
+    position: c.position,
+    isPrivate: c.isPrivate,
+    archivedAt: c.archivedAt,
+  }
+}
+
+export const demoChannelService: ChannelService = {
+  async listCategories() {
+    await latency()
+    const member = memberOf(requireCurrentUserId())
+    if (!member) return []
+
+    const canManage = permissionsForMember(member).can('channels.manage')
+    const visible = new Set(visibleChannels().map((c) => c.categoryId))
+
+    // A category is only shown through its contents, so an empty private
+    // section does not advertise its own name.
+    return db()
+      .channelCategories.filter((cat) => canManage || visible.has(cat.id))
+      .sort((a, b) => a.position - b.position)
+      .map((cat) => ({
+        id: cat.id,
+        organizationId: cat.organizationId,
+        name: cat.name,
+        position: cat.position,
+      }))
+  },
+
+  async listChannels() {
+    await latency()
+    return visibleChannels().map(toChannel)
+  },
+
+  async createCategory(_organizationId, name) {
+    await latency()
+    assertCanManageChannels()
+    const id = crypto.randomUUID()
+    const store = db()
+    store.channelCategories.push({
+      id,
+      organizationId: store.organization.id,
+      name: name.trim(),
+      position: store.channelCategories.length,
+    })
+    recordAudit('category.created', 'channel_category', id, `Category ${name.trim()} created`)
+    persist()
+    return id
+  },
+
+  async updateCategory(categoryId, name) {
+    await latency()
+    assertCanManageChannels()
+    const category = db().channelCategories.find((c) => c.id === categoryId)
+    if (!category) throw new AppError('not_found', 'That category no longer exists.')
+    category.name = name.trim()
+    recordAudit('category.updated', 'channel_category', categoryId, `Category renamed`)
+    persist()
+  },
+
+  async deleteCategory(categoryId) {
+    await latency()
+    assertCanManageChannels()
+    const store = db()
+    // Channels survive and become uncategorised, mirroring ON DELETE SET NULL.
+    for (const channel of store.channels) {
+      if (channel.categoryId === categoryId) channel.categoryId = null
+    }
+    store.channelCategories = store.channelCategories.filter((c) => c.id !== categoryId)
+    recordAudit('category.deleted', 'channel_category', categoryId, 'Category deleted')
+    persist()
+  },
+
+  async reorderCategories(_organizationId, ids) {
+    await latency()
+    assertCanManageChannels()
+    ids.forEach((id, index) => {
+      const category = db().channelCategories.find((c) => c.id === id)
+      if (category) category.position = index
+    })
+    persist()
+  },
+
+  async createChannel(_organizationId, input) {
+    await latency()
+    assertPermission('channels.create', 'You do not have permission to create channels.')
+
+    const id = crypto.randomUUID()
+    const store = db()
+    store.channels.push({
+      id,
+      organizationId: store.organization.id,
+      categoryId: input.categoryId,
+      key: `${input.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${id.slice(0, 8)}`,
+      name: input.name.trim(),
+      topic: input.topic?.trim() || null,
+      position: store.channels.length,
+      isPrivate: input.isPrivate,
+      archivedAt: null,
+    })
+    recordAudit('channel.created', 'channel', id, `Channel ${input.name.trim()} created`)
+    persist()
+    return id
+  },
+
+  async updateChannel(channelId, patch) {
+    await latency()
+    assertCanManageChannels()
+    const channel = channelById(channelId)
+
+    const member = memberOf(requireCurrentUserId())
+    if (!member || !canInChannel(channel, member, 'channels.view')) {
+      throw new AppError('forbidden', 'You do not have access to that channel')
+    }
+
+    if (patch.name != null && patch.name.trim() !== '') channel.name = patch.name.trim()
+    if (patch.topic !== undefined && patch.topic !== null) {
+      channel.topic = patch.topic.trim() || null
+    }
+    if (patch.categoryId !== undefined && patch.categoryId !== null) {
+      channel.categoryId = patch.categoryId
+    }
+    if (patch.isPrivate != null) channel.isPrivate = patch.isPrivate
+    if (patch.archived != null) {
+      channel.archivedAt = patch.archived ? new Date().toISOString() : null
+    }
+
+    recordAudit(
+      patch.archived === true
+        ? 'channel.archived'
+        : patch.archived === false
+          ? 'channel.restored'
+          : 'channel.updated',
+      'channel',
+      channelId,
+      `Channel ${channel.name} updated`,
+    )
+    persist()
+  },
+
+  async deleteChannel(channelId) {
+    await latency()
+    assertPermission('channels.delete', 'You do not have permission to delete channels.')
+    const channel = channelById(channelId)
+
+    const member = memberOf(requireCurrentUserId())
+    if (!member || !canInChannel(channel, member, 'channels.view')) {
+      throw new AppError('forbidden', 'You do not have access to that channel')
+    }
+
+    const store = db()
+    store.channels = store.channels.filter((c) => c.id !== channelId)
+    // Overrides go with the channel, mirroring ON DELETE CASCADE.
+    store.channelOverrides = store.channelOverrides.filter((o) => o.channelId !== channelId)
+    recordAudit('channel.deleted', 'channel', channelId, `Channel ${channel.name} deleted`)
+    persist()
+  },
+
+  async reorderChannels(_organizationId, ids) {
+    await latency()
+    assertCanManageChannels()
+    ids.forEach((id, index) => {
+      const channel = db().channels.find((c) => c.id === id)
+      if (channel) channel.position = index
+    })
+    persist()
+  },
+
+  async listOverrides(channelId) {
+    await latency()
+    assertPermission(
+      'channels.permissions_manage',
+      'You do not have permission to manage channel permissions.',
+    )
+    return db()
+      .channelOverrides.filter((o) => o.channelId === channelId)
+      .map((o) => ({
+        channelId: o.channelId,
+        roleId: o.roleId,
+        permissionKey: o.permissionKey,
+        effect: o.effect,
+      }))
+  },
+
+  async setOverride(channelId, roleId, permissionKey, effect) {
+    await latency()
+    assertPermission(
+      'channels.permissions_manage',
+      'You do not have permission to manage channel permissions.',
+    )
+
+    const channel = channelById(channelId)
+    const role = roleById(roleId)
+
+    if (!OVERRIDABLE.includes(permissionKey)) {
+      throw new AppError('validation', `${permissionKey} cannot be overridden per channel`)
+    }
+
+    const member = memberOf(requireCurrentUserId())
+    if (!member || !canInChannel(channel, member, 'channels.view')) {
+      throw new AppError('forbidden', 'You do not have access to that channel')
+    }
+
+    // Hierarchy: you may only change access for roles below your own authority.
+    const actorRank = currentRank() ?? 1000
+    if (actorRank > -1 && role.rank <= actorRank) {
+      throw new AppError(
+        'forbidden',
+        'You can only change access for roles below your own authority',
+      )
+    }
+
+    // Delegation: you cannot hand out a capability you do not hold.
+    if (effect === 'allow' && member && !permissionsForMember(member).can(permissionKey as Permission)) {
+      throw new AppError('forbidden', `You cannot grant a permission you do not hold: ${permissionKey}`)
+    }
+
+    const store = db()
+    store.channelOverrides = store.channelOverrides.filter(
+      (o) => !(o.channelId === channelId && o.roleId === roleId && o.permissionKey === permissionKey),
+    )
+    if (effect !== null) {
+      store.channelOverrides.push({ channelId, roleId, permissionKey, effect })
+    }
+
+    recordAudit(
+      'channel.permission_changed',
+      'channel',
+      channelId,
+      `${permissionKey} on ${channel.name} for ${role.name}: ${effect ?? 'inherit'}`,
+    )
+    persist()
+  },
+}
 
 export const demoInvitationService: InvitationService = {
   async list() {

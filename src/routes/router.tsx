@@ -38,11 +38,15 @@ const RolesSettings = lazy(() =>
   import('@/features/settings/RolesSettings').then((m) => ({ default: m.RolesSettings })),
 )
 
+const ChannelsSettings = lazy(() =>
+  import('@/features/settings/ChannelsSettings').then((m) => ({ default: m.ChannelsSettings })),
+)
+
 const MessagesPage = lazy(() =>
   import('@/features/placeholder/pages').then((m) => ({ default: m.MessagesPage })),
 )
 const ChannelsPage = lazy(() =>
-  import('@/features/placeholder/pages').then((m) => ({ default: m.ChannelsPage })),
+  import('@/features/channels/ChannelsPage').then((m) => ({ default: m.ChannelsPage })),
 )
 const ProjectsPage = lazy(() =>
   import('@/features/placeholder/pages').then((m) => ({ default: m.ProjectsPage })),
@@ -108,6 +112,7 @@ export const router = createHashRouter([
               { path: 'profile', element: <ProfileSettings /> },
               { path: 'organization', element: <OrganizationSettings /> },
               { path: 'roles', element: <RolesSettings /> },
+              { path: 'channels', element: <ChannelsSettings /> },
             ],
           },
           { path: '*', element: <NotFoundPage /> },

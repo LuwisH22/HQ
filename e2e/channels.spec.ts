@@ -1,0 +1,96 @@
+import { expect, test, type Page } from '@playwright/test'
+
+/**
+ * Phase 1.5 · B3 — channels through the real UI.
+ *
+ * Names are unique per project and per run: the desktop and mobile projects
+ * execute concurrently against the same live organization, and a shared
+ * literal name makes them delete each other's channels. Everything created
+ * here is removed again.
+ */
+
+test.use({ storageState: '.auth/owner.json' })
+
+function uniqueName(prefix: string, project: string): string {
+  return `${prefix}-${project}-${String(Date.now() % 100000)}`
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.goto('/#/settings/channels')
+  await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible({ timeout: 20_000 })
+})
+
+async function createChannel(page: Page, name: string, visibility: 'Public' | 'Private') {
+  await page.getByRole('textbox', { name: 'New channel name' }).fill(name)
+  await page.getByRole('button', { name: visibility, exact: true }).click()
+  await expect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
+}
+
+async function deleteChannel(page: Page, name: string) {
+  page.once('dialog', (dialog) => void dialog.accept())
+  await page.getByRole('button', { name: `Delete ${name}` }).click()
+  await expect(page.getByText(name, { exact: true })).toHaveCount(0, { timeout: 15_000 })
+}
+
+test('creates a channel, archives it, restores it, then deletes it', async ({ page }, testInfo) => {
+  const name = uniqueName('probe', testInfo.project.name)
+
+  await createChannel(page, name, 'Public')
+
+  // Archive is the reversible operation, and it is the one offered first.
+  await page.getByRole('button', { name: `Archive ${name}` }).click()
+  await expect(page.getByText('Archived')).toBeVisible({ timeout: 15_000 })
+
+  await page.getByRole('button', { name: `Restore ${name}` }).click()
+  await expect(page.getByRole('button', { name: `Archive ${name}` })).toBeVisible({
+    timeout: 15_000,
+  })
+
+  await deleteChannel(page, name)
+})
+
+test('a private channel is marked as private and reachable from the directory', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('secret', testInfo.project.name)
+
+  await createChannel(page, name, 'Private')
+
+  // The owner sees it, because ownership is a column and not a role.
+  await page.goto('/#/channels')
+  await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible()
+  await expect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
+
+  await page.goto('/#/settings/channels')
+  await deleteChannel(page, name)
+})
+
+test('offers Allow, Inherit and Deny for each overridable permission', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('perms', testInfo.project.name)
+
+  await createChannel(page, name, 'Private')
+
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: name })
+    .getByRole('button', { name: 'Permissions' })
+    .click()
+
+  await expect(page.getByRole('heading', { name: `Permissions · ${name}` })).toBeVisible()
+
+  // Only the safe subset is offered — a channel does not hand out ownership.
+  await expect(page.getByText('View channel').first()).toBeVisible()
+  await expect(page.getByText('Send messages').first()).toBeVisible()
+  await expect(page.getByText('Delete organization')).toHaveCount(0)
+  await expect(page.getByText('Ban members')).toHaveCount(0)
+
+  const group = page.getByRole('group').first()
+  await expect(group.getByRole('button', { name: 'Allow' })).toBeVisible()
+  await expect(group.getByRole('button', { name: 'Inherit' })).toBeVisible()
+  await expect(group.getByRole('button', { name: 'Deny' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Done' }).click()
+  await deleteChannel(page, name)
+})

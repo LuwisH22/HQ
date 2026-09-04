@@ -13,6 +13,8 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type MemberStatus = 'active' | 'suspended' | 'banned'
 export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
+/** A channel override either allows or denies. An absent row means inherit. */
+export type OverrideEffect = 'allow' | 'deny'
 
 export interface Database {
   public: {
@@ -363,6 +365,77 @@ export interface Database {
           },
         ]
       }
+      channel_categories: {
+        Row: {
+          id: string
+          organization_id: string
+          name: string
+          position: number
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      channels: {
+        Row: {
+          id: string
+          organization_id: string
+          category_id: string | null
+          key: string
+          name: string
+          topic: string | null
+          type: string
+          position: number
+          is_private: boolean
+          archived_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'channels_category_id_fkey'
+            columns: ['category_id']
+            isOneToOne: false
+            referencedRelation: 'channel_categories'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      channel_permission_overrides: {
+        Row: {
+          channel_id: string
+          role_id: string
+          permission_key: string
+          effect: OverrideEffect
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'channel_permission_overrides_channel_id_fkey'
+            columns: ['channel_id']
+            isOneToOne: false
+            referencedRelation: 'channels'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'channel_permission_overrides_role_id_fkey'
+            columns: ['role_id']
+            isOneToOne: false
+            referencedRelation: 'roles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<never, never>
     Functions: {
@@ -427,10 +500,62 @@ export interface Database {
         Args: { p_member_id: string; p_reason?: string | null }
         Returns: undefined
       }
+      can_in_channel: {
+        Args: { p_channel_id: string; p_permission: string }
+        Returns: boolean
+      }
+      can_see_category: { Args: { p_category_id: string }; Returns: boolean }
+      channel_organization: { Args: { p_channel_id: string }; Returns: string }
+      create_category: {
+        Args: { p_organization_id: string; p_name: string }
+        Returns: string
+      }
+      update_category: { Args: { p_category_id: string; p_name: string }; Returns: undefined }
+      delete_category: { Args: { p_category_id: string }; Returns: undefined }
+      reorder_categories: {
+        Args: { p_organization_id: string; p_ids: string[] }
+        Returns: undefined
+      }
+      create_channel: {
+        Args: {
+          p_organization_id: string
+          p_name: string
+          p_topic?: string | null
+          p_category_id?: string | null
+          p_is_private?: boolean
+        }
+        Returns: string
+      }
+      update_channel: {
+        Args: {
+          p_channel_id: string
+          p_name?: string | null
+          p_topic?: string | null
+          p_category_id?: string | null
+          p_is_private?: boolean | null
+          p_archived?: boolean | null
+        }
+        Returns: undefined
+      }
+      delete_channel: { Args: { p_channel_id: string }; Returns: undefined }
+      reorder_channels: {
+        Args: { p_organization_id: string; p_ids: string[] }
+        Returns: undefined
+      }
+      set_channel_override: {
+        Args: {
+          p_channel_id: string
+          p_role_id: string
+          p_permission_key: string
+          p_effect?: OverrideEffect | null
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       member_status: MemberStatus
       invitation_status: InvitationStatus
+      override_effect: OverrideEffect
     }
     CompositeTypes: Record<never, never>
   }
@@ -453,3 +578,6 @@ export type InvitationRow = Tables<'invitations'>
 export type AuditLogRow = Tables<'audit_logs'>
 export type MemberRoleRow = Tables<'member_roles'>
 export type ModerationActionRow = Tables<'moderation_actions'>
+export type ChannelRow = Tables<'channels'>
+export type ChannelCategoryRow = Tables<'channel_categories'>
+export type ChannelOverrideRow = Tables<'channel_permission_overrides'>

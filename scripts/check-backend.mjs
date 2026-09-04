@@ -156,6 +156,21 @@ const HELPERS = [
   ['unsuspend_member', { p_member_id: ORG, p_reason: 'probe' }],
   ['ban_member', { p_member_id: ORG, p_reason: 'probe' }],
   ['unban_member', { p_member_id: ORG, p_reason: 'probe' }],
+  // Phase 1.5 · B3. can_in_channel decides who sees a private channel, so an
+  // anonymous caller must not be able to ask it anything.
+  ['can_in_channel', { p_channel_id: ORG, p_permission: 'channels.view' }],
+  ['can_see_category', { p_category_id: ORG }],
+  ['channel_organization', { p_channel_id: ORG }],
+  ['create_category', { p_organization_id: ORG, p_name: 'probe' }],
+  ['update_category', { p_category_id: ORG, p_name: 'probe' }],
+  ['delete_category', { p_category_id: ORG }],
+  ['reorder_categories', { p_organization_id: ORG, p_ids: [ORG] }],
+  ['create_channel', { p_organization_id: ORG, p_name: 'probe' }],
+  ['update_channel', { p_channel_id: ORG, p_name: 'probe' }],
+  ['delete_channel', { p_channel_id: ORG }],
+  ['reorder_channels', { p_organization_id: ORG, p_ids: [ORG] }],
+  ['set_channel_override', { p_channel_id: ORG, p_role_id: ORG,
+                             p_permission_key: 'channels.view', p_effect: 'allow' }],
 ]
 for (const [fn, args] of HELPERS) {
   const { error } = await supabase.rpc(fn, args)

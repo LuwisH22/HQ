@@ -16,7 +16,7 @@ import type { InvitationStatus, MemberStatus } from '@/types/database.types'
 const STORAGE_KEY = 'lfg-hq-demo-db'
 // Bumped when the seed shape changes, so a stale store is discarded rather
 // than half-migrated.
-const SCHEMA_VERSION = 3
+const SCHEMA_VERSION = 4
 
 // --- Row shapes (camelCase; the demo layer sits above the SQL naming) -------
 
@@ -108,6 +108,35 @@ export interface DemoDatabase {
   /** Append-only, mirroring the moderation_actions table. */
   moderationActions: DemoModerationAction[]
   nextModerationId: number
+  channelCategories: DemoChannelCategory[]
+  channels: DemoChannel[]
+  channelOverrides: DemoChannelOverride[]
+}
+
+export interface DemoChannelCategory {
+  id: string
+  organizationId: string
+  name: string
+  position: number
+}
+
+export interface DemoChannel {
+  id: string
+  organizationId: string
+  categoryId: string | null
+  key: string
+  name: string
+  topic: string | null
+  position: number
+  isPrivate: boolean
+  archivedAt: string | null
+}
+
+export interface DemoChannelOverride {
+  channelId: string
+  roleId: string
+  permissionKey: string
+  effect: 'allow' | 'deny'
 }
 
 export interface DemoModerationAction {
@@ -147,6 +176,8 @@ const GROUP = {
   profile: 3,
   member: 4,
   invitation: 5,
+  category: 6,
+  channel: 7,
 } as const
 
 const ROLE_KEYS = ['owner', 'admin', 'manager', 'coach', 'player', 'staff'] as const
@@ -542,6 +573,48 @@ function buildSeed(): DemoDatabase {
     version: SCHEMA_VERSION,
     moderationActions: [],
     nextModerationId: 1,
+    channelCategories: [
+      { id: demoId(GROUP.category, 0), organizationId: ORG_ID, name: 'INFORMATION', position: 0 },
+      { id: demoId(GROUP.category, 1), organizationId: ORG_ID, name: 'GENERAL', position: 1 },
+      { id: demoId(GROUP.category, 2), organizationId: ORG_ID, name: 'MANAGEMENT', position: 2 },
+    ],
+    channels: [
+      {
+        id: demoId(GROUP.channel, 0),
+        organizationId: ORG_ID,
+        categoryId: demoId(GROUP.category, 0),
+        key: 'announcements',
+        name: 'announcements',
+        topic: 'Org-wide notices',
+        position: 0,
+        isPrivate: false,
+        archivedAt: null,
+      },
+      {
+        id: demoId(GROUP.channel, 1),
+        organizationId: ORG_ID,
+        categoryId: demoId(GROUP.category, 1),
+        key: 'general',
+        name: 'general',
+        topic: 'Everything else',
+        position: 1,
+        isPrivate: false,
+        archivedAt: null,
+      },
+      {
+        id: demoId(GROUP.channel, 2),
+        organizationId: ORG_ID,
+        categoryId: demoId(GROUP.category, 2),
+        key: 'management',
+        name: 'management',
+        topic: 'Staff only',
+        position: 2,
+        // Private: invisible without an explicit ALLOW, not merely hidden.
+        isPrivate: true,
+        archivedAt: null,
+      },
+    ],
+    channelOverrides: [],
     currentUserId: null,
     organization: {
       id: ORG_ID,

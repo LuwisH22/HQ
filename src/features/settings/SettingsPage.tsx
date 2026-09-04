@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Buildings, Shield, User } from '@phosphor-icons/react'
+import { Buildings, Hash, Shield, User } from '@phosphor-icons/react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { useWorkspace } from '@/hooks/use-workspace'
 import { cn } from '@/lib/utils'
@@ -21,6 +21,7 @@ const TABS: readonly SettingsTab[] = [
     requires: 'organization.view',
   },
   { label: 'Roles & permissions', path: '/settings/roles', icon: Shield, requires: 'roles.view' },
+  { label: 'Channels', path: '/settings/channels', icon: Hash, requires: 'channels.view' },
 ]
 
 export function SettingsPage() {

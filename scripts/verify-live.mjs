@@ -190,6 +190,8 @@ check('every role has at least organization.view', EXPECTED_TEMPLATES.every(([k]
 // manage members can suspend, whoever could already remove them can ban.
 check('moderation permissions exist in the catalogue',
   ['members.suspend', 'members.ban', 'members.unban'].every((k) => dbKeys.includes(k)))
+check('channel permissions exist in the catalogue',
+  ['channels.delete', 'channels.permissions_manage'].every((k) => dbKeys.includes(k)))
 
 // --- resolved permissions for the caller ----------------------------------
 console.log('\nresolved permissions (my_permissions)')
@@ -606,11 +608,154 @@ if (otherMember) {
   }
 }
 
+// --- B3 · channels ----------------------------------------------------------
+console.log('\nB3 · channel schema and guarded mutations')
+
+let probeCategory = null
+let probePublic = null
+let probePrivate = null
+
+{
+  const { data, error } = await supabase.rpc('create_category', {
+    p_organization_id: org?.id,
+    p_name: 'verify-live probe',
+  })
+  probeCategory = typeof data === 'string' ? data : null
+  check('owner can create a category', !error && Boolean(probeCategory), error?.message ?? '')
+}
+{
+  const { data, error } = await supabase.rpc('create_channel', {
+    p_organization_id: org?.id,
+    p_name: 'probe public',
+    p_topic: 'created by verify-live',
+    p_category_id: probeCategory,
+    p_is_private: false,
+  })
+  probePublic = typeof data === 'string' ? data : null
+  check('owner can create a public channel', !error && Boolean(probePublic), error?.message ?? '')
+}
+{
+  const { data, error } = await supabase.rpc('create_channel', {
+    p_organization_id: org?.id,
+    p_name: 'probe private',
+    p_topic: null,
+    p_category_id: probeCategory,
+    p_is_private: true,
+  })
+  probePrivate = typeof data === 'string' ? data : null
+  check('owner can create a private channel', !error && Boolean(probePrivate), error?.message ?? '')
+}
+
+console.log('\nB3 · direct writes are refused on every channel table')
+for (const [label, table, row] of [
+  ['channels', 'channels', { organization_id: org?.id, key: 'forged', name: 'forged' }],
+  ['channel_categories', 'channel_categories', { organization_id: org?.id, name: 'forged' }],
+  ['channel_permission_overrides', 'channel_permission_overrides',
+    { channel_id: probePrivate, role_id: playerRole?.id, permission_key: 'channels.view',
+      effect: 'allow' }],
+]) {
+  const { error } = await supabase.from(table).insert(row)
+  check(`${label} has no client insert policy`, Boolean(error),
+    error ? `blocked (${error.code ?? ''})` : 'ACCEPTED — WRITABLE')
+}
+
+console.log('\nB3 · overrides stay inside the safe subset')
+for (const key of ['organization.delete', 'members.ban', 'roles.manage']) {
+  const { error } = await supabase.rpc('set_channel_override', {
+    p_channel_id: probePrivate,
+    p_role_id: playerRole?.id,
+    p_permission_key: key,
+    p_effect: 'allow',
+  })
+  check(`${key} cannot be overridden per channel`, Boolean(error),
+    error ? 'refused' : 'ACCEPTED — SUBSET NOT ENFORCED')
+}
+
+console.log('\nB3 · an override is scoped to one channel only')
+{
+  const { error } = await supabase.rpc('set_channel_override', {
+    p_channel_id: probePrivate,
+    p_role_id: playerRole?.id,
+    p_permission_key: 'channels.view',
+    p_effect: 'allow',
+  })
+  check('an ALLOW can be granted on the private channel', !error, error?.message ?? '')
+}
+{
+  const { data: rows } = await supabase
+    .from('channel_permission_overrides')
+    .select('channel_id')
+  check('exactly one override row exists', (rows ?? []).length === 1,
+    `${String((rows ?? []).length)} row(s)`)
+  check('and it belongs to the private channel only',
+    (rows ?? []).every((r) => r.channel_id === probePrivate))
+}
+{
+  // The decisive check: a channel-local grant must not appear anywhere in the
+  // organization-level answer.
+  const { data: mineNow } = await supabase.rpc('my_permissions', {
+    p_organization_id: org?.id ?? '',
+  })
+  const keysNow = Array.isArray(mineNow)
+    ? mineNow.map((r) => (typeof r === 'string' ? r : r.my_permissions))
+    : []
+  check('a channel ALLOW does not change my_permissions', keysNow.length === srcKeys.length,
+    `${String(keysNow.length)}/${String(srcKeys.length)}`)
+
+  const { data: playerRows } = await supabase
+    .from('role_permissions')
+    .select('permission_key')
+    .eq('role_id', playerRole?.id ?? '')
+  check('a channel ALLOW adds no organization role_permission',
+    !(playerRows ?? []).some((r) => r.permission_key === 'channels.permissions_manage'),
+    `${String((playerRows ?? []).length)} org permission(s)`)
+}
+
+console.log('\nB3 · archive is reversible, delete is not')
+{
+  const { error } = await supabase.rpc('update_channel', {
+    p_channel_id: probePublic,
+    p_archived: true,
+  })
+  check('a channel can be archived', !error, error?.message ?? '')
+
+  const { data } = await supabase
+    .from('channels').select('archived_at').eq('id', probePublic).maybeSingle()
+  check('archived_at recorded', Boolean(data?.archived_at))
+}
+{
+  const { error } = await supabase.rpc('update_channel', {
+    p_channel_id: probePublic,
+    p_archived: false,
+  })
+  check('archiving can be undone', !error, error?.message ?? '')
+
+  const { data } = await supabase
+    .from('channels').select('archived_at').eq('id', probePublic).maybeSingle()
+  check('archived_at cleared again', data?.archived_at === null)
+}
+
+console.log('\nB3 · cleanup')
+for (const [label, id] of [['public', probePublic], ['private', probePrivate]]) {
+  const { error } = await supabase.rpc('delete_channel', { p_channel_id: id })
+  check(`${label} probe channel deleted`, !error, error?.message ?? '')
+}
+{
+  const { error } = await supabase.rpc('delete_category', { p_category_id: probeCategory })
+  check('probe category deleted', !error, error?.message ?? '')
+}
+{
+  const { count } = await supabase
+    .from('channel_permission_overrides')
+    .select('*', { count: 'exact', head: true })
+  check('overrides cascaded away with their channel', count === 0, `${String(count)} left`)
+}
+
 await supabase.auth.signOut()
 
 console.log(
   failures === 0
-    ? '\nAll signed-in checks passed.\n\nThe B1 section creates and deletes a probe role; the B2 section\nsuspends, bans and restores a member. Both clean up after themselves,\nbut the audit and moderation logs keep their entries — by design,\nthey are append-only.\n'
+    ? '\nAll signed-in checks passed.\n\nThe B1 section creates and deletes a probe role; the B2 section\nsuspends, bans and restores a member; the B3 section creates and deletes\na category and two channels. All three clean up after themselves, but the\naudit and moderation logs keep their entries — by design, append-only.\n'
     : `\n${String(failures)} check(s) FAILED.\n`,
 )
 process.exit(failures === 0 ? 0 : 1)

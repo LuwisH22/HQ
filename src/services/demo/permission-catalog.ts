@@ -114,6 +114,18 @@ export const PERMISSION_CATALOG: readonly PermissionCatalogEntry[] = [
     description: 'Create new channels.',
   },
   {
+    key: 'channels.delete',
+    category: 'Chat',
+    label: 'Delete channels',
+    description: 'Permanently remove a channel. Archiving is the reversible alternative.',
+  },
+  {
+    key: 'channels.permissions_manage',
+    category: 'Chat',
+    label: 'Manage channel permissions',
+    description: 'Decide which roles may see and post in each channel.',
+  },
+  {
     key: 'channels.manage',
     category: 'Chat',
     label: 'Manage channels',

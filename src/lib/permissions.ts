@@ -27,6 +27,8 @@ export const PERMISSIONS = [
   'channels.view',
   'channels.create',
   'channels.manage',
+  'channels.delete',
+  'channels.permissions_manage',
   'messages.send',
   'messages.pin',
   'messages.moderate',

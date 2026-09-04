@@ -1,0 +1,325 @@
+import { useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { Hash, LockSimple, Plus, Trash, Archive, ArrowCounterClockwise } from '@phosphor-icons/react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { CardSkeleton, ErrorState, ForbiddenState } from '@/components/common/states'
+import { channelService } from '@/services/channel.service'
+import type { Channel } from '@/services/channel.service'
+import { errorMessage } from '@/lib/errors'
+import { useWorkspace } from '@/hooks/use-workspace'
+import { usePermission } from '@/hooks/use-permission'
+import { ChannelPermissionsDialog } from './ChannelPermissionsDialog'
+
+/**
+ * Channel and category management.
+ *
+ * Everything here is a thin wrapper over a guarded routine: the database
+ * re-checks the permission and the hierarchy for each action, so hiding a
+ * button is a courtesy rather than the control. Nothing is optimistic —
+ * a channel's visibility is not something to render before the server agrees.
+ */
+export function ChannelsSettings() {
+  const { organization } = useWorkspace()
+  const organizationId = organization?.id
+  const queryClient = useQueryClient()
+
+  const canView = usePermission('channels.view')
+  const canCreate = usePermission('channels.create')
+  const canManage = usePermission('channels.manage')
+  const canDelete = usePermission('channels.delete')
+  const canManagePermissions = usePermission('channels.permissions_manage')
+
+  const [newCategory, setNewCategory] = useState('')
+  const [newChannel, setNewChannel] = useState('')
+  const [permissionsFor, setPermissionsFor] = useState<Channel | null>(null)
+
+  const categoriesQuery = useQuery({
+    queryKey: ['channel-categories', organizationId ?? 'none'],
+    queryFn: () => channelService.listCategories(organizationId as string),
+    enabled: Boolean(organizationId) && canView,
+  })
+
+  const channelsQuery = useQuery({
+    queryKey: ['channels', organizationId ?? 'none'],
+    queryFn: () => channelService.listChannels(organizationId as string),
+    enabled: Boolean(organizationId) && canView,
+  })
+
+  async function refresh(): Promise<void> {
+    await queryClient.invalidateQueries({ queryKey: ['channels', organizationId ?? 'none'] })
+    await queryClient.invalidateQueries({
+      queryKey: ['channel-categories', organizationId ?? 'none'],
+    })
+  }
+
+  const createCategory = useMutation({
+    mutationFn: (name: string) => channelService.createCategory(organizationId as string, name),
+    onSuccess: async () => {
+      setNewCategory('')
+      await refresh()
+      toast.success('Category created.')
+    },
+    onError: (error: unknown) => toast.error(errorMessage(error)),
+  })
+
+  const createChannel = useMutation({
+    mutationFn: (input: { name: string; isPrivate: boolean }) =>
+      channelService.createChannel(organizationId as string, {
+        name: input.name,
+        topic: null,
+        categoryId: null,
+        isPrivate: input.isPrivate,
+      }),
+    onSuccess: async () => {
+      setNewChannel('')
+      await refresh()
+      toast.success('Channel created.')
+    },
+    onError: (error: unknown) => toast.error(errorMessage(error)),
+  })
+
+  const archive = useMutation({
+    mutationFn: (input: { id: string; archived: boolean }) =>
+      channelService.updateChannel(input.id, { archived: input.archived }),
+    onSuccess: async (_data, input) => {
+      await refresh()
+      toast.success(input.archived ? 'Channel archived.' : 'Channel restored.')
+    },
+    onError: (error: unknown) => toast.error(errorMessage(error)),
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: string) => channelService.deleteChannel(id),
+    onSuccess: async () => {
+      await refresh()
+      toast.success('Channel deleted.')
+    },
+    onError: (error: unknown) => toast.error(errorMessage(error)),
+  })
+
+  const removeCategory = useMutation({
+    mutationFn: (id: string) => channelService.deleteCategory(id),
+    onSuccess: async () => {
+      await refresh()
+      toast.success('Category deleted. Its channels are now uncategorised.')
+    },
+    onError: (error: unknown) => toast.error(errorMessage(error)),
+  })
+
+  const grouped = useMemo(() => {
+    const categories = categoriesQuery.data ?? []
+    const channels = channelsQuery.data ?? []
+    return [
+      ...categories.map((category) => ({
+        category,
+        channels: channels.filter((c) => c.categoryId === category.id),
+      })),
+      { category: null, channels: channels.filter((c) => c.categoryId === null) },
+    ].filter((group) => group.category !== null || group.channels.length > 0)
+  }, [categoriesQuery.data, channelsQuery.data])
+
+  if (!canView) return <ForbiddenState />
+
+  if (categoriesQuery.isPending || channelsQuery.isPending) {
+    return (
+      <Card>
+        <CardContent className="pt-4">
+          <CardSkeleton lines={8} />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (categoriesQuery.isError || channelsQuery.isError) {
+    return (
+      <ErrorState
+        error={categoriesQuery.error ?? channelsQuery.error}
+        onRetry={() => {
+          void categoriesQuery.refetch()
+          void channelsQuery.refetch()
+        }}
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {canManage ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                value={newCategory}
+                onChange={(event) => setNewCategory(event.target.value)}
+                placeholder="New category name"
+                aria-label="New category name"
+              />
+              <Button
+                loading={createCategory.isPending}
+                disabled={newCategory.trim().length === 0}
+                onClick={() => createCategory.mutate(newCategory.trim())}
+              >
+                <Plus className="size-3.5" aria-hidden="true" />
+                Category
+              </Button>
+            </div>
+
+            {canCreate ? (
+              <div className="flex gap-2">
+                <Input
+                  value={newChannel}
+                  onChange={(event) => setNewChannel(event.target.value)}
+                  placeholder="New channel name"
+                  aria-label="New channel name"
+                />
+                <Button
+                  variant="outline"
+                  loading={createChannel.isPending}
+                  disabled={newChannel.trim().length === 0}
+                  onClick={() =>
+                    createChannel.mutate({ name: newChannel.trim(), isPrivate: false })
+                  }
+                >
+                  <Hash className="size-3.5" aria-hidden="true" />
+                  Public
+                </Button>
+                <Button
+                  variant="outline"
+                  loading={createChannel.isPending}
+                  disabled={newChannel.trim().length === 0}
+                  onClick={() => createChannel.mutate({ name: newChannel.trim(), isPrivate: true })}
+                >
+                  <LockSimple className="size-3.5" aria-hidden="true" />
+                  Private
+                </Button>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {grouped.map((group) => (
+        <Card key={group.category?.id ?? 'uncategorised'}>
+          <CardHeader className="flex-row items-center gap-2 space-y-0">
+            <CardTitle className="flex-1">{group.category?.name ?? 'Uncategorised'}</CardTitle>
+            <Badge variant="outline">{group.channels.length}</Badge>
+            {group.category && canManage ? (
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Delete category ${group.category.name}`}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Delete the category "${group.category?.name ?? ''}"? Its channels are kept and become uncategorised.`,
+                    )
+                  ) {
+                    removeCategory.mutate(group.category.id)
+                  }
+                }}
+              >
+                <Trash className="size-3.5" aria-hidden="true" />
+              </Button>
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            {group.channels.length === 0 ? (
+              <p className="text-muted-foreground text-2xs">No channels in this category.</p>
+            ) : (
+              <ul className="divide-border divide-y" aria-label="Channels">
+                {group.channels.map((channel) => (
+                  <li key={channel.id} className="flex items-center gap-3 py-2.5">
+                    {channel.isPrivate ? (
+                      <LockSimple className="text-muted-foreground size-3.5" aria-label="Private" />
+                    ) : (
+                      <Hash className="text-muted-foreground size-3.5" aria-hidden="true" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm leading-tight font-medium">{channel.name}</p>
+                      {channel.topic ? (
+                        <p className="text-2xs text-muted-foreground truncate">{channel.topic}</p>
+                      ) : null}
+                    </div>
+
+                    {channel.archivedAt ? <Badge variant="warning">Archived</Badge> : null}
+
+                    {canManagePermissions ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setPermissionsFor(channel)}
+                      >
+                        Permissions
+                      </Button>
+                    ) : null}
+
+                    {canManage ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={
+                          channel.archivedAt
+                            ? `Restore ${channel.name}`
+                            : `Archive ${channel.name}`
+                        }
+                        onClick={() =>
+                          archive.mutate({ id: channel.id, archived: !channel.archivedAt })
+                        }
+                      >
+                        {channel.archivedAt ? (
+                          <ArrowCounterClockwise className="size-3.5" aria-hidden="true" />
+                        ) : (
+                          <Archive className="size-3.5" aria-hidden="true" />
+                        )}
+                      </Button>
+                    ) : null}
+
+                    {canDelete ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Delete ${channel.name}`}
+                        onClick={() => {
+                          // Permanent, and it will take the message history with
+                          // it once Phase 2 lands. Archiving is the reversible
+                          // option and is one button to the left.
+                          if (
+                            window.confirm(
+                              `Permanently delete #${channel.name}? This cannot be undone — archiving is reversible.`,
+                            )
+                          ) {
+                            remove.mutate(channel.id)
+                          }
+                        }}
+                      >
+                        <Trash className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+
+      {permissionsFor && organizationId ? (
+        <ChannelPermissionsDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setPermissionsFor(null)
+          }}
+          channel={permissionsFor}
+          organizationId={organizationId}
+        />
+      ) : null}
+    </div>
+  )
+}
