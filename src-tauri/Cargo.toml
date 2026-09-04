@@ -1,0 +1,36 @@
+[package]
+name = "lfg-hq"
+version = "0.1.0"
+description = "LFG HQ — private internal operating system for an esports organization."
+authors = ["LFG Esports"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+# The desktop entry point lives in the library so the same setup can be reused
+# by a future mobile target without duplicating it.
+name = "lfg_hq_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-window-state = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-deep-link = "2"
+
+[profile.release]
+# Small, fast binaries: this is an internal tool, not a game.
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

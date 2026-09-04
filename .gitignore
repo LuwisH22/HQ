@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/schemas/
+# WiX and NSIS toolchains, downloaded on demand when bundling on Windows.
+src-tauri/WixTools/
+src-tauri/NSIS/
+
+# ---------------------------------------------------------------------------
+# Secrets. Everything below is unrecoverable if published — treat a match here
+# as a reason to rotate, not just to delete the file.
+# ---------------------------------------------------------------------------
+
+# Frontend/CLI configuration. .env.example is the documented template and is
+# the only one that may be committed.
+.env
+.env.*
+!.env.example
+
+# Supabase CLI local state and secrets.
+supabase/.env
+supabase/.branches/
+supabase/.temp/
+
+# Tauri updater signing keys, and certificates for code signing.
+*.key
+*.pem
+*.p12
+*.pfx
+tauri-private.key*
+.tauri/
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# Caches and logs
+.vite/
+.eslintcache
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

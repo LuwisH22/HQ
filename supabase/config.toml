@@ -1,0 +1,78 @@
+# LFG HQ — Supabase local development configuration.
+# `project_id` also names the local Docker stack.
+project_id = "lfg-hq"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed/seed.sql"]
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+
+# Catches every outbound email locally so invite flows can be tested end to end.
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:1420"
+additional_redirect_urls = [
+  "http://localhost:1420",
+  "http://localhost:1420/#/auth/callback",
+  "lfghq://auth/callback",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+
+# LFG HQ is invitation-only. This is the single most important auth setting in
+# the project: with it false, the only way into the workspace is an invite
+# issued by someone holding `members.invite`.
+enable_signup = false
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = true
+max_frequency = "20s"
+otp_expiry = 3600
+
+[auth.email.template.invite]
+subject = "You have been invited to LFG HQ"
+content_path = "./templates/invite.html"
+
+[auth.sessions]
+# Sign out sessions that have been idle for a week.
+inactivity_timeout = "168h"
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"
+inspector_port = 8083
+
+[analytics]
+enabled = false
