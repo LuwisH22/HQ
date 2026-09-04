@@ -62,7 +62,21 @@ export interface OrganizationMember {
   role: MemberRole
   /** Every role held, most authoritative first. Source of truth. */
   roles: MemberRole[]
+  /** NULL with status 'suspended' means indefinite. Never set while banned. */
+  suspendedUntil: string | null
+  moderationReason: string | null
   profile: MemberProfileSummary
+}
+
+/** One entry in the append-only moderation history. */
+export interface ModerationAction {
+  id: number
+  action: 'suspend' | 'unsuspend' | 'ban' | 'unban'
+  reason: string | null
+  expiresAt: string | null
+  createdAt: string
+  actorName: string | null
+  targetUserId: string
 }
 
 /** The signed-in user's own membership, including resolved permissions. */
@@ -79,6 +93,8 @@ export interface CurrentMembership {
    * implicitly holds every permission, so no role edit can lock them out.
    */
   isOwner: boolean
+  suspendedUntil: string | null
+  moderationReason: string | null
   permissions: PermissionSet
 }
 
@@ -184,7 +200,6 @@ export interface OrganizationService {
   listRoles(organizationId: string): Promise<MemberRole[]>
   getPermissionMatrix(organizationId: string): Promise<PermissionMatrixRow[]>
   updateMemberRole(membershipId: string, roleId: string): Promise<void>
-  updateMemberStatus(membershipId: string, status: MemberStatus): Promise<void>
   removeMember(membershipId: string): Promise<void>
   updateOrganization(organizationId: string, patch: OrganizationPatch): Promise<OrganizationSummary>
 
@@ -199,6 +214,31 @@ export interface OrganizationService {
   setRolePermissions(roleId: string, permissionKeys: readonly string[]): Promise<void>
   assignRole(membershipId: string, roleId: string): Promise<void>
   unassignRole(membershipId: string, roleId: string): Promise<void>
+
+  // --- Moderation (Phase 1.5 · B2) ---
+  // `status` is no longer client-writable. Every one of these is a guarded
+  // routine in Postgres that records the reason, the actor, the expiry and
+  // an append-only history entry, so a moderation decision is always
+  // reviewable afterwards.
+  //
+  // `days: null` suspends indefinitely — a lapsed suspension restores
+  // access on its own, an indefinite one needs an explicit lift.
+  suspendMember(membershipId: string, reason: string, days: number | null): Promise<void>
+  unsuspendMember(membershipId: string, reason?: string): Promise<void>
+  /** Also revokes the Auth session server-side; see supabase/functions/moderate-user. */
+  banMember(membershipId: string, reason: string): Promise<ModerationResult>
+  unbanMember(membershipId: string, reason?: string): Promise<ModerationResult>
+  listModerationHistory(organizationId: string, userId?: string): Promise<ModerationAction[]>
+}
+
+/**
+ * A ban touches two systems. Organization access is revoked by RLS and is
+ * never in doubt; the authentication layer is updated through an Edge
+ * Function and can fail independently, so the caller is told which happened.
+ */
+export interface ModerationResult {
+  authUpdated: boolean
+  warning: string | null
 }
 
 export interface ProfileService {

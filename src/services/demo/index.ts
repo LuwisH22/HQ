@@ -5,9 +5,10 @@ import {
   isPermission,
   PERMISSIONS,
   PermissionSet,
+  type Permission,
 } from '@/lib/permissions'
+import { isEffectivelyActive } from '@/lib/moderation'
 import { endDemoSession, isDemoSessionActive, startDemoSession } from '@/lib/demo-mode'
-import type { MemberStatus } from '@/types/database.types'
 import type {
   AuditEntry,
   AuditService,
@@ -131,13 +132,22 @@ function rankOfMember(member: DemoMember): number {
   return ranks.length > 0 ? Math.min(...ranks) : 1000
 }
 
+/** Mirrors is_effectively_active(): a lapsed suspension restores access. */
+function effectivelyActive(member: DemoMember): boolean {
+  return isEffectivelyActive(member.status, member.suspendedUntil ?? null)
+}
+
 function currentRank(): number | null {
   const membership = memberOf(requireCurrentUserId())
-  if (!membership || membership.status !== 'active') return null
+  if (!membership || !effectivelyActive(membership)) return null
   return rankOfMember(membership)
 }
 
 function permissionsForMember(member: DemoMember): PermissionSet {
+  // Suspended and banned members hold nothing at all, whatever their roles
+  // say. This is the demo mirror of every helper gating on effective status.
+  if (!effectivelyActive(member)) return PermissionSet.empty()
+
   // The owner implicitly holds everything, so no permission edit can lock
   // them out of their own organization.
   if (isOwnerUser(member.userId)) return new PermissionSet(PERMISSIONS)
@@ -217,6 +227,78 @@ function assertOwnerSurvives(target: DemoMember, action: 'remove' | 'deactivate'
       ? 'The organization owner cannot be removed. Transfer ownership first.'
       : 'The organization owner cannot be deactivated. Transfer ownership first.',
   )
+}
+
+/** Mirrors `require_reason` in Postgres. */
+function requireReason(reason: string): string {
+  const trimmed = reason.trim()
+  if (trimmed === '') {
+    throw new AppError('validation', 'A reason is required for moderation actions')
+  }
+  if (trimmed.length > 500) {
+    throw new AppError('validation', 'Keep the reason under 500 characters')
+  }
+  return trimmed
+}
+
+/**
+ * Mirrors `assert_can_moderate`. Ownership is checked against the organization,
+ * never against a role, and equal authority is not enough.
+ */
+function assertCanModerate(membershipId: string, permission: Permission): DemoMember {
+  const member = db().members.find((m) => m.id === membershipId)
+  if (!member) throw new AppError('not_found', 'That member no longer exists.')
+
+  assertPermission(permission, 'You do not have permission to moderate members.')
+
+  if (member.userId === requireCurrentUserId()) {
+    throw new AppError('forbidden', 'You cannot moderate your own membership')
+  }
+  if (isOwnerUser(member.userId)) {
+    throw new AppError(
+      'forbidden',
+      'The organization owner cannot be moderated. Transfer ownership first.',
+    )
+  }
+
+  const actorRank = currentRank() ?? 1000
+  const targetRank = rankOfMember(member)
+  if (actorRank > -1 && targetRank <= actorRank) {
+    throw new AppError(
+      'forbidden',
+      'You cannot moderate a member whose authority is at or above your own',
+    )
+  }
+
+  return member
+}
+
+function clearModerationState(member: DemoMember): void {
+  member.status = 'active'
+  member.suspendedUntil = null
+  member.moderationReason = null
+  member.moderatedBy = requireCurrentUserId()
+  member.moderatedAt = new Date().toISOString()
+}
+
+function recordModeration(
+  member: DemoMember,
+  action: 'suspend' | 'unsuspend' | 'ban' | 'unban',
+  reason: string | null,
+  expiresAt: string | null,
+): void {
+  const store = db()
+  store.moderationActions.push({
+    id: store.nextModerationId,
+    targetMemberId: member.id,
+    targetUserId: member.userId,
+    actorId: store.currentUserId,
+    action,
+    reason,
+    expiresAt,
+    createdAt: new Date().toISOString(),
+  })
+  store.nextModerationId += 1
 }
 
 function displayName(userId: string | null): string {
@@ -336,6 +418,8 @@ export const demoOrganizationService: OrganizationService = {
       role: toMemberRole(roleById(membership.roleId)),
       roles: rolesOf(membership).map((id) => toMemberRole(roleById(id))),
       isOwner: isOwnerUser(membership.userId),
+      suspendedUntil: membership.suspendedUntil ?? null,
+      moderationReason: membership.moderationReason ?? null,
       permissions: permissionsForMember(membership),
     }
   },
@@ -356,6 +440,8 @@ export const demoOrganizationService: OrganizationService = {
           joinedAt: member.joinedAt,
           role: toMemberRole(roleById(member.roleId)),
           roles: rolesOf(member).map((id) => toMemberRole(roleById(id))),
+          suspendedUntil: member.suspendedUntil ?? null,
+          moderationReason: member.moderationReason ?? null,
           profile: {
             id: profile.id,
             email: profile.email,
@@ -567,24 +653,118 @@ export const demoOrganizationService: OrganizationService = {
     persist()
   },
 
-  async updateMemberStatus(membershipId, status: MemberStatus) {
+  async suspendMember(membershipId, reason, days) {
     await latency()
-    assertPermission('members.manage', 'You do not have permission to manage members.')
+    const member = assertCanModerate(membershipId, 'members.suspend')
+    const trimmed = requireReason(reason)
 
-    const member = db().members.find((m) => m.id === membershipId)
-    if (!member) throw new AppError('not_found', 'That member no longer exists.')
+    if (days !== null && (days < 1 || days > 365)) {
+      throw new AppError('validation', 'A suspension must last between 1 and 365 days')
+    }
 
-    assertCanActOnMember(member)
-    if (status !== 'active') assertOwnerSurvives(member, 'deactivate')
+    const until =
+      days === null ? null : new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
 
-    member.status = status
+    member.status = 'suspended'
+    member.suspendedUntil = until
+    member.moderationReason = trimmed
+    member.moderatedBy = requireCurrentUserId()
+    member.moderatedAt = new Date().toISOString()
+
+    recordModeration(member, 'suspend', trimmed, until)
     recordAudit(
-      status === 'suspended' ? 'member.suspended' : 'member.reactivated',
+      'member.suspended',
       'organization_member',
       member.id,
-      `${displayName(member.userId)} ${status === 'suspended' ? 'access suspended' : 'access restored'}`,
+      until === null
+        ? `${displayName(member.userId)} suspended indefinitely`
+        : `${displayName(member.userId)} suspended until ${until.slice(0, 10)}`,
     )
     persist()
+  },
+
+  async unsuspendMember(membershipId, reason) {
+    await latency()
+    const member = assertCanModerate(membershipId, 'members.suspend')
+    if (member.status !== 'suspended') {
+      throw new AppError('validation', 'That member is not suspended')
+    }
+
+    clearModerationState(member)
+    recordModeration(member, 'unsuspend', reason ?? null, null)
+    recordAudit(
+      'member.unsuspended',
+      'organization_member',
+      member.id,
+      `${displayName(member.userId)} suspension lifted`,
+    )
+    persist()
+  },
+
+  async banMember(membershipId, reason) {
+    await latency()
+    const member = assertCanModerate(membershipId, 'members.ban')
+    const trimmed = requireReason(reason)
+
+    member.status = 'banned'
+    // A ban has no expiry; clearing this stops a stale timestamp being read
+    // as one.
+    member.suspendedUntil = null
+    member.moderationReason = trimmed
+    member.moderatedBy = requireCurrentUserId()
+    member.moderatedAt = new Date().toISOString()
+
+    recordModeration(member, 'ban', trimmed, null)
+    recordAudit(
+      'member.banned',
+      'organization_member',
+      member.id,
+      `${displayName(member.userId)} banned`,
+    )
+    persist()
+
+    // Demo mode has no Supabase Auth to revoke, and saying otherwise would
+    // teach behaviour the real backend does not have.
+    return { authUpdated: false, warning: 'Demo mode does not revoke authentication sessions.' }
+  },
+
+  async unbanMember(membershipId, reason) {
+    await latency()
+    const member = assertCanModerate(membershipId, 'members.unban')
+    if (member.status !== 'banned') {
+      throw new AppError('validation', 'That member is not banned')
+    }
+
+    // Roles are left exactly as they were: a ban is about access, not about
+    // what someone was brought in to do.
+    clearModerationState(member)
+    recordModeration(member, 'unban', reason ?? null, null)
+    recordAudit(
+      'member.unbanned',
+      'organization_member',
+      member.id,
+      `${displayName(member.userId)} ban lifted`,
+    )
+    persist()
+
+    return { authUpdated: false, warning: null }
+  },
+
+  async listModerationHistory(_organizationId, userId) {
+    await latency()
+    return db()
+      .moderationActions.filter((entry) => !userId || entry.targetUserId === userId)
+      .slice()
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((entry) => ({
+        id: entry.id,
+        action: entry.action,
+        reason: entry.reason,
+        expiresAt: entry.expiresAt,
+        createdAt: entry.createdAt,
+        actorName: entry.actorId ? displayName(entry.actorId) : null,
+        targetUserId: entry.targetUserId,
+      }))
   },
 
   async removeMember(membershipId) {

@@ -150,6 +150,12 @@ const HELPERS = [
   ['set_role_permissions', { p_role_id: ORG, p_permission_keys: ['organization.view'] }],
   ['assign_role_to_member', { p_member_id: ORG, p_role_id: ORG }],
   ['unassign_role_from_member', { p_member_id: ORG, p_role_id: ORG }],
+  // Phase 1.5 · B2.
+  ['is_effectively_active', { p_status: 'active', p_suspended_until: null }],
+  ['suspend_member', { p_member_id: ORG, p_reason: 'probe', p_days: 1 }],
+  ['unsuspend_member', { p_member_id: ORG, p_reason: 'probe' }],
+  ['ban_member', { p_member_id: ORG, p_reason: 'probe' }],
+  ['unban_member', { p_member_id: ORG, p_reason: 'probe' }],
 ]
 for (const [fn, args] of HELPERS) {
   const { error } = await supabase.rpc(fn, args)

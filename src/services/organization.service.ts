@@ -10,10 +10,12 @@ import type {
   OrganizationPatch,
   OrganizationService,
   OrganizationSummary,
+  ModerationAction,
+  ModerationResult,
   PermissionMatrixRow,
   RoleInput,
 } from './service-contracts'
-import type { OrganizationRow, ProfileRow, RoleRow, MemberStatus } from '@/types/database.types'
+import type { OrganizationRow, ProfileRow, RoleRow } from '@/types/database.types'
 import { firstOf } from './postgrest'
 
 /**
@@ -83,6 +85,58 @@ async function fetchRolesByMember(memberIds: string[]): Promise<Map<string, Memb
   return byMember
 }
 
+/**
+ * Ban and unban both run through the `moderate-user` Edge Function.
+ *
+ * The organization half is authoritative and already done by the time the
+ * function returns; the auth half can fail on its own, and a 207 says so
+ * rather than pretending the whole thing failed.
+ */
+async function moderateThroughFunction(
+  membershipId: string,
+  action: 'ban' | 'unban',
+  reason: string,
+): Promise<ModerationResult> {
+  const supabase = getSupabase()
+
+  const { data: sessionData } = await supabase.auth.getSession()
+  if (!sessionData.session) {
+    throw new AppError('auth', 'Your session has expired. Please sign in again.')
+  }
+
+  const response = await supabase.functions.invoke<{
+    ok?: boolean
+    authUpdated?: boolean
+    warning?: string
+    error?: string
+  }>('moderate-user', { body: { memberId: membershipId, action, reason } })
+
+  const error: unknown = response.error
+  if (error) {
+    // supabase-js surfaces a non-2xx as an error without the body, so the
+    // server's own message is dug out where it is available.
+    const context: unknown =
+      typeof error === 'object' && error !== null && 'context' in error
+        ? error.context
+        : null
+    let message = 'The moderation action could not be completed.'
+    if (context instanceof Response) {
+      try {
+        const body = (await context.json()) as { error?: string }
+        if (typeof body.error === 'string') message = body.error
+      } catch {
+        // Keep the generic message.
+      }
+    }
+    throw new AppError('forbidden', message, { cause: error })
+  }
+
+  return {
+    authUpdated: response.data?.authUpdated === true,
+    warning: response.data?.warning ?? null,
+  }
+}
+
 export const supabaseOrganizationService: OrganizationService = {
   /** Organizations the signed-in user belongs to. RLS does the filtering. */
   async listMine(): Promise<OrganizationSummary[]> {
@@ -112,7 +166,7 @@ export const supabaseOrganizationService: OrganizationService = {
       supabase
         .from('organization_members')
         .select(
-          `id, organization_id, user_id, status, joined_at,
+          `id, organization_id, user_id, status, suspended_until, moderation_reason, joined_at,
            role:roles!organization_members_role_id_fkey (
              id, key, name, description, rank, is_system, created_by, organization_id, created_at, updated_at
            )`,
@@ -160,6 +214,8 @@ export const supabaseOrganizationService: OrganizationService = {
       // Ownership lives on the organization, never on a role. A role called
       // "Owner" grants nothing; renaming a role transfers nothing.
       isOwner: organizationResult.data?.owner_id === userId,
+      suspendedUntil: membershipResult.data.suspended_until,
+      moderationReason: membershipResult.data.moderation_reason,
       permissions: new PermissionSet(permissionKeys),
     }
   },
@@ -168,7 +224,7 @@ export const supabaseOrganizationService: OrganizationService = {
     const { data, error } = await getSupabase()
       .from('organization_members')
       .select(
-        `id, organization_id, user_id, status, joined_at,
+        `id, organization_id, user_id, status, suspended_until, moderation_reason, joined_at,
          role:roles!organization_members_role_id_fkey (
            id, key, name, description, rank, is_system, created_by, organization_id, created_at, updated_at
          ),
@@ -199,6 +255,8 @@ export const supabaseOrganizationService: OrganizationService = {
           joinedAt: row.joined_at,
           role: toMemberRole(role),
           roles: rolesByMember.get(row.id) ?? [toMemberRole(role)],
+          suspendedUntil: row.suspended_until,
+          moderationReason: row.moderation_reason,
           profile: {
             id: profile.id,
             email: profile.email ?? '',
@@ -354,13 +412,70 @@ export const supabaseOrganizationService: OrganizationService = {
     if (error) throw toAppError(error)
   },
 
-  async updateMemberStatus(membershipId: string, status: MemberStatus): Promise<void> {
-    const { error } = await getSupabase()
-      .from('organization_members')
-      .update({ status })
-      .eq('id', membershipId)
-
+  async suspendMember(membershipId: string, reason: string, days: number | null): Promise<void> {
+    const { error } = await getSupabase().rpc('suspend_member', {
+      p_member_id: membershipId,
+      p_reason: reason,
+      p_days: days,
+    })
     if (error) throw toAppError(error)
+  },
+
+  async unsuspendMember(membershipId: string, reason?: string): Promise<void> {
+    const { error } = await getSupabase().rpc('unsuspend_member', {
+      p_member_id: membershipId,
+      p_reason: reason ?? null,
+    })
+    if (error) throw toAppError(error)
+  },
+
+  /**
+   * Banning goes through the Edge Function, not straight to the RPC.
+   *
+   * Revoking the Auth session needs the service-role key, which must never
+   * reach this client. The function calls `ban_member()` with the caller's own
+   * JWT first — so Postgres still decides — and only then uses the privileged
+   * key for the auth half.
+   */
+  async banMember(membershipId: string, reason: string): Promise<ModerationResult> {
+    return moderateThroughFunction(membershipId, 'ban', reason)
+  },
+
+  async unbanMember(membershipId: string, reason?: string): Promise<ModerationResult> {
+    return moderateThroughFunction(membershipId, 'unban', reason ?? '')
+  },
+
+  async listModerationHistory(
+    organizationId: string,
+    userId?: string,
+  ): Promise<ModerationAction[]> {
+    let query = getSupabase()
+      .from('moderation_actions')
+      .select(
+        `id, action, reason, expires_at, created_at, target_user_id,
+         actor:profiles!moderation_actions_actor_id_fkey ( display_name, full_name, email )`,
+      )
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (userId) query = query.eq('target_user_id', userId)
+
+    const { data, error } = await query
+    if (error) throw toAppError(error)
+
+    return (data ?? []).map((row) => {
+      const actor = firstOf(row.actor)
+      return {
+        id: row.id,
+        action: row.action as ModerationAction['action'],
+        reason: row.reason,
+        expiresAt: row.expires_at,
+        createdAt: row.created_at,
+        actorName: actor?.display_name ?? actor?.full_name ?? actor?.email ?? null,
+        targetUserId: row.target_user_id,
+      }
+    })
   },
 
   async removeMember(membershipId: string): Promise<void> {
@@ -400,7 +515,6 @@ export const organizationService: OrganizationService = {
   listRoles: (organizationId) => impl().listRoles(organizationId),
   getPermissionMatrix: (organizationId) => impl().getPermissionMatrix(organizationId),
   updateMemberRole: (membershipId, roleId) => impl().updateMemberRole(membershipId, roleId),
-  updateMemberStatus: (membershipId, status) => impl().updateMemberStatus(membershipId, status),
   removeMember: (membershipId) => impl().removeMember(membershipId),
   updateOrganization: (organizationId, patch) => impl().updateOrganization(organizationId, patch),
   createRole: (organizationId, input) => impl().createRole(organizationId, input),
@@ -410,4 +524,11 @@ export const organizationService: OrganizationService = {
   setRolePermissions: (roleId, keys) => impl().setRolePermissions(roleId, keys),
   assignRole: (membershipId, roleId) => impl().assignRole(membershipId, roleId),
   unassignRole: (membershipId, roleId) => impl().unassignRole(membershipId, roleId),
+  suspendMember: (membershipId, reason, days) =>
+    impl().suspendMember(membershipId, reason, days),
+  unsuspendMember: (membershipId, reason) => impl().unsuspendMember(membershipId, reason),
+  banMember: (membershipId, reason) => impl().banMember(membershipId, reason),
+  unbanMember: (membershipId, reason) => impl().unbanMember(membershipId, reason),
+  listModerationHistory: (organizationId, userId) =>
+    impl().listModerationHistory(organizationId, userId),
 }

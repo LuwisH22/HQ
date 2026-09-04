@@ -42,7 +42,6 @@ export const demoOrganizationService: OrganizationService = {
   listRoles: unreachable,
   getPermissionMatrix: unreachable,
   updateMemberRole: unreachable,
-  updateMemberStatus: unreachable,
   removeMember: unreachable,
   updateOrganization: unreachable,
   createRole: unreachable,
@@ -52,6 +51,11 @@ export const demoOrganizationService: OrganizationService = {
   setRolePermissions: unreachable,
   assignRole: unreachable,
   unassignRole: unreachable,
+  suspendMember: unreachable,
+  unsuspendMember: unreachable,
+  banMember: unreachable,
+  unbanMember: unreachable,
+  listModerationHistory: unreachable,
 }
 
 export const demoProfileService: ProfileService = {

@@ -186,6 +186,10 @@ check('player cannot invite members', !(byRole.get('player') ?? []).includes('me
 check('player can view the calendar', (byRole.get('player') ?? []).includes('calendar.view'))
 check('staff cannot upload files', !(byRole.get('staff') ?? []).includes('files.upload'))
 check('every role has at least organization.view', EXPECTED_TEMPLATES.every(([k]) => (byRole.get(k) ?? []).includes('organization.view')))
+// B2 seeded these by capability, never by role name: whoever could already
+// manage members can suspend, whoever could already remove them can ban.
+check('moderation permissions exist in the catalogue',
+  ['members.suspend', 'members.ban', 'members.unban'].every((k) => dbKeys.includes(k)))
 
 // --- resolved permissions for the caller ----------------------------------
 console.log('\nresolved permissions (my_permissions)')
@@ -427,11 +431,186 @@ if (probeRoleId) {
   check('probe role deleted (cleanup)', !error, error?.message ?? '')
 }
 
+// --- B2 · moderation --------------------------------------------------------
+console.log('\nB2 · effective status is derived in the database')
+
+// The expiry rule is checked by calling the function directly, so no data has
+// to be mutated and no clock has to be faked.
+for (const [label, status, until, expected] of [
+  ['active member', 'active', null, true],
+  ['suspension still in force', 'suspended', '2999-01-01T00:00:00Z', false],
+  ['suspension already lapsed', 'suspended', '2000-01-01T00:00:00Z', true],
+  ['indefinite suspension', 'suspended', null, false],
+  ['ban with a stale timestamp', 'banned', '2000-01-01T00:00:00Z', false],
+  ['ban with a future timestamp', 'banned', '2999-01-01T00:00:00Z', false],
+]) {
+  const { data, error } = await supabase.rpc('is_effectively_active', {
+    p_status: status,
+    p_suspended_until: until,
+  })
+  check(`${label} -> ${String(expected)}`, !error && data === expected,
+    error ? error.message.slice(0, 40) : `got ${String(data)}`)
+}
+
+console.log('\nB2 · moderation is not reachable by direct writes')
+
+const otherMember = (members ?? []).find((m) => m.user_id !== userId)
+
+if (otherMember) {
+  {
+    const { error } = await supabase
+      .from('organization_members')
+      .update({ status: 'banned' })
+      .eq('id', otherMember.id)
+    check('status is not client-writable', Boolean(error),
+      error ? error.message.slice(0, 46) : 'ACCEPTED — MODERATION BYPASSABLE')
+  }
+  {
+    const { error } = await supabase.from('moderation_actions').insert({
+      organization_id: org?.id,
+      target_user_id: otherMember.user_id,
+      action: 'ban',
+      reason: 'forged',
+    })
+    check('moderation history cannot be forged', Boolean(error),
+      error ? `blocked (${error.code ?? ''})` : 'ACCEPTED — HISTORY IS WRITABLE')
+  }
+} else {
+  check('a second member exists to moderate', false, 'SKIPPED — only one member')
+}
+
+console.log('\nB2 · who may be moderated')
+
+if (self) {
+  const { error } = await supabase.rpc('suspend_member', {
+    p_member_id: self.id,
+    p_reason: 'probe',
+    p_days: 1,
+  })
+  check('self-moderation is refused', Boolean(error),
+    error ? error.message.slice(0, 44) : 'ACCEPTED — SELF-MODERATION POSSIBLE')
+}
+
+// The owner is protected by organizations.owner_id, so the owner's own
+// membership can never be moderated — not even by themselves, which the
+// self-check above already covers. A second signed-in identity would be
+// needed to prove the owner branch, so it is asserted in the unit tests.
+
+console.log('\nB2 · suspend, verify, restore (self-cleaning)')
+
+if (otherMember) {
+  {
+    const { error } = await supabase.rpc('suspend_member', {
+      p_member_id: otherMember.id,
+      p_reason: 'verify-live probe; restored immediately',
+      p_days: 1,
+    })
+    check('owner can suspend a member', !error, error?.message ?? '')
+  }
+
+  {
+    const { data: after } = await supabase
+      .from('organization_members')
+      .select('status, suspended_until, moderation_reason, moderated_by')
+      .eq('id', otherMember.id)
+      .maybeSingle()
+    check('status recorded as suspended', after?.status === 'suspended', String(after?.status))
+    check('expiry recorded', Boolean(after?.suspended_until), after?.suspended_until ?? '')
+    check('reason recorded', Boolean(after?.moderation_reason))
+    check('actor recorded', after?.moderated_by === userId)
+  }
+
+  {
+    const { data: history } = await supabase
+      .from('moderation_actions')
+      .select('action, reason, expires_at, actor_id')
+      .eq('target_user_id', otherMember.user_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    check('history entry written', (history ?? []).length === 1)
+    check('history records the action', history?.[0]?.action === 'suspend', history?.[0]?.action ?? '')
+    check('history records the actor', history?.[0]?.actor_id === userId)
+  }
+
+  {
+    const { error } = await supabase.rpc('unsuspend_member', {
+      p_member_id: otherMember.id,
+      p_reason: 'probe complete',
+    })
+    check('suspension can be lifted', !error, error?.message ?? '')
+  }
+
+  {
+    const { data: restored } = await supabase
+      .from('organization_members')
+      .select('status, suspended_until, moderation_reason')
+      .eq('id', otherMember.id)
+      .maybeSingle()
+    check('member restored to active', restored?.status === 'active', String(restored?.status))
+    check('expiry cleared', restored?.suspended_until === null)
+    check('reason cleared', restored?.moderation_reason === null)
+  }
+
+  console.log('\nB2 · ban and unban (self-cleaning)')
+
+  const { data: rolesBefore } = await supabase
+    .from('member_roles')
+    .select('role_id')
+    .eq('member_id', otherMember.id)
+
+  {
+    const { error } = await supabase.rpc('ban_member', {
+      p_member_id: otherMember.id,
+      p_reason: 'verify-live probe; lifted immediately',
+    })
+    check('owner can ban a member', !error, error?.message ?? '')
+  }
+
+  {
+    const { data: after } = await supabase
+      .from('organization_members')
+      .select('status, suspended_until')
+      .eq('id', otherMember.id)
+      .maybeSingle()
+    check('status recorded as banned', after?.status === 'banned', String(after?.status))
+    // A ban carries no expiry, so nothing can turn it into an accidental unban.
+    check('ban carries no expiry', after?.suspended_until === null)
+  }
+
+  {
+    const { error } = await supabase.rpc('unban_member', {
+      p_member_id: otherMember.id,
+      p_reason: 'probe complete',
+    })
+    check('ban can be lifted', !error, error?.message ?? '')
+  }
+
+  {
+    const { data: restored } = await supabase
+      .from('organization_members')
+      .select('status')
+      .eq('id', otherMember.id)
+      .maybeSingle()
+    check('member restored after unban', restored?.status === 'active', String(restored?.status))
+
+    const { data: rolesAfter } = await supabase
+      .from('member_roles')
+      .select('role_id')
+      .eq('member_id', otherMember.id)
+    check(
+      'roles survive a ban and an unban untouched',
+      JSON.stringify((rolesAfter ?? []).map((r) => r.role_id).sort()) ===
+        JSON.stringify((rolesBefore ?? []).map((r) => r.role_id).sort()),
+      `${String((rolesAfter ?? []).length)} role(s)`,
+    )
+  }
+}
+
 await supabase.auth.signOut()
 
 console.log(
   failures === 0
-    ? '\nAll signed-in checks passed. Nothing was modified.\n'
+    ? '\nAll signed-in checks passed.\n\nThe B1 section creates and deletes a probe role; the B2 section\nsuspends, bans and restores a member. Both clean up after themselves,\nbut the audit and moderation logs keep their entries — by design,\nthey are append-only.\n'
     : `\n${String(failures)} check(s) FAILED.\n`,
 )
 process.exit(failures === 0 ? 0 : 1)

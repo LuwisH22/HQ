@@ -16,6 +16,9 @@ export const PERMISSIONS = [
   'members.invite',
   'members.manage',
   'members.remove',
+  'members.suspend',
+  'members.ban',
+  'members.unban',
 
   'roles.view',
   'roles.manage',

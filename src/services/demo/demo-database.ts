@@ -16,7 +16,7 @@ import type { InvitationStatus, MemberStatus } from '@/types/database.types'
 const STORAGE_KEY = 'lfg-hq-demo-db'
 // Bumped when the seed shape changes, so a stale store is discarded rather
 // than half-migrated.
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 // --- Row shapes (camelCase; the demo layer sits above the SQL naming) -------
 
@@ -58,6 +58,11 @@ export interface DemoMember {
    * single-role shape meant.
    */
   roleIds?: string[]
+  /** NULL with status 'suspended' means indefinite. Never set while banned. */
+  suspendedUntil?: string | null
+  moderationReason?: string | null
+  moderatedBy?: string | null
+  moderatedAt?: string | null
   id: string
   organizationId: string
   userId: string
@@ -100,6 +105,20 @@ export interface DemoDatabase {
   invitations: DemoInvitation[]
   auditLogs: DemoAuditLog[]
   nextAuditId: number
+  /** Append-only, mirroring the moderation_actions table. */
+  moderationActions: DemoModerationAction[]
+  nextModerationId: number
+}
+
+export interface DemoModerationAction {
+  id: number
+  targetMemberId: string
+  targetUserId: string
+  actorId: string | null
+  action: 'suspend' | 'unsuspend' | 'ban' | 'unban'
+  reason: string | null
+  expiresAt: string | null
+  createdAt: string
 }
 
 // --- Identifiers -----------------------------------------------------------
@@ -521,6 +540,8 @@ function buildSeed(): DemoDatabase {
 
   return {
     version: SCHEMA_VERSION,
+    moderationActions: [],
+    nextModerationId: 1,
     currentUserId: null,
     organization: {
       id: ORG_ID,

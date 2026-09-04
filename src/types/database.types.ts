@@ -11,7 +11,7 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
-export type MemberStatus = 'active' | 'suspended'
+export type MemberStatus = 'active' | 'suspended' | 'banned'
 export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
 
 export interface Database {
@@ -172,6 +172,11 @@ export interface Database {
           user_id: string
           role_id: string
           status: MemberStatus
+          /** NULL with status=suspended means indefinite. Never set while banned. */
+          suspended_until: string | null
+          moderation_reason: string | null
+          moderated_by: string | null
+          moderated_at: string | null
           joined_at: string
           created_at: string
           updated_at: string
@@ -327,6 +332,37 @@ export interface Database {
           },
         ]
       }
+      moderation_actions: {
+        Row: {
+          id: number
+          organization_id: string
+          target_member_id: string | null
+          target_user_id: string
+          actor_id: string | null
+          action: string
+          reason: string | null
+          expires_at: string | null
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'moderation_actions_target_user_id_fkey'
+            columns: ['target_user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'moderation_actions_actor_id_fkey'
+            columns: ['actor_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<never, never>
     Functions: {
@@ -378,6 +414,19 @@ export interface Database {
         Args: { p_member_id: string; p_role_id: string }
         Returns: undefined
       }
+      suspend_member: {
+        Args: { p_member_id: string; p_reason: string; p_days?: number | null }
+        Returns: undefined
+      }
+      unsuspend_member: {
+        Args: { p_member_id: string; p_reason?: string | null }
+        Returns: undefined
+      }
+      ban_member: { Args: { p_member_id: string; p_reason: string }; Returns: undefined }
+      unban_member: {
+        Args: { p_member_id: string; p_reason?: string | null }
+        Returns: undefined
+      }
     }
     Enums: {
       member_status: MemberStatus
@@ -403,3 +452,4 @@ export type OrganizationMemberRow = Tables<'organization_members'>
 export type InvitationRow = Tables<'invitations'>
 export type AuditLogRow = Tables<'audit_logs'>
 export type MemberRoleRow = Tables<'member_roles'>
+export type ModerationActionRow = Tables<'moderation_actions'>

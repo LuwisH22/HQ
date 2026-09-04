@@ -25,6 +25,10 @@ for (const line of (() => {
 }
 
 const SIGNOUT = /signout\.spec\.ts$/
+// The organization has exactly one non-owner member, so moderation mutates a
+// row every other signed-in spec can see. It therefore runs alone, after the
+// rest, rather than racing them.
+const MODERATION = /moderation\.spec\.ts$/
 const PORT = 1420
 const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`
 
@@ -53,7 +57,7 @@ export default defineConfig({
     {
       name: 'desktop',
       dependencies: ['setup'],
-      testIgnore: SIGNOUT,
+      testIgnore: [SIGNOUT, MODERATION],
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 900 },
@@ -63,9 +67,22 @@ export default defineConfig({
     {
       name: 'mobile',
       dependencies: ['setup'],
-      testIgnore: SIGNOUT,
+      testIgnore: [SIGNOUT, MODERATION],
       use: {
         ...devices['Pixel 7'],
+        ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
+      },
+    },
+    {
+      name: 'moderation',
+      testMatch: MODERATION,
+      // Runs after the read-only specs: suspending or banning the only other
+      // member changes what those specs would see.
+      dependencies: ['desktop', 'mobile'],
+      workers: 1,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
         ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
       },
     },
@@ -74,7 +91,7 @@ export default defineConfig({
       testMatch: SIGNOUT,
       // Runs last: signing out revokes every session for the user, including
       // the one the other projects share.
-      dependencies: ['desktop', 'mobile'],
+      dependencies: ['desktop', 'mobile', 'moderation'],
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 900 },

@@ -3,6 +3,7 @@ import { CircleNotch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/common/states'
 import { useAuth } from '@/hooks/use-auth'
+import { effectiveMemberStatus, suspensionEndsAt } from '@/lib/moderation'
 import { useWorkspace } from '@/hooks/use-workspace'
 
 function BootScreen({ label }: { label: string }) {
@@ -80,14 +81,37 @@ export function RequireAuth() {
     )
   }
 
-  if (workspace.membership?.status === 'suspended') {
+  // Derived, not stored: a suspension whose expiry has passed already reads as
+  // active here, with nothing having been written. The database applies the
+  // same rule, so this screen and the data agree.
+  const membershipStatus = workspace.membership
+    ? effectiveMemberStatus(workspace.membership.status, workspace.membership.suspendedUntil)
+    : 'active'
+
+  if (membershipStatus !== 'active') {
+    const banned = membershipStatus === 'banned'
+    const until = workspace.membership
+      ? suspensionEndsAt(workspace.membership.status, workspace.membership.suspendedUntil)
+      : null
+
     return (
       <div className="bg-background flex min-h-dvh items-center justify-center p-6">
         <div className="border-border bg-surface w-full max-w-md space-y-4 rounded-lg border p-6 text-center">
-          <h1 className="text-base font-semibold">Your access is suspended</h1>
+          <h1 className="text-base font-semibold">
+            {banned ? 'Your access has been revoked' : 'Your access is suspended'}
+          </h1>
           <p className="text-muted-foreground text-xs leading-relaxed">
-            An administrator has paused your membership. Contact them to restore access.
+            {banned
+              ? 'An administrator has removed your access to this organization.'
+              : until
+                ? `An administrator has paused your membership until ${until.toLocaleDateString()}.`
+                : 'An administrator has paused your membership. Contact them to restore access.'}
           </p>
+          {workspace.membership?.moderationReason ? (
+            <p className="border-border bg-elevated text-muted-foreground rounded-md border p-3 text-xs">
+              {workspace.membership.moderationReason}
+            </p>
+          ) : null}
           <Button size="sm" variant="ghost" onClick={() => void signOut()}>
             Sign out
           </Button>

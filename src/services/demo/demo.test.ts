@@ -103,14 +103,16 @@ describe('member CRUD', () => {
   })
 
   it('suspends and restores a member', async () => {
+    // Status is no longer written directly: moderation goes through routines
+    // that also record the reason, the actor and the history.
     const members = await demoOrganizationService.listMembers('any')
     const target = members.find((m) => m.role.key === 'player')!
 
-    await demoOrganizationService.updateMemberStatus(target.id, 'suspended')
+    await demoOrganizationService.suspendMember(target.id, 'Testing', 7)
     let after = await demoOrganizationService.listMembers('any')
     expect(after.find((m) => m.id === target.id)?.status).toBe('suspended')
 
-    await demoOrganizationService.updateMemberStatus(target.id, 'active')
+    await demoOrganizationService.unsuspendMember(target.id)
     after = await demoOrganizationService.listMembers('any')
     expect(after.find((m) => m.id === target.id)?.status).toBe('active')
   })
@@ -147,13 +149,30 @@ describe('authorization rules mirror the database guards', () => {
     expect(membership?.permissions.can('organization.delete')).toBe(true)
   })
 
-  it('refuses to suspend the last remaining owner', async () => {
+  it('refuses to suspend the organization owner', async () => {
+    // The demo admin IS the owner, and self-moderation is refused first — so a
+    // delegate is needed to reach the owner-protection rule at all.
+    const deputy = await demoOrganizationService.createRole('any', {
+      name: 'Deputy',
+      description: null,
+      rank: 5,
+    })
+    await demoOrganizationService.setRolePermissions(deputy, [
+      'organization.view',
+      'members.view',
+      'members.suspend',
+    ])
+
     const members = await demoOrganizationService.listMembers('any')
     const owner = members.find((m) => m.role.key === 'owner')!
+    const delegate = members.find((m) => m.role.key !== 'owner')!
+    await demoOrganizationService.updateMemberRole(delegate.id, deputy)
 
-    await expect(demoOrganizationService.updateMemberStatus(owner.id, 'suspended')).rejects.toThrow(
-      /owner cannot be deactivated/i,
-    )
+    db().currentUserId = delegate.userId
+
+    await expect(
+      demoOrganizationService.suspendMember(owner.id, 'Should be impossible', 7),
+    ).rejects.toThrow(/owner cannot be moderated/i)
   })
 
   it('refuses to remove the last remaining owner', async () => {

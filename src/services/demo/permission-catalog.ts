@@ -61,6 +61,24 @@ export const PERMISSION_CATALOG: readonly PermissionCatalogEntry[] = [
     label: 'Remove members',
     description: 'Remove a member from the organization.',
   },
+  {
+    key: 'members.suspend',
+    category: 'Members',
+    label: 'Suspend members',
+    description: 'Temporarily block a member from the organization, with an optional expiry.',
+  },
+  {
+    key: 'members.ban',
+    category: 'Members',
+    label: 'Ban members',
+    description: 'Permanently block a member. Requires an explicit unban to reverse.',
+  },
+  {
+    key: 'members.unban',
+    category: 'Members',
+    label: 'Restore members',
+    description: 'Lift a suspension or a ban and restore access.',
+  },
 
   // Access control
   {

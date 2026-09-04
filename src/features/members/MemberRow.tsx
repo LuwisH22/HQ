@@ -1,5 +1,13 @@
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { DotsThree, PauseCircle, PlayCircle, Shield, UserMinus } from '@phosphor-icons/react'
+import {
+  DotsThree,
+  PauseCircle,
+  PlayCircle,
+  Prohibit,
+  Shield,
+  UserMinus,
+} from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback, AvatarImage, AvatarStatus } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +30,8 @@ import { displayNameFor, initialsFor } from '@/services/profile.service'
 import { queryKeys } from '@/lib/query-keys'
 import { errorMessage } from '@/lib/errors'
 import { canActOnRank, canGrantRank } from '@/lib/permissions'
+import { effectiveMemberStatus, suspensionEndsAt } from '@/lib/moderation'
+import { ModerateMemberDialog, type ModerationIntent } from './ModerateMemberDialog'
 import { useWorkspace } from '@/hooks/use-workspace'
 import { usePermission } from '@/hooks/use-permission'
 import { presenceFrom, presenceLabel } from '@/utils/presence'
@@ -39,6 +49,15 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
   const queryClient = useQueryClient()
   const { membership, organization } = useWorkspace()
   const canManage = usePermission('members.manage')
+  const canSuspend = usePermission('members.suspend')
+  const canBan = usePermission('members.ban')
+  const canUnban = usePermission('members.unban')
+  const [intent, setIntent] = useState<ModerationIntent | null>(null)
+
+  // What the member's status resolves to right now. A suspension whose
+  // expiry has passed already reads as active, with nothing written.
+  const effective = effectiveMemberStatus(member.status, member.suspendedUntil)
+  const suspendedUntil = suspensionEndsAt(member.status, member.suspendedUntil)
   const canRemove = usePermission('members.remove')
 
   // The owner outranks every possible role; otherwise authority is the most
@@ -77,15 +96,6 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
     onError: (error) => toast.error(errorMessage(error)),
   })
 
-  const statusMutation = useMutation({
-    mutationFn: (status: 'active' | 'suspended') =>
-      organizationService.updateMemberStatus(member.id, status),
-    onSuccess: async (_data, status) => {
-      toast.success(status === 'suspended' ? 'Member suspended.' : 'Member reactivated.')
-      await invalidate()
-    },
-    onError: (error) => toast.error(errorMessage(error)),
-  })
 
   const removeMutation = useMutation({
     mutationFn: () => organizationService.removeMember(member.id),
@@ -96,7 +106,7 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
     onError: (error) => toast.error(errorMessage(error)),
   })
 
-  const busy = assignMutation.isPending || unassignMutation.isPending || statusMutation.isPending || removeMutation.isPending
+  const busy = assignMutation.isPending || unassignMutation.isPending || removeMutation.isPending
   const showMenu = (canManage || canRemove) && mayAct && !isSelf
 
   // Only roles at or below the viewer's own authority may be assigned.
@@ -118,7 +128,12 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
             {displayNameFor(member.profile)}
           </p>
           {isSelf ? <Badge variant="secondary">You</Badge> : null}
-          {member.status === 'suspended' ? <Badge variant="warning">Suspended</Badge> : null}
+          {effective === 'suspended' ? (
+            <Badge variant="warning">
+              {suspendedUntil ? `Suspended until ${formatDate(suspendedUntil.toISOString())}` : 'Suspended'}
+            </Badge>
+          ) : null}
+          {effective === 'banned' ? <Badge variant="destructive">Banned</Badge> : null}
         </div>
         <p className="text-2xs text-muted-foreground truncate">
           {member.profile.title ? `${member.profile.title} · ` : ''}
@@ -191,13 +206,11 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
               </>
             ) : null}
 
-            {canManage ? (
+            {canSuspend ? (
               <DropdownMenuItem
-                onSelect={() =>
-                  statusMutation.mutate(member.status === 'active' ? 'suspended' : 'active')
-                }
+                onSelect={() => setIntent(effective === 'active' ? 'suspend' : 'unsuspend')}
               >
-                {member.status === 'active' ? (
+                {effective === 'active' ? (
                   <>
                     <PauseCircle aria-hidden="true" />
                     Suspend access
@@ -205,9 +218,23 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
                 ) : (
                   <>
                     <PlayCircle aria-hidden="true" />
-                    Restore access
+                    Lift suspension
                   </>
                 )}
+              </DropdownMenuItem>
+            ) : null}
+
+            {canBan && effective !== 'banned' ? (
+              <DropdownMenuItem destructive onSelect={() => setIntent('ban')}>
+                <Prohibit aria-hidden="true" />
+                Ban member
+              </DropdownMenuItem>
+            ) : null}
+
+            {canUnban && effective === 'banned' ? (
+              <DropdownMenuItem onSelect={() => setIntent('unban')}>
+                <PlayCircle aria-hidden="true" />
+                Lift ban
               </DropdownMenuItem>
             ) : null}
 
@@ -230,6 +257,18 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
       ) : (
         <span className="w-8 shrink-0" aria-hidden="true" />
       )}
+
+      {intent && organization ? (
+        <ModerateMemberDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setIntent(null)
+          }}
+          member={member}
+          intent={intent}
+          organizationId={organization.id}
+        />
+      ) : null}
     </div>
   )
 }
