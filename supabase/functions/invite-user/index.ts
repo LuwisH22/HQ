@@ -35,7 +35,13 @@ function corsHeaders(origin: string | null): Record<string, string> {
 
   return {
     'Access-Control-Allow-Origin': allow,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    // `x-application-name` is set on the supabase-js client's `global.headers`,
+    // which the library passes to every sub-client including Functions. It is a
+    // non-simple header, so the browser preflights it and refuses the request
+    // unless it is named here. Declaring it grants no read access and no origin
+    // relaxation — it only permits the browser to send it.
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type, x-application-name',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     Vary: 'Origin',
   }
@@ -141,8 +147,17 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  const siteUrl = Deno.env.get('PUBLIC_SITE_URL') ?? 'http://localhost:1420'
-  const redirectTo = `${siteUrl}/#/auth/accept-invite?token=${encodeURIComponent(token)}`
+  // The token goes in the real query string, NOT inside the hash route.
+  //
+  // GoTrue appends its own `#access_token=...` fragment to whatever we hand
+  // it. supabase-js reads everything after the FIRST `#`, so a URL shaped
+  // `/#/auth/accept-invite?token=...#access_token=...` makes the access token
+  // unparseable and no session is ever established — the invite then dead-ends
+  // on a page that requires one. Landing on `/?invite_token=...` leaves the
+  // fragment to Supabase alone. The app strips the parameter before its first
+  // render; see src/features/auth/invite-token.ts.
+  const siteUrl = (Deno.env.get('PUBLIC_SITE_URL') ?? 'http://localhost:1420').replace(/\/+$/, '')
+  const redirectTo = `${siteUrl}/?invite_token=${encodeURIComponent(token)}`
 
   const { error: mailError } = await adminClient.auth.admin.inviteUserByEmail(email, {
     redirectTo,

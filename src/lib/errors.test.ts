@@ -89,3 +89,39 @@ describe('errorMessage', () => {
     expect(errorMessage(pgError('23505', 'duplicate key'))).toBe('That already exists.')
   })
 })
+
+describe('authored database messages', () => {
+  it('keeps the invitation wording raised by accept_invitation', () => {
+    // P0002 previously collapsed to "We could not find that.", which does not
+    // tell someone whether to request a new invite.
+    expect(
+      toAppError({ code: 'P0002', message: 'This invitation link is not valid' }).userMessage,
+    ).toBe('This invitation link is not valid')
+
+    expect(
+      toAppError({ code: '23514', message: 'This invitation has expired' }).userMessage,
+    ).toBe('This invitation has expired')
+
+    expect(
+      toAppError({ code: '23514', message: 'This invitation has already been used' }).userMessage,
+    ).toBe('This invitation has already been used')
+  })
+
+  it('still maps the email mismatch, which was already authored', () => {
+    expect(
+      toAppError({
+        code: '42501',
+        message: 'This invitation was issued to a different email address',
+      }).userMessage,
+    ).toBe('This invitation was issued to a different email address')
+  })
+
+  it('falls back to the generic message for raw Postgres noise', () => {
+    expect(
+      toAppError({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "invitations_pkey"',
+      }).userMessage,
+    ).toBe('That already exists.')
+  })
+})

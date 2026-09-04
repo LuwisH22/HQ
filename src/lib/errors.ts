@@ -66,6 +66,12 @@ function isPostgrestError(value: unknown): value is PostgrestError {
  * they are safe to surface. Anything longer or containing SQL punctuation is
  * treated as an internal detail and replaced.
  */
+/**
+ * Codes this schema raises only from an explicit `RAISE EXCEPTION`, never from
+ * a bare constraint violation — so their message text is safe to surface.
+ */
+const AUTHORED_CODES = new Set(['42501', 'P0002', '23514'])
+
 function isAuthoredMessage(message: string): boolean {
   return (
     message.length > 0 &&
@@ -96,8 +102,21 @@ export function toAppError(error: unknown): AppError {
     if (mapped) {
       // Prefer our own RAISE EXCEPTION text when there is one — it is more
       // specific than the generic mapping.
+      //
+      // Restricted to codes that this schema only ever raises deliberately.
+      // Widening it to every mapped code is tempting but wrong:
+      // `isAuthoredMessage` passes raw text like `duplicate key value violates
+      // unique constraint "…"`, which would leak constraint names into the UI
+      // in place of "That already exists."
+      //
+      // P0002 and 23514 are on the list because `accept_invitation` raises
+      // them with wording a recipient actually needs — whether a link is
+      // unknown, expired, or already used decides if they should ask for a new
+      // invite. Without this they all collapse to "We could not find that."
       const message =
-        error.code === '42501' && isAuthoredMessage(error.message) ? error.message : mapped.message
+        AUTHORED_CODES.has(error.code ?? '') && isAuthoredMessage(error.message)
+          ? error.message
+          : mapped.message
       return new AppError(mapped.kind, message, { cause: error })
     }
     if (isAuthoredMessage(error.message)) {

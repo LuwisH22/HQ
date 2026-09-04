@@ -5,6 +5,8 @@ import { Toaster } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { AuthProvider } from '@/features/auth/AuthProvider'
+import { InviteLanding } from '@/features/auth/InviteLanding'
+import { useAuthDeepLinks } from '@/features/auth/useAuthDeepLinks'
 import { WorkspaceProvider } from '@/features/organization/WorkspaceProvider'
 import { EnvironmentError } from '@/features/setup/EnvironmentError'
 import { PresenceHeartbeat } from '@/features/organization/PresenceHeartbeat'
@@ -42,6 +44,9 @@ function useThemeEffect() {
 
 function AppProviders() {
   useThemeEffect()
+  // Desktop only, and mounted once: the app is the sole consumer of
+  // `lfghq://auth/...` links.
+  useAuthDeepLinks()
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -49,7 +54,9 @@ function AppProviders() {
         <WorkspaceProvider>
           <TooltipProvider delayDuration={400} skipDelayDuration={300}>
             <PresenceHeartbeat />
-            <RouterProvider router={router} />
+            <InviteLanding>
+              <RouterProvider router={router} />
+            </InviteLanding>
             <Toaster
               theme="dark"
               position="bottom-right"

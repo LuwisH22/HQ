@@ -1,5 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// Must be evaluated before anything reads `window.location` — the router
+// included — so the raw invitation token leaves the address bar before the
+// first render and never reaches the history stack. Module bodies run in
+// import order, which is why this sits above `./App`. See `invite-token.ts`
+// for what this can and cannot protect against.
+import './features/auth/capture-invite-token'
 import { App } from './App'
 // Self-hosted so the desktop build works offline and satisfies the Tauri CSP
 // (font-src 'self'), which blocks Google Fonts. Nocturne's hierarchy depends
