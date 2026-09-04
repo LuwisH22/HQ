@@ -4,10 +4,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------------------
-   LFG HQ design tokens
-   Dark-first. Every colour is defined once as an OKLCH triple and exposed to
-   Tailwind through @theme inline, so `bg-surface`, `text-muted-foreground`,
-   etc. resolve to the same values the raw CSS uses.
+   LFG HQ design tokens — Nocturne
+   Values from the Nocturne handoff. Hierarchy is size and space, never weight;
+   elevation is a hairline edge plus ambient darkness, never a stacked shadow.
 --------------------------------------------------------------------------- */
 
 @theme inline {
@@ -28,6 +27,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-text: var(--accent-text);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
@@ -35,94 +35,129 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-signal: var(--signal);
+  --color-demo: var(--demo);
+  --color-offline: var(--offline);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --radius-xs: calc(var(--radius) - 4px);
-  --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
-  --radius-xl: calc(var(--radius) + 6px);
+  /* Nocturne's radius scale is 4 / 8 / 14, not a ramp off one base value. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Elevation is an edge, not a drop shadow. Overriding Tailwind's own
+     shadow-* scale means every existing `shadow-sm` becomes the hairline. */
+  --shadow-sm: 0 0 0 1px #3f424d;
+  --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgb(0 0 0 / 0.55);
+  --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgb(0 0 0 / 0.65);
 
   --font-sans:
-    'Inter var', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
   --font-mono:
     'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
     monospace;
 
+  /* Nocturne's ramp is 25 / 20 / 14 / 13 / 12 / 11 / 10. Only two steps move:
+     `text-sm` drops 14 -> 13 (body, names, nav rows, inputs, buttons) and
+     `text-3xs` is new for eyebrows and stat labels. `text-xs` (12) and
+     `text-2xs` (11) already sit where the spec wants them, so every existing
+     usage of those keeps meaning what it meant. The four one-off sizes —
+     25 / 20 / 14 / 26 — are set at their call sites. */
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: 0.875rem;
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
 }
 
-/* Light theme — supported, but the product is designed dark-first. */
+/* Nocturne is a dark-only system. The light theme is kept so :root resolves;
+   the product mounts with .dark on <html>. */
 :root {
-  --radius: 0.375rem;
+  --radius: 0.5rem;
 
-  --background: oklch(0.985 0.002 265);
-  --foreground: oklch(0.17 0.012 265);
-  --surface: oklch(1 0 0);
-  --surface-foreground: oklch(0.17 0.012 265);
-  --elevated: oklch(0.97 0.003 265);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.17 0.012 265);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.17 0.012 265);
+  --background: #f3f5fe;
+  --foreground: #292b31;
+  --surface: #ffffff;
+  --surface-foreground: #292b31;
+  --elevated: #e4e7f5;
+  --card: #ffffff;
+  --card-foreground: #292b31;
+  --popover: #ffffff;
+  --popover-foreground: #292b31;
 
-  --primary: oklch(0.55 0.19 272);
-  --primary-foreground: oklch(0.99 0.002 265);
-  --secondary: oklch(0.955 0.004 265);
-  --secondary-foreground: oklch(0.24 0.012 265);
-  --muted: oklch(0.955 0.004 265);
-  --muted-foreground: oklch(0.5 0.014 265);
-  --accent: oklch(0.94 0.008 265);
-  --accent-foreground: oklch(0.22 0.012 265);
+  --primary: #796cbf;
+  --primary-foreground: #f5f4ff;
+  --secondary: #e4e7f5;
+  --secondary-foreground: #3f424d;
+  --muted: #e4e7f5;
+  --muted-foreground: #75798c;
+  --accent: #e7e5fe;
+  --accent-foreground: #2b2741;
+  --accent-text: #5d5294;
 
-  --destructive: oklch(0.55 0.21 27);
-  --destructive-foreground: oklch(0.99 0.002 265);
-  --success: oklch(0.58 0.15 152);
-  --success-foreground: oklch(0.99 0.002 265);
-  --warning: oklch(0.71 0.16 72);
-  --warning-foreground: oklch(0.19 0.03 72);
-  --signal: oklch(0.62 0.13 200);
+  --destructive: #b4413f;
+  --destructive-foreground: #f5f4ff;
+  --success: #796cbf;
+  --success-foreground: #f5f4ff;
+  --warning: #75798c;
+  --warning-foreground: #f5f4ff;
+  --signal: #796cbf;
+  --demo: #8a5f1f;
+  --offline: #b2b6ca;
 
-  --border: oklch(0.9 0.006 265);
-  --input: oklch(0.93 0.006 265);
-  --ring: oklch(0.55 0.19 272);
+  --border: #cfd3e5;
+  --input: #b2b6ca;
+  --ring: #796cbf;
 }
 
 .dark {
-  --background: oklch(0.155 0.008 265);
-  --foreground: oklch(0.96 0.004 265);
-  --surface: oklch(0.187 0.009 265);
-  --surface-foreground: oklch(0.96 0.004 265);
-  --elevated: oklch(0.222 0.011 265);
-  --card: oklch(0.196 0.01 265);
-  --card-foreground: oklch(0.96 0.004 265);
-  --popover: oklch(0.215 0.011 265);
-  --popover-foreground: oklch(0.96 0.004 265);
+  --background: #161826;
+  --foreground: #e9e9ed;
+  --surface: #232532;
+  --surface-foreground: #e9e9ed;
+  --elevated: #292b31;
+  --card: #232532;
+  --card-foreground: #e9e9ed;
+  --popover: #232532;
+  --popover-foreground: #e9e9ed;
 
-  --primary: oklch(0.66 0.185 272);
-  --primary-foreground: oklch(0.15 0.02 272);
-  --secondary: oklch(0.25 0.012 265);
-  --secondary-foreground: oklch(0.94 0.005 265);
-  --muted: oklch(0.24 0.011 265);
-  --muted-foreground: oklch(0.68 0.014 265);
-  --accent: oklch(0.28 0.014 265);
-  --accent-foreground: oklch(0.96 0.004 265);
+  --primary: #9184d9;
+  --primary-foreground: #161826;
+  --secondary: #292b31;
+  --secondary-foreground: #e9e9ed;
+  --muted: #292b31;
+  --muted-foreground: #9397ab;
+  --accent: #3f424d;
+  --accent-foreground: #e9e9ed;
+  /* accent-300 — the accent at body-text size, where #9184d9 is too dim */
+  --accent-text: #d2cefd;
 
-  --destructive: oklch(0.63 0.2 25);
-  --destructive-foreground: oklch(0.16 0.02 25);
-  --success: oklch(0.7 0.16 155);
-  --success-foreground: oklch(0.16 0.03 155);
-  --warning: oklch(0.78 0.15 75);
-  --warning-foreground: oklch(0.18 0.03 75);
-  --signal: oklch(0.78 0.12 198);
+  /* Outside the system, on the system's lightness scale: destructive is
+     L 0.664 / C 0.122 at hue 23, demo the same lightness and chroma at hue 75.
+     Nocturne is mono, but "you are not on real data" has to stay unmissable,
+     so the demo badge keeps its own colour rather than becoming a neutral. */
+  --destructive: #d4736f;
+  --destructive-foreground: #161826;
+  --demo: #bf872e;
+  /* neutral-700 — presence, offline */
+  --offline: #595d6c;
 
-  --border: oklch(0.28 0.012 265);
-  --input: oklch(0.3 0.013 265);
-  --ring: oklch(0.66 0.185 272);
+  /* Mono palette: presence is not colour-coded. Online reads as the accent,
+     away as neutral-500, offline as neutral-700. */
+  --success: #9184d9;
+  --success-foreground: #161826;
+  --warning: #9397ab;
+  --warning-foreground: #161826;
+  --signal: #9184d9;
+
+  --border: #3f424d;
+  --input: #3f424d;
+  --ring: #9184d9;
 }
 
 @layer base {
@@ -137,20 +172,37 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    font-size: 13px;
+    line-height: 1.55;
     /* The desktop shell owns its own scrolling regions. */
     overflow: hidden;
     overscroll-behavior: none;
   }
 
-  /* Visible, consistent keyboard focus everywhere. Pointer interactions do not
-     get a ring, keyboard users always do. */
+  /* Hierarchy is size and space. Weight never goes past 500. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 500;
+    line-height: 1.12;
+    letter-spacing: -0.015em;
+  }
+
+  /* Nocturne's focus ring is a 2px accent outline at 2px offset, not a ring. */
+  :focus {
+    outline: none;
+  }
   :focus-visible {
-    @apply ring-ring ring-2 ring-offset-2 outline-none;
-    --tw-ring-offset-color: var(--background);
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    box-shadow: none;
   }
 
   ::selection {
-    background: color-mix(in oklch, var(--primary) 32%, transparent);
+    background: color-mix(in srgb, var(--primary) 30%, transparent);
   }
 
   /* Slim, unobtrusive scrollbars that match the surface. */
@@ -204,5 +256,15 @@
   }
   .pt-safe {
     padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Nocturne's accent rail: 2px x 16px, sits outside the row's padding. */
+  .nav-rail {
+    position: absolute;
+    left: -8px;
+    width: 2px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--primary);
   }
 }

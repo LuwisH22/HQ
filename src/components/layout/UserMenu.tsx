@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { LogOut, Settings, User as UserIcon } from 'lucide-react'
+import { SignOut, Gear, User as UserIcon } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback, AvatarImage, AvatarStatus } from '@/components/ui/avatar'
 import {
@@ -94,12 +94,12 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
           Your profile
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void navigate('/settings')}>
-          <Settings aria-hidden="true" />
+          <Gear aria-hidden="true" />
           Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem destructive onSelect={() => void handleSignOut()}>
-          <LogOut aria-hidden="true" />
+          <SignOut aria-hidden="true" />
           Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>

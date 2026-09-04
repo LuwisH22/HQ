@@ -2,18 +2,27 @@ import type * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
+/**
+ * Nocturne's tag. Three treatments only — accent, neutral, outline. Anything
+ * that used to be colour-coded (warning, destructive, success) resolves to one
+ * of these, because the system is mono.
+ */
 const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-2xs font-medium leading-none transition-colors',
+  'inline-flex items-center gap-1 rounded-sm px-[7px] py-0.5 text-2xs leading-none font-medium',
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-primary/15 text-primary',
-        secondary: 'border-transparent bg-secondary text-secondary-foreground',
-        outline: 'border-border text-muted-foreground',
-        success: 'border-transparent bg-success/15 text-success',
-        warning: 'border-transparent bg-warning/15 text-warning',
-        destructive: 'border-transparent bg-destructive/15 text-destructive',
-        signal: 'border-transparent bg-signal/15 text-signal',
+        default: 'bg-primary/14 text-accent-text',
+        accent: 'bg-primary/14 text-accent-text',
+        neutral: 'bg-foreground/8 text-muted-foreground',
+        secondary: 'bg-foreground/8 text-muted-foreground',
+        outline: 'border-border text-muted-foreground border',
+        // Mono palette: these keep their names for call sites but read as
+        // outline, per the handoff's badge table.
+        success: 'border-border text-muted-foreground border',
+        warning: 'border-border text-muted-foreground border',
+        destructive: 'border-border text-muted-foreground border',
+        signal: 'bg-primary/14 text-accent-text',
       },
     },
     defaultVariants: { variant: 'default' },

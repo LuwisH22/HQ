@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+import { CircleNotch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/common/states'
 import { useAuth } from '@/hooks/use-auth'
@@ -12,7 +12,7 @@ function BootScreen({ label }: { label: string }) {
       role="status"
       aria-live="polite"
     >
-      <Loader2 className="text-muted-foreground size-5 animate-spin" aria-hidden="true" />
+      <CircleNotch className="text-muted-foreground size-5 animate-spin" aria-hidden="true" />
       <p className="text-muted-foreground text-xs">{label}</p>
     </div>
   )

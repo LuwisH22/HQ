@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Mail, X } from 'lucide-react'
+import { EnvelopeSimple, X } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -36,7 +36,7 @@ export function PendingInvitations({ organizationId }: { organizationId: string 
   return (
     <Card>
       <CardHeader className="flex-row items-center gap-2 space-y-0">
-        <Mail className="text-muted-foreground size-3.5" aria-hidden="true" />
+        <EnvelopeSimple className="text-muted-foreground size-3.5" aria-hidden="true" />
         <CardTitle className="flex-1">Pending invitations</CardTitle>
         {pending.length > 0 ? <Badge variant="outline">{pending.length}</Badge> : null}
       </CardHeader>

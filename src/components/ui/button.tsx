@@ -1,28 +1,40 @@
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { Loader2 } from 'lucide-react'
+import { CircleNotch } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
+/**
+ * Nocturne's primary action is an accent outline on transparent — never a
+ * fill. Emphasis comes from the border and the hover tint, so a screen can
+ * carry several actions without one of them shouting.
+ *
+ * The focus ring is deliberately absent here: `@layer base` gives every
+ * focusable element the system's 2px accent outline at 2px offset.
+ */
 const buttonVariants = cva(
-  'inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:pointer-events-none',
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-sm border border-transparent bg-transparent text-sm font-medium whitespace-nowrap transition-[background-color,color,border-color] duration-[140ms] select-none disabled:pointer-events-none disabled:opacity-45 [&_svg]:size-[15px] [&_svg]:shrink-0 [&_svg]:pointer-events-none',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80',
+        default: 'border-primary text-foreground hover:bg-primary/14 active:bg-primary/22',
+        secondary: 'border-border text-foreground hover:bg-foreground/7 active:bg-foreground/11',
+        // Kept as a distinct name because call sites use it; visually the same
+        // bordered treatment as `secondary`.
+        outline: 'border-border text-foreground hover:bg-foreground/7 active:bg-foreground/11',
+        ghost: 'text-foreground hover:bg-foreground/7 active:bg-foreground/11',
         destructive:
-          'bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/80',
-        outline: 'border border-border bg-transparent hover:bg-accent hover:text-accent-foreground',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 hover:underline',
+          'border-destructive text-destructive hover:bg-destructive/12 active:bg-destructive/18',
+        // The accent at body size is too dim to read; the 300 step is the one
+        // Nocturne uses for accent-coloured text.
+        link: 'text-accent-text underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-8 rounded-sm px-3 text-xs',
-        lg: 'h-11 rounded-md px-6',
-        icon: 'size-9',
-        'icon-sm': 'size-8 rounded-sm',
+        default: 'h-8 px-3 py-1.5',
+        sm: 'h-7 px-2.5',
+        lg: 'h-9 px-5',
+        icon: 'size-7 border-0 px-0',
+        'icon-sm': 'size-7 border-0 px-0',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },
@@ -54,7 +66,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
     >
       {loading ? (
         <>
-          <Loader2 className="animate-spin" aria-hidden="true" />
+          <CircleNotch className="animate-spin" aria-hidden="true" />
           {children}
         </>
       ) : (

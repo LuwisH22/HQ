@@ -1,6 +1,11 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
+/**
+ * Nocturne treats elevation as a hairline edge, not a drop shadow — so the
+ * card carries `shadow-sm` (redefined in index.css as a 1px inset ring) and
+ * has no border property of its own. Never stack the two.
+ */
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(function Card(
   { className, ...props },
   ref,
@@ -8,7 +13,7 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
   return (
     <div
       ref={ref}
-      className={cn('border-border bg-card text-card-foreground rounded-lg border', className)}
+      className={cn('bg-card text-card-foreground rounded-md shadow-sm', className)}
       {...props}
     />
   )
@@ -25,7 +30,7 @@ const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTML
     return (
       <h3
         ref={ref}
-        className={cn('text-sm leading-none font-semibold tracking-tight', className)}
+        className={cn('text-[14px] leading-none font-semibold tracking-[-0.01em]', className)}
         {...props}
       />
     )

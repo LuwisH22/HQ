@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Search, UserPlus, Users } from 'lucide-react'
+import { MagnifyingGlass, UserPlus, Users } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -111,7 +111,7 @@ export function MembersPage() {
       />
 
       <div className="relative">
-        <Search
+        <MagnifyingGlass
           className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
           aria-hidden="true"
         />
@@ -139,7 +139,7 @@ export function MembersPage() {
           }
         />
       ) : (
-        <ul className="space-y-2">
+        <ul aria-label="Members" className="space-y-2">
           {filtered.map((member) => (
             <li key={member.id}>
               <MemberRow member={member} roles={rolesQuery.data ?? []} />

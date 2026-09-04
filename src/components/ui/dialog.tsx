@@ -1,6 +1,6 @@
 import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
+import { X } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 const Dialog = DialogPrimitive.Root
@@ -16,7 +16,7 @@ const DialogOverlay = React.forwardRef<
     <DialogPrimitive.Overlay
       ref={ref}
       className={cn(
-        'fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px]',
+        'bg-elevated/55 fixed inset-0 z-50',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
         className,
@@ -41,8 +41,9 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4',
-          'border-border bg-popover border p-5 shadow-2xl sm:rounded-lg',
+          'fixed top-1/2 left-1/2 z-50 grid w-[min(480px,92vw)] -translate-x-1/2 -translate-y-1/2',
+          // No padding on the panel: screens supply their own band layout.
+          'bg-popover rounded-md shadow-lg',
           'max-h-[90vh] overflow-y-auto',
           'data-[state=open]:animate-in data-[state=closed]:animate-out',
           'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
@@ -53,7 +54,7 @@ const DialogContent = React.forwardRef<
       >
         {children}
         {showClose ? (
-          <DialogPrimitive.Close className="text-muted-foreground focus-visible:ring-ring absolute top-3.5 right-3.5 rounded-sm p-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none">
+          <DialogPrimitive.Close className="text-muted-foreground hover:text-foreground absolute top-3.5 right-3.5 rounded-sm p-1 transition-colors duration-[140ms]">
             <X className="size-4" aria-hidden="true" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
@@ -83,7 +84,7 @@ const DialogTitle = React.forwardRef<
   return (
     <DialogPrimitive.Title
       ref={ref}
-      className={cn('text-base leading-none font-semibold tracking-tight', className)}
+      className={cn('text-[16px] leading-tight font-semibold', className)}
       {...props}
     />
   )
@@ -96,7 +97,7 @@ const DialogDescription = React.forwardRef<
   return (
     <DialogPrimitive.Description
       ref={ref}
-      className={cn('text-muted-foreground text-sm', className)}
+      className={cn('text-muted-foreground text-xs leading-relaxed', className)}
       {...props}
     />
   )

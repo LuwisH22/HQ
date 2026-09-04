@@ -1,12 +1,12 @@
 import {
   Bell,
-  CalendarDays,
+  CalendarBlank,
   Files,
-  FolderKanban,
+  Kanban,
   Hash,
-  MessageSquare,
-  UsersRound,
-} from 'lucide-react'
+  ChatTeardropText,
+  UsersThree,
+} from '@phosphor-icons/react'
 import { PhasePlaceholderPage } from './PhasePlaceholderPage'
 
 /**
@@ -19,7 +19,7 @@ export function MessagesPage() {
   return (
     <PhasePlaceholderPage
       title="Messages"
-      icon={MessageSquare}
+      icon={ChatTeardropText}
       phase={2}
       summary="Direct messages and group conversations with the rest of the organization."
       capabilities={[
@@ -54,7 +54,7 @@ export function ProjectsPage() {
   return (
     <PhasePlaceholderPage
       title="Projects"
-      icon={FolderKanban}
+      icon={Kanban}
       phase={3}
       summary="Kanban boards for bootcamps, content, sponsorships and everything else in flight."
       capabilities={[
@@ -71,7 +71,7 @@ export function CalendarPage() {
   return (
     <PhasePlaceholderPage
       title="Calendar"
-      icon={CalendarDays}
+      icon={CalendarBlank}
       phase={4}
       summary="Scrims, matches, training blocks, meetings and deadlines in one schedule."
       capabilities={[
@@ -88,7 +88,7 @@ export function TeamsPage() {
   return (
     <PhasePlaceholderPage
       title="Teams"
-      icon={UsersRound}
+      icon={UsersThree}
       phase={3}
       summary="Rosters per title, with player status and staff assignments."
       capabilities={[

@@ -1,0 +1,326 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --bg: oklch(0.155 0.008 265);
+      --surface: oklch(0.187 0.009 265);
+      --card: oklch(0.196 0.01 265);
+      --elevated: oklch(0.222 0.011 265);
+      --border: oklch(0.28 0.012 265);
+      --fg: oklch(0.96 0.004 265);
+      --muted: oklch(0.68 0.014 265);
+      --success: oklch(0.7 0.16 155);
+      --warning: oklch(0.78 0.15 75);
+      --signal: oklch(0.78 0.12 198);
+    }
+    body {
+      margin: 0;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: oklch(0.66 0.185 272); text-decoration: none; }
+    a:hover { color: oklch(0.72 0.17 272); }
+    .ico { width: 16px; height: 16px; flex: none; stroke-width: 1.75; }
+  </style>
+</helmet>
+
+<div style="display: flex; width: 1440px; height: 900px; overflow: hidden;">
+
+  <!-- ── Sidebar (w-60 = 240px, bg-surface) ───────────────────────── -->
+  <aside style="display: flex; flex-direction: column; width: 240px; flex: none; background: var(--surface); border-right: 1px solid var(--border);">
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border-radius: 6px; background: linear-gradient(135deg, {{accent}}, var(--signal)); color: oklch(0.15 0.02 272); font-size: 11px; font-weight: 700; letter-spacing: -0.02em;">LF</span>
+      <span style="min-width: 0;">
+        <span style="display: block; font-size: 14px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em;">LFG Esports</span>
+        <span style="display: block; font-size: 11px; line-height: 16px; color: var(--muted);">Competitive since day one.</span>
+      </span>
+    </div>
+
+    <nav style="flex: 1; padding: 4px 12px; display: flex; flex-direction: column; gap: 2px;">
+      <div style="position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; background: var(--accent); font-size: 14px; font-weight: 500;">
+        <span style="position: absolute; left: -8px; width: 2px; height: 16px; border-radius: 9999px; background: {{accent}};"></span>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        Dashboard
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 14px; color: var(--muted);">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Messages
+        <span style="margin-left: auto; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.68 0.014 265 / 0.6);">Soon</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 14px; color: var(--muted);">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg>
+        Channels
+        <span style="margin-left: auto; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.68 0.014 265 / 0.6);">Soon</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 14px; color: var(--muted);">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v7M12 7v4M16 7v9"/></svg>
+        Projects
+        <span style="margin-left: auto; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.68 0.014 265 / 0.6);">Soon</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 14px; color: var(--muted);">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg>
+        Calendar
+        <span style="margin-left: auto; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.68 0.014 265 / 0.6);">Soon</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 14px; color: var(--muted);">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M17 11a3 3 0 1 0-2-5.2M21 20a5 5 0 0 0-4-4.9"/></svg>
+        Teams
+        <span style="margin-left: auto; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.68 0.014 265 / 0.6);">Soon</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 14px; color: var(--muted);">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V6z"/><path d="M15 2v4h4"/></svg>
+        Files
+        <span style="margin-left: auto; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.68 0.014 265 / 0.6);">Soon</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 14px; color: var(--muted);">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        Notifications
+        <span style="margin-left: auto; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.68 0.014 265 / 0.6);">Soon</span>
+      </div>
+
+      <p style="margin: 16px 0 4px; padding: 0 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.68 0.014 265 / 0.7);">Organization</p>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 14px; color: var(--muted);">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="7" r="4"/><path d="M2 21a7 7 0 0 1 14 0M17 3.1a4 4 0 0 1 0 7.8M22 21a7 7 0 0 0-5-6.7"/></svg>
+        Members
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 14px; color: var(--muted);">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11.5 4a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9 2 2 0 1 1 0 4z"/></svg>
+        Settings
+      </div>
+    </nav>
+
+    <div style="border-top: 1px solid var(--border); padding: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 6px;">
+        <span style="position: relative; flex: none;">
+          <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--elevated); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted);">RV</span>
+          <span style="position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 9999px; background: var(--success); border: 2px solid var(--surface);"></span>
+        </span>
+        <span style="min-width: 0;">
+          <span style="display: block; font-size: 14px; font-weight: 500; line-height: 1.15;">vance</span>
+          <span style="display: block; font-size: 11px; line-height: 16px; color: var(--muted);">Owner</span>
+        </span>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="margin-left: auto; color: var(--muted);"><path d="m11 17-5-5 5-5M18 17l-5-5 5-5"/></svg>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main column ───────────────────────────────────────────────── -->
+  <div style="display: flex; flex-direction: column; flex: 1; min-width: 0;">
+
+    <!-- Topbar (h-12 = 48px) -->
+    <header style="display: flex; align-items: center; gap: 8px; height: 48px; flex: none; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--border);">
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; border: 1px solid oklch(0.78 0.15 75 / 0.4); background: oklch(0.78 0.15 75 / 0.15); color: var(--warning); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2;"><path d="M10 2v7.5L4.2 19a2 2 0 0 0 1.7 3h12.2a2 2 0 0 0 1.7-3L14 9.5V2M8.5 2h7M7 15h10"/></svg>
+          Demo mode
+        </span>
+        <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 4px; color: var(--muted);">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        </span>
+        <span style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 4px; border: 1px solid var(--border); font-size: 12px; font-weight: 500; color: var(--muted);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75;"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          Search
+          <kbd style="padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border); background: var(--elevated); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;">Ctrl K</kbd>
+        </span>
+      </div>
+    </header>
+
+    <!-- Scrollable content -->
+    <main style="flex: 1; overflow: hidden; padding: 24px;">
+      <div style="display: flex; flex-direction: column; gap: 20px; max-width: 1400px;">
+
+        <!-- Greeting -->
+        <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <p style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);">Friday, 4 September</p>
+            <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2;">Good morning, vance</h1>
+            <p style="margin: 0; font-size: 12px; color: var(--muted);">LFG Esports · Owner</p>
+          </div>
+          <span style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 4px; background: {{accent}}; color: oklch(0.15 0.02 272); font-size: 12px; font-weight: 500;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75;"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M22 11h-6"/></svg>
+            Invite member
+          </span>
+        </header>
+
+        <!-- Stat tiles -->
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+          <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--muted);"><circle cx="9" cy="7" r="4"/><path d="M2 21a7 7 0 0 1 14 0M17 3.1a4 4 0 0 1 0 7.8M22 21a7 7 0 0 0-5-6.7"/></svg>
+              <p style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);">Active members</p>
+            </div>
+            <p style="margin: 6px 0 0; font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;">10</p>
+            <p style="margin: 6px 0 0; font-size: 11px; color: var(--muted);">In this organization</p>
+          </div>
+
+          <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--success);"><path d="M2 8.8a16 16 0 0 1 20 0M5 12.6a11 11 0 0 1 14 0M8.5 16.3a6 6 0 0 1 7 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+              <p style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);">Around now</p>
+            </div>
+            <p style="margin: 6px 0 0; font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;">4</p>
+            <p style="margin: 6px 0 0; font-size: 11px; color: var(--muted);">Seen in the last 30 minutes</p>
+          </div>
+
+          <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--muted);"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg>
+              <p style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);">Pending invites</p>
+            </div>
+            <p style="margin: 6px 0 0; font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;">3</p>
+            <p style="margin: 6px 0 0; font-size: 11px; color: var(--muted);">Awaiting acceptance</p>
+          </div>
+
+          <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--muted);"><path d="M12 2.5 20 5v6c0 5-3.4 9.2-8 10.5C7.4 20.2 4 16 4 11V5z"/></svg>
+              <p style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);">Your role</p>
+            </div>
+            <p style="margin: 6px 0 0; font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -0.02em;">Owner</p>
+            <p style="margin: 6px 0 0; font-size: 11px; color: var(--muted);">34 permissions granted</p>
+          </div>
+        </div>
+
+        <!-- Phase panels -->
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+          <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card);">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--muted);"><circle cx="12" cy="13" r="8"/><path d="M12 9.5V13l2 1.5M5 3 3 5M19 3l2 2"/></svg>
+              <h3 style="margin: 0; flex: 1; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Today's schedule</h3>
+              <span style="padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; font-weight: 500; color: var(--muted);">Phase 4</span>
+            </div>
+            <div style="padding: 0 16px 16px;">
+              <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">Scrims, matches, reviews and meetings for today.</p>
+              <p style="margin: 12px 0 0; font-size: 11px; color: oklch(0.68 0.014 265 / 0.7);">Arrives with Calendar.</p>
+            </div>
+          </div>
+
+          <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card);">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--muted);"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v7M12 7v4M16 7v9"/></svg>
+              <h3 style="margin: 0; flex: 1; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Active projects</h3>
+              <span style="padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; font-weight: 500; color: var(--muted);">Phase 3</span>
+            </div>
+            <div style="padding: 0 16px 16px;">
+              <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">Boards you are a member of, with progress at a glance.</p>
+              <p style="margin: 12px 0 0; font-size: 11px; color: oklch(0.68 0.014 265 / 0.7);">Arrives with Projects.</p>
+            </div>
+          </div>
+
+          <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card);">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--muted);"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m8 12 3 3 5-6"/></svg>
+              <h3 style="margin: 0; flex: 1; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Your tasks</h3>
+              <span style="padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; font-weight: 500; color: var(--muted);">Phase 3</span>
+            </div>
+            <div style="padding: 0 16px 16px;">
+              <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">Everything assigned to you, sorted by due date.</p>
+              <p style="margin: 12px 0 0; font-size: 11px; color: oklch(0.68 0.014 265 / 0.7);">Arrives with Projects.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Roster + activity -->
+        <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px;">
+
+          <div style="grid-column: span 3; border: 1px solid var(--border); border-radius: 8px; background: var(--card);">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--muted);"><circle cx="9" cy="7" r="4"/><path d="M2 21a7 7 0 0 1 14 0M17 3.1a4 4 0 0 1 0 7.8M22 21a7 7 0 0 0-5-6.7"/></svg>
+              <h3 style="margin: 0; flex: 1; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Team status</h3>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--muted);">
+                All members
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75;"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+              </span>
+            </div>
+            <div style="padding: 0 16px 16px;">
+              <sc-for list="{{roster}}" as="m" hint-placeholder-count="5">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid oklch(0.28 0.012 265 / 0.6);">
+                  <span style="position: relative; flex: none;">
+                    <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--elevated); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted);">{{m.initials}}</span>
+                    <span style="position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 9999px; border: 2px solid var(--card); background: {{m.dot}};"></span>
+                  </span>
+                  <div style="flex: 1; min-width: 0;">
+                    <p style="margin: 0; font-size: 14px; font-weight: 500; line-height: 1.2;">{{m.name}}</p>
+                    <p style="margin: 1px 0 0; font-size: 11px; color: var(--muted);">{{m.title}}</p>
+                  </div>
+                  <span style="padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; font-weight: 500; color: var(--muted);">{{m.role}}</span>
+                  <span style="width: 52px; text-align: right; font-size: 11px; color: {{m.presenceColor}};">{{m.presence}}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="grid-column: span 2; border: 1px solid var(--border); border-radius: 8px; background: var(--card);">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--muted);"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+              <h3 style="margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Recent activity</h3>
+            </div>
+            <div style="padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px;">
+              <sc-for list="{{activity}}" as="a" hint-placeholder-count="5">
+                <div style="display: flex; gap: 10px;">
+                  <span style="margin-top: 6px; width: 6px; height: 6px; flex: none; border-radius: 9999px; background: oklch(0.66 0.185 272 / 0.6);"></span>
+                  <div style="min-width: 0;">
+                    <p style="margin: 0; font-size: 12px; line-height: 1.4;">{{a.summary}}</p>
+                    <p style="margin: 2px 0 0; font-size: 11px; color: var(--muted);">{{a.meta}}</p>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"oklch(0.66 0.185 272)","options":["oklch(0.66 0.185 272)","oklch(0.72 0.16 200)","oklch(0.72 0.17 145)","oklch(0.7 0.19 35)"],"section":"Brand"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const online = 'oklch(0.7 0.16 155)';
+    const away = 'oklch(0.78 0.15 75)';
+    const off = 'oklch(0.68 0.014 265 / 0.5)';
+    const mutedText = 'oklch(0.68 0.014 265)';
+    return {
+      accent: this.props.accent ?? 'oklch(0.66 0.185 272)',
+      roster: [
+        { initials: 'RV', name: 'vance', title: 'Founder & Owner', role: 'Owner', dot: online, presence: 'Online', presenceColor: online },
+        { initials: 'JO', name: 'jokafor', title: 'Operations Admin', role: 'Admin', dot: online, presence: 'Online', presenceColor: online },
+        { initials: 'KN', name: 'kaidrop', title: 'Entry Fragger', role: 'Player', dot: online, presence: 'Online', presenceColor: online },
+        { initials: 'SP', name: 'spetrov', title: 'Team Manager — Valorant', role: 'Manager', dot: away, presence: 'Away', presenceColor: mutedText },
+        { initials: 'AF', name: 'anaf', title: 'Head Coach — Valorant', role: 'Coach', dot: away, presence: 'Away', presenceColor: mutedText },
+        { initials: 'TL', name: 'tobi', title: 'Assistant Coach & Analyst', role: 'Coach', dot: off, presence: 'Offline', presenceColor: mutedText }
+      ],
+      activity: [
+        { summary: 'Invited demo.tryout@lfg.test as Player', meta: 'vance · 42 minutes ago' },
+        { summary: 'Tobias Lindqvist changed to Coach', meta: 'jokafor · 3 hours ago' },
+        { summary: 'Chris Bello access suspended', meta: 'vance · 7 hours ago' },
+        { summary: 'Default timezone set to Europe/Berlin', meta: 'vance · 23 hours ago' },
+        { summary: 'Priya Raman joined the organization', meta: 'praman · 12 days ago' },
+        { summary: 'Kai Nakamura joined as Player', meta: 'vance · 1 month ago' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

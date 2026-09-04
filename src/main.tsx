@@ -1,6 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+// Self-hosted so the desktop build works offline and satisfies the Tauri CSP
+// (font-src 'self'), which blocks Google Fonts. Nocturne's hierarchy depends
+// on a real weight 500, which the Segoe UI fallback does not have.
+import '@fontsource-variable/inter'
 import './index.css'
 
 const container = document.getElementById('root')

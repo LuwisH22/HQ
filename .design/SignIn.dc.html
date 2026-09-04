@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --bg: oklch(0.155 0.008 265);
+      --surface: oklch(0.187 0.009 265);
+      --elevated: oklch(0.222 0.011 265);
+      --border: oklch(0.28 0.012 265);
+      --input: oklch(0.3 0.013 265);
+      --fg: oklch(0.96 0.004 265);
+      --muted: oklch(0.68 0.014 265);
+      --warning: oklch(0.78 0.15 75);
+      --destructive: oklch(0.63 0.2 25);
+      --signal: oklch(0.78 0.12 198);
+    }
+    body {
+      margin: 0;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: oklch(0.66 0.185 272); text-decoration: none; }
+    a:hover { color: oklch(0.72 0.17 272); }
+  </style>
+</helmet>
+
+<div style="display: flex; align-items: center; justify-content: center; width: 1440px; height: 900px; padding: 40px 16px; box-sizing: border-box;">
+  <div style="width: 384px;">
+
+    <!-- Wordmark -->
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 28px;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: none; border-radius: 6px; background: linear-gradient(135deg, {{accent}}, var(--signal)); color: oklch(0.15 0.02 272); font-size: 11px; font-weight: 700; letter-spacing: -0.02em;">LF</span>
+      <div>
+        <p style="margin: 0; font-size: 14px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em;">LFG HQ</p>
+        <p style="margin: 0; font-size: 11px; line-height: 16px; color: var(--muted);">Private organization workspace</p>
+      </div>
+    </div>
+
+    <!-- Card -->
+    <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 24px;">
+      <div style="margin-bottom: 20px;">
+        <h1 style="margin: 0 0 6px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Sign in</h1>
+        <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">LFG HQ is invitation-only. Use the account your organization set up for you.</p>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 14px; font-weight: 500; line-height: 1;">Email<span style="margin-left: 2px; color: var(--destructive);">*</span></label>
+          <div style="display: flex; align-items: center; height: 36px; padding: 0 12px; border: 1px solid var(--input); border-radius: 6px; background: var(--bg); font-size: 14px; color: var(--muted);">you@organization.gg</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 14px; font-weight: 500; line-height: 1;">Password<span style="margin-left: 2px; color: var(--destructive);">*</span></label>
+          <div style="height: 36px; border: 1px solid var(--input); border-radius: 6px; background: var(--bg);"></div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: center; height: 36px; border-radius: 6px; background: {{accent}}; color: oklch(0.15 0.02 272); font-size: 14px; font-weight: 500;">Sign in</div>
+
+        <p style="margin: 0; text-align: center; font-size: 12px; color: var(--muted);">Forgot your password?</p>
+      </div>
+
+      <!-- Development entry -->
+      <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+        <div style="border: 1px solid oklch(0.78 0.15 75 / 0.3); background: oklch(0.78 0.15 75 / 0.1); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 16px; height: 16px; flex: none; margin-top: 2px; stroke-width: 1.75; color: var(--warning);"><path d="M10 2v7.5L4.2 19a2 2 0 0 0 1.7 3h12.2a2 2 0 0 0 1.7-3L14 9.5V2M8.5 2h7M7 15h10"/></svg>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <p style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--warning);">Development mode</p>
+              <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">Explore the app with local sample data. Nothing is sent anywhere, and this option does not exist in a production build.</p>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: center; height: 36px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-weight: 500;">Continue as Demo Admin</div>
+        </div>
+      </div>
+    </div>
+
+    <p style="margin: 16px 0 0; text-align: center; font-size: 12px; color: var(--muted);">Email me a sign-in link instead</p>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"oklch(0.66 0.185 272)","options":["oklch(0.66 0.185 272)","oklch(0.72 0.16 200)","oklch(0.72 0.17 145)","oklch(0.7 0.19 35)"],"section":"Brand"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? 'oklch(0.66 0.185 272)' };
+  }
+}
+</script>
+</body>
+</html>

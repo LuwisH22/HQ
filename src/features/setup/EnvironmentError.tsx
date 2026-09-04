@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react'
+import { Warning } from '@phosphor-icons/react'
 
 /**
  * Shown when `VITE_SUPABASE_*` is missing or malformed.
@@ -12,7 +12,7 @@ export function EnvironmentError({ errors }: { errors: string[] }) {
       <div className="border-border bg-surface w-full max-w-lg space-y-4 rounded-lg border p-6">
         <div className="flex items-center gap-3">
           <div className="bg-warning/15 flex size-9 shrink-0 items-center justify-center rounded-md">
-            <AlertTriangle className="text-warning size-4" aria-hidden="true" />
+            <Warning className="text-warning size-4" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-sm font-semibold">LFG HQ is not configured</h1>

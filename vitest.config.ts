@@ -9,6 +9,10 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    // The first component test in a file pays for transforming the
+    // @phosphor-icons/react barrel; later ones run warm. 5s is not enough for
+    // that cold start on a slower machine.
+    testTimeout: 20_000,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,

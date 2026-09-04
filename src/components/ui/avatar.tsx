@@ -9,7 +9,7 @@ const Avatar = React.forwardRef<
   return (
     <AvatarPrimitive.Root
       ref={ref}
-      className={cn('bg-muted relative flex size-8 shrink-0 overflow-hidden rounded-md', className)}
+      className={cn('bg-muted relative flex size-8 shrink-0 overflow-hidden rounded-sm', className)}
       {...props}
     />
   )
@@ -36,7 +36,7 @@ const AvatarFallback = React.forwardRef<
     <AvatarPrimitive.Fallback
       ref={ref}
       className={cn(
-        'bg-elevated text-2xs text-muted-foreground flex size-full items-center justify-center rounded-md font-semibold tracking-wide uppercase',
+        'bg-elevated text-2xs text-muted-foreground flex size-full items-center justify-center rounded-sm font-semibold tracking-wide uppercase',
         className,
       )}
       {...props}
@@ -44,7 +44,12 @@ const AvatarFallback = React.forwardRef<
   )
 })
 
-/** Online / away / offline dot, positioned against an Avatar in a relative wrapper. */
+/**
+ * Online / away / offline dot, positioned against an Avatar in a relative
+ * wrapper. Nocturne is mono: presence is not colour-coded. Online reads as the
+ * accent, away as neutral-500, offline as neutral-700 — so the signal is
+ * lightness, not hue.
+ */
 function AvatarStatus({
   status,
   className,
@@ -59,9 +64,9 @@ function AvatarStatus({
       aria-label={label}
       className={cn(
         'border-surface absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2',
-        status === 'online' && 'bg-success',
+        status === 'online' && 'bg-primary',
         status === 'away' && 'bg-warning',
-        status === 'offline' && 'bg-muted-foreground/50',
+        status === 'offline' && 'bg-offline',
         className,
       )}
     />

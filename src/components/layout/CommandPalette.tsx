@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
-import { CornerDownLeft, Search } from 'lucide-react'
+import { ArrowElbowDownLeft, MagnifyingGlass } from '@phosphor-icons/react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { useWorkspace } from '@/hooks/use-workspace'
 import { useUiStore } from '@/stores/ui.store'
@@ -79,7 +79,7 @@ export function CommandPalette() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
         showClose={false}
-        className="top-[15%] max-w-lg translate-y-0 gap-0 overflow-hidden p-0"
+        className="top-[15vh] w-[min(512px,92vw)] max-w-none translate-y-0 gap-0 overflow-hidden rounded-lg p-0"
       >
         <VisuallyHidden>
           <DialogTitle>Search LFG HQ</DialogTitle>
@@ -89,7 +89,7 @@ export function CommandPalette() {
         </VisuallyHidden>
 
         <div className="border-border flex items-center gap-2.5 border-b px-3.5">
-          <Search className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+          <MagnifyingGlass className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
           <input
             autoFocus
             value={query}
@@ -101,7 +101,7 @@ export function CommandPalette() {
             aria-activedescendant={
               results[activeIndex] ? `command-${results[activeIndex].id}` : undefined
             }
-            className="placeholder:text-muted-foreground h-11 flex-1 bg-transparent text-sm outline-none"
+            className="caret-primary placeholder:text-muted-foreground/70 h-11 flex-1 bg-transparent text-sm outline-none"
           />
         </div>
 
@@ -142,7 +142,7 @@ export function CommandPalette() {
                     </span>
                   ) : null}
                   {index === activeIndex ? (
-                    <CornerDownLeft
+                    <ArrowElbowDownLeft
                       className="text-muted-foreground ml-auto size-3.5 shrink-0"
                       aria-hidden="true"
                     />

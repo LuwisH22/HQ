@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Compass } from 'lucide-react'
+import { Compass } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/common/states'
 

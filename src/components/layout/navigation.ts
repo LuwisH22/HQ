@@ -1,23 +1,23 @@
 import {
   Bell,
-  CalendarDays,
-  FolderKanban,
+  CalendarBlank,
+  Kanban,
   Files,
   Hash,
-  LayoutDashboard,
-  MessageSquare,
-  Settings,
+  SquaresFour,
+  ChatTeardropText,
+  Gear,
   Users,
-  UsersRound,
-  type LucideIcon,
-} from 'lucide-react'
+  UsersThree,
+  type Icon,
+} from '@phosphor-icons/react'
 import type { Permission } from '@/lib/permissions'
 
 export interface NavItem {
   id: string
   label: string
   path: string
-  icon: LucideIcon
+  icon: Icon
   /** Hidden unless the member holds at least one of these. Empty means always. */
   requires: readonly Permission[]
   /**
@@ -40,7 +40,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'dashboard',
     label: 'Dashboard',
     path: '/',
-    icon: LayoutDashboard,
+    icon: SquaresFour,
     requires: [],
     phase: 1,
     group: 'workspace',
@@ -49,7 +49,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'messages',
     label: 'Messages',
     path: '/messages',
-    icon: MessageSquare,
+    icon: ChatTeardropText,
     requires: ['channels.view'],
     phase: 2,
     group: 'workspace',
@@ -67,7 +67,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'projects',
     label: 'Projects',
     path: '/projects',
-    icon: FolderKanban,
+    icon: Kanban,
     requires: ['projects.view'],
     phase: 3,
     group: 'workspace',
@@ -76,7 +76,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'calendar',
     label: 'Calendar',
     path: '/calendar',
-    icon: CalendarDays,
+    icon: CalendarBlank,
     requires: ['calendar.view'],
     phase: 4,
     group: 'workspace',
@@ -85,7 +85,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'teams',
     label: 'Teams',
     path: '/teams',
-    icon: UsersRound,
+    icon: UsersThree,
     requires: ['teams.view'],
     phase: 3,
     group: 'workspace',
@@ -121,7 +121,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'settings',
     label: 'Settings',
     path: '/settings',
-    icon: Settings,
+    icon: Gear,
     requires: [],
     phase: 1,
     group: 'organization',

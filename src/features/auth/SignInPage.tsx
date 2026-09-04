@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { MailCheck } from 'lucide-react'
+import { EnvelopeSimpleOpen } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { FormField } from '@/components/common/FormField'
@@ -77,7 +77,7 @@ export function SignInPage() {
         description="If that address belongs to a member, a sign-in link is on its way. The link expires in one hour."
       >
         <div className="border-border bg-elevated flex items-center gap-3 rounded-md border p-3">
-          <MailCheck className="text-success size-4 shrink-0" aria-hidden="true" />
+          <EnvelopeSimpleOpen className="text-success size-4 shrink-0" aria-hidden="true" />
           <p className="text-muted-foreground text-xs">
             Sent to{' '}
             <span className="text-foreground font-medium">{magicForm.getValues('email')}</span>

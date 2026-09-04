@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
+import type { Icon } from '@phosphor-icons/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -25,7 +25,7 @@ export function UpcomingPanel({
   availableInPhase,
 }: {
   title: string
-  icon: LucideIcon
+  icon: Icon
   description: string
   availableInPhase: number
 }) {

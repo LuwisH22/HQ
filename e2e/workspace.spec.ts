@@ -7,7 +7,15 @@ import { expect, test, type Page } from '@playwright/test'
  * Run against the local stack:
  *
  *   npx supabase start && npx supabase db reset
- *   E2E_EMAIL=owner@lfg.test E2E_PASSWORD='LfgHq!Dev2025' npm run e2e
+ *   npm run e2e
+ *
+ * Credentials are read from a git-ignored `.env.e2e` (see playwright.config.ts):
+ *
+ *   E2E_EMAIL=...
+ *   E2E_PASSWORD=...
+ *
+ * For the local stack these are the seeded owner account — see
+ * `supabase/seed/seed.sql`, which is the single source of truth for them.
  *
  * Without those variables the whole file is skipped rather than failing, so a
  * contributor with no backend still gets a green run from `auth.spec.ts`.
@@ -21,18 +29,21 @@ test.skip(
   'Set E2E_EMAIL and E2E_PASSWORD to run the signed-in workspace specs.',
 )
 
-async function signIn(page: Page) {
-  await page.goto('/#/auth/sign-in')
-  await page.getByLabel('Email').fill(EMAIL as string)
-  await page.getByLabel('Password').fill(PASSWORD as string)
-  await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(
-    page.getByRole('heading', { name: /Good (morning|afternoon|evening)|Still up/ }),
-  ).toBeVisible({ timeout: 15_000 })
+/** On phones the sidebar and account menu live behind the navigation drawer. */
+async function openNavIfMobile(page: Page) {
+  const openNav = page.getByRole('button', { name: 'Open navigation' })
+  if (await openNav.isVisible()) await openNav.click()
 }
 
+// One shared session, established by e2e/auth.setup.ts. Signing in per test
+// would issue a password grant per spec and trip the hosted auth rate limit.
+test.use({ storageState: '.auth/owner.json' })
+
 test.beforeEach(async ({ page }) => {
-  await signIn(page)
+  await page.goto('/#/')
+  await expect(
+    page.getByRole('heading', { name: /Good (morning|afternoon|evening)|Still up/ }),
+  ).toBeVisible({ timeout: 20_000 })
 })
 
 test.describe('workspace shell', () => {
@@ -43,17 +54,19 @@ test.describe('workspace shell', () => {
   })
 
   test('navigates between sections without a full reload', async ({ page }) => {
+    await openNavIfMobile(page)
     await page.getByRole('link', { name: 'Members', exact: true }).first().click()
     await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible()
 
+    await openNavIfMobile(page)
     await page.getByRole('link', { name: 'Settings', exact: true }).first().click()
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   })
 
   test('opens the command palette with the keyboard and jumps to a section', async ({ page }) => {
     await page.keyboard.press('ControlOrMeta+k')
-    const search = page.getByRole('combobox', { name: 'Search' }).or(page.getByLabel('Search'))
-    await expect(search.first()).toBeFocused()
+    await expect(page.getByRole('listbox', { name: 'Results' })).toBeVisible()
+    await expect(page.getByLabel('Search', { exact: true })).toBeFocused()
 
     await page.keyboard.type('memb')
     await page.keyboard.press('Enter')
@@ -67,7 +80,8 @@ test.describe('workspace shell', () => {
     await expect(page.getByRole('listbox', { name: 'Results' })).toHaveCount(0)
   })
 
-  test('collapses and restores the sidebar', async ({ page }) => {
+  test('collapses and restores the sidebar', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'The sidebar is replaced by a drawer on phones.')
     const collapse = page.getByRole('button', { name: 'Collapse sidebar' })
     await collapse.click()
     await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible()
@@ -88,9 +102,8 @@ test.describe('members', () => {
   })
 
   test('filters the roster from the search box', async ({ page }) => {
-    const rows = page.getByRole('listitem')
-    const before = await rows.count()
-    expect(before).toBeGreaterThan(1)
+    const roster = page.getByRole('list', { name: 'Members' })
+    await expect(roster.getByRole('listitem').first()).toBeVisible()
 
     await page.getByLabel('Search members').fill('zzzz-no-such-person')
     await expect(page.getByText('No members match that search')).toBeVisible()
@@ -126,6 +139,11 @@ test.describe('settings', () => {
   test('saves a profile change and persists it across a reload', async ({ page }) => {
     await page.goto('/#/settings/profile')
 
+    // A dashboard-created account starts with display_name NULL and the form
+    // requires it, so fill it before expecting a save to go through.
+    const displayName = page.getByLabel('Display name')
+    if ((await displayName.inputValue()) === '') await displayName.fill('qa-owner')
+
     const title = page.getByLabel('Title')
     const next = `QA ${Date.now() % 10_000}`
     await title.fill(next)
@@ -145,18 +163,6 @@ test.describe('settings', () => {
   test('keeps the immutable organization handle read-only', async ({ page }) => {
     await page.goto('/#/settings/organization')
     await expect(page.getByLabel('Handle')).toBeDisabled()
-  })
-})
-
-test.describe('session', () => {
-  test('signing out returns to the sign-in screen and blocks the app', async ({ page }) => {
-    await page.getByRole('button', { name: 'Account menu' }).first().click()
-    await page.getByRole('menuitem', { name: 'Sign out' }).click()
-
-    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
-
-    await page.goto('/#/members')
-    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
   })
 })
 

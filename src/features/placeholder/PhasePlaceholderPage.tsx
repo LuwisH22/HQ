@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
+import type { Icon } from '@phosphor-icons/react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,7 +18,7 @@ export function PhasePlaceholderPage({
   capabilities,
 }: {
   title: string
-  icon: LucideIcon
+  icon: Icon
   phase: number
   summary: string
   capabilities: readonly string[]

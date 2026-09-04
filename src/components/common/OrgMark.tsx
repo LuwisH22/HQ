@@ -1,8 +1,9 @@
 import { cn } from '@/lib/utils'
 
 /**
- * Organization avatar: the uploaded logo when there is one, otherwise a
- * generated monogram so an org without branding still reads as itself.
+ * Organization mark: the uploaded logo when there is one, otherwise a
+ * monogram in an accent-outlined square. Nocturne has no gradients — the
+ * outline is what carries the brand here.
  */
 export function OrgMark({
   name,
@@ -20,7 +21,7 @@ export function OrgMark({
         alt=""
         loading="lazy"
         decoding="async"
-        className={cn('size-7 shrink-0 rounded-md object-cover', className)}
+        className={cn('size-7 shrink-0 rounded-sm object-cover', className)}
       />
     )
   }
@@ -31,9 +32,8 @@ export function OrgMark({
     <span
       aria-hidden="true"
       className={cn(
-        'flex size-7 shrink-0 items-center justify-center rounded-md',
-        'from-primary to-signal bg-gradient-to-br',
-        'text-2xs text-primary-foreground font-bold tracking-tight',
+        'border-primary text-primary flex size-7 shrink-0 items-center justify-center rounded-sm border',
+        'text-2xs font-semibold tracking-tight',
         className,
       )}
     >

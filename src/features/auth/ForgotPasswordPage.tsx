@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { MailCheck } from 'lucide-react'
+import { EnvelopeSimpleOpen } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,7 +38,7 @@ export function ForgotPasswordPage() {
         description="If that address belongs to a member, a password reset link is on its way."
       >
         <div className="border-border bg-elevated flex items-center gap-3 rounded-md border p-3">
-          <MailCheck className="text-success size-4 shrink-0" aria-hidden="true" />
+          <EnvelopeSimpleOpen className="text-success size-4 shrink-0" aria-hidden="true" />
           <p className="text-muted-foreground text-xs">
             Sent to <span className="text-foreground font-medium">{form.getValues('email')}</span>
           </p>

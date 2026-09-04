@@ -1,0 +1,154 @@
+/**
+ * Live backend preflight.
+ *
+ * Verifies, against whatever project `.env` points at, that the security model
+ * this app depends on is actually in force — before anyone signs in and before
+ * the E2E suite runs. Everything here is checked as an ANONYMOUS caller, which
+ * is exactly the position an attacker holding the publishable key is in.
+ *
+ * The publishable/anon key is public by design; it is only safe because of RLS
+ * and the table grants. This script is what proves that claim rather than
+ * assuming it.
+ *
+ *   node scripts/check-backend.mjs
+ *
+ * Exits non-zero if any check fails.
+ */
+import { readFileSync } from 'node:fs'
+import { createClient } from '@supabase/supabase-js'
+
+// Minimal .env reader: values may contain spaces, so this does not go through
+// the shell.
+function readEnvFile(path) {
+  const out = {}
+  let raw
+  try {
+    raw = readFileSync(path, 'utf8')
+  } catch {
+    return out
+  }
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq === -1) continue
+    out[trimmed.slice(0, eq).trim()] = trimmed
+      .slice(eq + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '')
+  }
+  return out
+}
+
+const env = { ...readEnvFile('.env'), ...process.env }
+const url = env.VITE_SUPABASE_URL
+const key = env.VITE_SUPABASE_ANON_KEY
+
+if (!url || !key) {
+  console.error('check-backend: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are not set.')
+  process.exit(1)
+}
+
+const TABLES = [
+  'organizations',
+  'profiles',
+  'permissions',
+  'role_templates',
+  'role_template_permissions',
+  'roles',
+  'role_permissions',
+  'organization_members',
+  'invitations',
+  'audit_logs',
+]
+
+/** Functions that must never be callable without a session. */
+const PRIVILEGED_RPCS = ['bootstrap_organization', 'log_audit_event', 'hash_invitation_token']
+
+const supabase = createClient(url, key, { auth: { persistSession: false } })
+
+let failures = 0
+function check(label, passed, detail) {
+  console.log(`  ${passed ? 'PASS' : 'FAIL'}  ${label.padEnd(52)} ${detail ?? ''}`)
+  if (!passed) failures += 1
+}
+
+console.log(`\nchecking ${url}\n`)
+
+// --- 1. the client can reach the project with this key ---------------------
+console.log('client')
+const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+check('supabase-js reaches the auth endpoint', !sessionError, sessionError?.message ?? '')
+check('no session while signed out', sessionData?.session === null)
+
+// --- 2. authentication is closed -------------------------------------------
+console.log('\nauthentication')
+const { error: loginError } = await supabase.auth.signInWithPassword({
+  email: 'nobody.preflight@lfg.test',
+  password: 'not-a-real-password-nobody-uses',
+})
+check('unknown credentials are refused', Boolean(loginError), loginError?.message ?? '')
+
+const { error: signUpError } = await supabase.auth.signUp({
+  email: 'nobody.preflight2@lfg.test',
+  password: 'not-a-real-password-nobody-uses',
+})
+check(
+  'public signup is disabled server-side',
+  /signup|not allowed|disabled/i.test(signUpError?.message ?? ''),
+  signUpError?.message ?? 'SIGNUP SUCCEEDED — close it in the dashboard',
+)
+
+// --- 3. no table leaks a single row to an anonymous caller -----------------
+console.log('\nanonymous reads (every one must be refused)')
+for (const table of TABLES) {
+  const { data, error } = await supabase.from(table).select('*').limit(1)
+  const leaked = !error && (data?.length ?? 0) > 0
+  check(
+    table,
+    !leaked,
+    error ? `blocked (${error.code ?? 'error'})` : `returned ${String(data?.length ?? 0)} rows`,
+  )
+}
+
+// --- 4. no table accepts an anonymous write --------------------------------
+console.log('\nanonymous writes (every one must be refused)')
+for (const table of ['organizations', 'profiles', 'organization_members', 'audit_logs']) {
+  const { error } = await supabase.from(table).insert({})
+  check(
+    `insert into ${table}`,
+    Boolean(error),
+    error ? `blocked (${error.code ?? 'error'})` : 'ACCEPTED',
+  )
+}
+
+// --- 5. privileged routines are not exposed --------------------------------
+console.log('\nprivileged functions (must not be reachable)')
+for (const fn of PRIVILEGED_RPCS) {
+  const { error } = await supabase.rpc(fn, {})
+  check(fn, Boolean(error), error ? `blocked (${error.code ?? 'error'})` : 'REACHABLE')
+}
+// These are SECURITY DEFINER and bypass RLS internally, so they must not be
+// reachable without a session even though they currently return nothing.
+const ORG = '00000000-0000-4000-8000-000000000000'
+const HELPERS = [
+  ['is_org_member', { p_organization_id: ORG }],
+  ['has_org_permission', { p_organization_id: ORG, p_permission: 'members.view' }],
+  ['my_role_rank', { p_organization_id: ORG }],
+  ['shares_organization_with', { p_user_id: ORG }],
+  ['my_permissions', { p_organization_id: ORG }],
+  ['create_invitation', { p_organization_id: ORG, p_email: 'x@y.z', p_role_id: ORG, p_token: 't' }],
+  ['accept_invitation', { p_token: 'nope' }],
+  ['revoke_invitation', { p_invitation_id: ORG }],
+]
+for (const [fn, args] of HELPERS) {
+  const { error } = await supabase.rpc(fn, args)
+  check(fn, Boolean(error), error ? `blocked (${error.code ?? 'error'})` : 'REACHABLE')
+}
+
+console.log(
+  failures === 0
+    ? '\nAll checks passed — the anonymous surface is closed.\n'
+    : `\n${String(failures)} check(s) FAILED.\n`,
+)
+process.exit(failures === 0 ? 0 : 1)

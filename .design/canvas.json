@@ -1,0 +1,26 @@
+{
+  "artboards": [
+    { "file": "SignIn.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "Sign in" },
+    { "file": "Main.dc.html", "x": 1560, "y": 0, "w": 1440, "h": 900, "title": "Dashboard" },
+    { "file": "Members.dc.html", "x": 3120, "y": 0, "w": 1440, "h": 900, "title": "Members" },
+    { "file": "Permissions.dc.html", "x": 0, "y": 1020, "w": 1440, "h": 900, "title": "Roles & permissions" },
+    { "file": "MobileDashboard.dc.html", "x": 1560, "y": 1020, "w": 390, "h": 844, "title": "Mobile — dashboard" }
+  ],
+  "annotations": [
+    {
+      "id": "tokens",
+      "x": 0,
+      "y": -150,
+      "w": 460,
+      "text": "Lifted from src/index.css, not redrawn.\n\nbg oklch(0.155 0.008 265) · surface 0.187 · card 0.196\nborder oklch(0.28 0.012 265) · primary oklch(0.66 0.185 272)\n6px radius · 11/12/14px type · 36px controls · 240px sidebar"
+    },
+    {
+      "id": "accent-lever",
+      "x": 2080,
+      "y": -150,
+      "w": 460,
+      "text": "Each artboard has one tweak: Brand accent.\nUse it to try a different primary hue — it drives the logo mark, the active nav rail, primary buttons and the settings tab underline.\n\nArtboards don't share state, so set it per board."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

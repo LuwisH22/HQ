@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Users } from 'lucide-react'
+import { ArrowRight, Users } from '@phosphor-icons/react'
 import { Avatar, AvatarFallback, AvatarImage, AvatarStatus } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

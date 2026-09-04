@@ -2,15 +2,15 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  CalendarClock,
+  CalendarCheck,
   CheckSquare,
-  FolderKanban,
-  Mail,
+  Kanban,
+  EnvelopeSimple,
   Shield,
   UserPlus,
   Users,
-  Wifi,
-} from 'lucide-react'
+  Broadcast,
+} from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Can } from '@/components/common/Can'
@@ -83,10 +83,10 @@ export function DashboardPage() {
       {/* --- Greeting --------------------------------------------------- */}
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
-          <p className="text-2xs text-muted-foreground font-medium tracking-wider uppercase">
+          <p className="text-3xs text-foreground/45 font-semibold tracking-[0.1em] uppercase">
             {formatLongDate(new Date())}
           </p>
-          <h1 className="text-xl font-semibold tracking-tight">
+          <h1 className="text-[25px] font-medium tracking-[-0.015em]">
             {greetingFor()}
             {firstName ? `, ${firstName}` : ''}
           </h1>
@@ -116,7 +116,7 @@ export function DashboardPage() {
           loading={canViewMembers && membersQuery.isPending}
         />
         <StatTile
-          icon={Wifi}
+          icon={Broadcast}
           label="Around now"
           value={canViewMembers ? stats.onlineNow : '—'}
           hint="Seen in the last 30 minutes"
@@ -124,7 +124,7 @@ export function DashboardPage() {
           accent="success"
         />
         <StatTile
-          icon={Mail}
+          icon={EnvelopeSimple}
           label="Pending invites"
           value={canInvite ? stats.pendingInvites : '—'}
           hint={canInvite ? 'Awaiting acceptance' : 'Requires invite access'}
@@ -142,13 +142,13 @@ export function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <UpcomingPanel
           title="Today's schedule"
-          icon={CalendarClock}
+          icon={CalendarCheck}
           description="Scrims, matches, reviews and meetings for today."
           availableInPhase={4}
         />
         <UpcomingPanel
           title="Active projects"
-          icon={FolderKanban}
+          icon={Kanban}
           description="Boards you are a member of, with progress at a glance."
           availableInPhase={3}
         />

@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
+import type { Icon } from '@phosphor-icons/react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
@@ -16,7 +16,7 @@ export function StatTile({
   loading = false,
   accent = 'default',
 }: {
-  icon: LucideIcon
+  icon: Icon
   label: string
   value: string | number
   hint?: string
@@ -35,7 +35,7 @@ export function StatTile({
           )}
           aria-hidden="true"
         />
-        <p className="text-2xs text-muted-foreground truncate font-medium tracking-wider uppercase">
+        <p className="text-3xs text-muted-foreground truncate font-semibold tracking-[0.1em] uppercase">
           {label}
         </p>
       </div>
@@ -43,12 +43,12 @@ export function StatTile({
       {loading ? (
         <Skeleton className="mt-2 h-7 w-12" />
       ) : (
-        <p className="mt-1.5 truncate text-2xl leading-none font-semibold tracking-tight tabular-nums">
+        <p className="mt-1.5 truncate text-[26px] leading-none font-medium tracking-[-0.015em] tabular-nums">
           {value}
         </p>
       )}
 
-      {hint ? <p className="text-2xs text-muted-foreground mt-1.5 truncate">{hint}</p> : null}
+      {hint ? <p className="text-3xs text-foreground/45 mt-1.5 truncate">{hint}</p> : null}
     </div>
   )
 }

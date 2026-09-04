@@ -1,4 +1,4 @@
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, CaretDown } from '@phosphor-icons/react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,7 +73,7 @@ export function OrganizationSwitcher({ collapsed }: { collapsed: boolean }) {
       >
         {identity}
         {!collapsed ? (
-          <ChevronDown className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
+          <CaretDown className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
         ) : null}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">

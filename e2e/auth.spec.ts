@@ -11,6 +11,22 @@ import { expect, test } from '@playwright/test'
  * themselves unless E2E_EMAIL / E2E_PASSWORD are provided.
  */
 
+/**
+ * These specs exercise the real sign-in form, which only renders when Supabase
+ * credentials are configured. With no `.env` the app shows "No backend
+ * configured" and offers demo mode instead — a legitimate state, covered by
+ * `demo-mode.spec.ts`. Skip rather than fail, so a checkout without credentials
+ * still gets a green run.
+ */
+test.beforeEach(async ({ page }) => {
+  await page.goto('/#/auth/sign-in')
+  const noBackend = await page
+    .getByRole('heading', { name: 'No backend configured' })
+    .isVisible()
+    .catch(() => false)
+  test.skip(noBackend, 'No Supabase credentials configured; the sign-in form is not rendered.')
+})
+
 test.describe('unauthenticated access', () => {
   test('redirects the root route to sign-in', async ({ page }) => {
     await page.goto('/')

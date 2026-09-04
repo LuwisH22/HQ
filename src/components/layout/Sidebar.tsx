@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { NavLink } from 'react-router-dom'
-import { ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { CaretDoubleLeft, CaretDoubleRight } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWorkspace } from '@/hooks/use-workspace'
@@ -19,12 +19,12 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       end={item.path === '/'}
       className={({ isActive }) =>
         cn(
-          'group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
+          'group relative flex items-center gap-2.5 rounded-sm px-2.5 py-1.5 text-sm transition-colors duration-[140ms]',
           'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
           collapsed && 'justify-center px-0',
           isActive
-            ? 'bg-accent text-accent-foreground font-medium'
-            : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+            ? 'bg-primary/14 text-foreground font-medium'
+            : 'text-muted-foreground hover:bg-foreground/7 hover:text-foreground',
         )
       }
     >
@@ -34,7 +34,7 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
           <span
             aria-hidden="true"
             className={cn(
-              'bg-primary absolute -left-2 h-4 w-0.5 rounded-full transition-opacity',
+              'bg-primary absolute -left-2 h-4 w-0.5 rounded-xs transition-opacity',
               isActive ? 'opacity-100' : 'opacity-0',
             )}
           />
@@ -45,7 +45,7 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
             <>
               <span className="truncate">{item.label}</span>
               {upcoming ? (
-                <span className="text-2xs text-muted-foreground/60 ml-auto font-medium tracking-wider uppercase">
+                <span className="text-3xs text-foreground/38 ml-auto font-semibold tracking-[0.1em] uppercase">
                   Soon
                 </span>
               ) : null}
@@ -114,7 +114,7 @@ export function Sidebar() {
         {organizationItems.length > 0 ? (
           <>
             {!collapsed ? (
-              <p className="text-2xs text-muted-foreground/70 px-2.5 pt-4 pb-1 font-semibold tracking-wider uppercase">
+              <p className="text-3xs text-foreground/42 px-2.5 pt-4 pb-1 font-semibold tracking-[0.1em] uppercase">
                 Organization
               </p>
             ) : (
@@ -141,7 +141,11 @@ export function Sidebar() {
           aria-expanded={!collapsed}
           className={cn('text-muted-foreground mt-1', collapsed ? 'mx-auto flex' : 'ml-auto flex')}
         >
-          {collapsed ? <ChevronsRight aria-hidden="true" /> : <ChevronsLeft aria-hidden="true" />}
+          {collapsed ? (
+            <CaretDoubleRight aria-hidden="true" />
+          ) : (
+            <CaretDoubleLeft aria-hidden="true" />
+          )}
         </Button>
       </div>
     </aside>

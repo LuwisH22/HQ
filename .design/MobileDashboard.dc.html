@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --bg: oklch(0.155 0.008 265);
+      --surface: oklch(0.187 0.009 265);
+      --card: oklch(0.196 0.01 265);
+      --elevated: oklch(0.222 0.011 265);
+      --border: oklch(0.28 0.012 265);
+      --fg: oklch(0.96 0.004 265);
+      --muted: oklch(0.68 0.014 265);
+      --success: oklch(0.7 0.16 155);
+      --warning: oklch(0.78 0.15 75);
+    }
+    body {
+      margin: 0;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: oklch(0.66 0.185 272); text-decoration: none; }
+    a:hover { color: oklch(0.72 0.17 272); }
+  </style>
+</helmet>
+
+<div style="display: flex; flex-direction: column; width: 390px; height: 844px; overflow: hidden; background: var(--bg);">
+
+  <!-- Topbar: hamburger + demo badge + search (h-12) -->
+  <header style="display: flex; align-items: center; gap: 8px; height: 48px; flex: none; padding: 0 8px; background: var(--surface); border-bottom: 1px solid var(--border);">
+    <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 4px; color: var(--fg);">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 18px; height: 18px; stroke-width: 1.75;"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </span>
+    <span style="margin-left: auto; display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 4px; border: 1px solid oklch(0.78 0.15 75 / 0.4); background: oklch(0.78 0.15 75 / 0.15); color: var(--warning); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 11px; height: 11px; stroke-width: 2;"><path d="M10 2v7.5L4.2 19a2 2 0 0 0 1.7 3h12.2a2 2 0 0 0 1.7-3L14 9.5V2M8.5 2h7M7 15h10"/></svg>
+      Demo
+    </span>
+    <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted);">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 15px; height: 15px; stroke-width: 1.75;"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    </span>
+  </header>
+
+  <!-- Scrollable content -->
+  <main style="flex: 1; overflow: hidden; padding: 16px;">
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+
+      <header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <p style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);">Friday, 4 September</p>
+          <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2;">Good morning, vance</h1>
+          <p style="margin: 0; font-size: 12px; color: var(--muted);">LFG Esports · Owner</p>
+        </div>
+      </header>
+
+      <span style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 6px; background: {{accent}}; color: oklch(0.15 0.02 272); font-size: 14px; font-weight: 500;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 16px; height: 16px; stroke-width: 1.75;"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M22 11h-6"/></svg>
+        Invite member
+      </span>
+
+      <!-- 2-col stat grid -->
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+        <sc-for list="{{stats}}" as="s" hint-placeholder-count="4">
+          <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; flex: none; stroke-width: 1.75; color: {{s.iconColor}};"><path d="{{s.d}}"/></svg>
+              <p style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{s.label}}</p>
+            </div>
+            <p style="margin: 6px 0 0; font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;">{{s.value}}</p>
+            <p style="margin: 6px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted);">{{s.hint}}</p>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- Stacked phase panels -->
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <sc-for list="{{panels}}" as="p" hint-placeholder-count="2">
+          <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card);">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; flex: none; stroke-width: 1.75; color: var(--muted);"><path d="{{p.d}}"/></svg>
+              <h3 style="margin: 0; flex: 1; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">{{p.title}}</h3>
+              <span style="padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; font-weight: 500; color: var(--muted);">{{p.phase}}</span>
+            </div>
+            <div style="padding: 0 16px 16px;">
+              <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">{{p.body}}</p>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom tab bar: 5 destinations, 56px targets -->
+  <nav style="display: flex; align-items: stretch; flex: none; background: var(--surface); border-top: 1px solid var(--border);">
+    <sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+      <div style="display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; padding: 0 4px; color: {{t.color}};">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 20px; height: 20px; stroke-width: {{t.stroke}};"><path d="{{t.d}}"/></svg>
+        <span style="font-size: 11px; line-height: 1;">{{t.label}}</span>
+      </div>
+    </sc-for>
+  </nav>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"oklch(0.66 0.185 272)","options":["oklch(0.66 0.185 272)","oklch(0.72 0.16 200)","oklch(0.72 0.17 145)","oklch(0.7 0.19 35)"],"section":"Brand"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? 'oklch(0.66 0.185 272)';
+    const muted = 'oklch(0.68 0.014 265)';
+    return {
+      accent,
+      stats: [
+        { label: 'Active members', value: '10', hint: 'In this organization', d: 'M9 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8M2 21a7 7 0 0 1 14 0', iconColor: muted },
+        { label: 'Around now', value: '4', hint: 'Seen in the last 30 minutes', d: 'M2 8.8a16 16 0 0 1 20 0M5 12.6a11 11 0 0 1 14 0M8.5 16.3a6 6 0 0 1 7 0', iconColor: 'oklch(0.7 0.16 155)' },
+        { label: 'Pending invites', value: '3', hint: 'Awaiting acceptance', d: 'M2 6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zM2 7l10 6 10-6', iconColor: muted },
+        { label: 'Your role', value: 'Owner', hint: '34 permissions granted', d: 'M12 2.5 20 5v6c0 5-3.4 9.2-8 10.5C7.4 20.2 4 16 4 11V5z', iconColor: muted }
+      ],
+      panels: [
+        { title: "Today's schedule", phase: 'Phase 4', body: 'Scrims, matches, reviews and meetings for today.', d: 'M12 5a8 8 0 1 1 0 16 8 8 0 0 1 0-16M12 9.5V13l2 1.5' },
+        { title: 'Active projects', phase: 'Phase 3', body: 'Boards you are a member of, with progress at a glance.', d: 'M3 3h18v18H3zM8 7v7M12 7v4M16 7v9' },
+        { title: 'Your tasks', phase: 'Phase 3', body: 'Everything assigned to you, sorted by due date.', d: 'M3 3h18v18H3zm5 9 3 3 5-6' }
+      ],
+      tabs: [
+        { label: 'Dashboard', color: accent, stroke: 2.25, d: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z' },
+        { label: 'Messages', color: muted, stroke: 1.75, d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
+        { label: 'Projects', color: muted, stroke: 1.75, d: 'M3 3h18v18H3zM8 7v7M12 7v4M16 7v9' },
+        { label: 'Calendar', color: muted, stroke: 1.75, d: 'M3 5h18v16H3zM8 3v4M16 3v4M3 11h18' },
+        { label: 'Members', color: muted, stroke: 1.75, d: 'M9 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8M2 21a7 7 0 0 1 14 0' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

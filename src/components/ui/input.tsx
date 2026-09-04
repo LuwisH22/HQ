@@ -3,6 +3,10 @@ import { cn } from '@/lib/utils'
 
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement>
 
+/**
+ * Recessed: the field takes the ground colour so it reads as cut into the
+ * surface it sits on, rather than floating above it.
+ */
 const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
   { className, type, ...props },
   ref,
@@ -12,11 +16,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
       type={type}
       ref={ref}
       className={cn(
-        'border-input bg-background flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm transition-colors',
-        'placeholder:text-muted-foreground',
-        'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        'aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive',
+        'border-input bg-background caret-primary flex h-[34px] w-full rounded-sm border px-2.5 py-[7px] text-sm transition-[border-color] duration-[140ms]',
+        'placeholder:text-muted-foreground/70',
+        'focus-visible:border-primary',
+        'disabled:cursor-not-allowed disabled:opacity-45',
+        'aria-[invalid=true]:border-destructive',
         'file:border-0 file:bg-transparent file:text-sm file:font-medium',
         className,
       )}

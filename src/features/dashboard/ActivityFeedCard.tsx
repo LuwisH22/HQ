@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Activity } from 'lucide-react'
+import { Pulse } from '@phosphor-icons/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/common/states'
 import { auditService } from '@/services/audit.service'
@@ -29,14 +29,14 @@ export function ActivityFeedCard({ organizationId }: { organizationId: string | 
   return (
     <Card className="h-full">
       <CardHeader className="flex-row items-center gap-2 space-y-0">
-        <Activity className="text-muted-foreground size-3.5" aria-hidden="true" />
+        <Pulse className="text-muted-foreground size-3.5" aria-hidden="true" />
         <CardTitle>Recent activity</CardTitle>
       </CardHeader>
 
       <CardContent>
         {!canRead ? (
           <EmptyState
-            icon={Activity}
+            icon={Pulse}
             title="Not available for your role"
             description="The audit trail is visible to administrators."
           />
@@ -46,7 +46,7 @@ export function ActivityFeedCard({ organizationId }: { organizationId: string | 
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : query.data.length === 0 ? (
           <EmptyState
-            icon={Activity}
+            icon={Pulse}
             title="Nothing yet"
             description="Administrative changes — invitations, role updates, settings — appear here."
           />

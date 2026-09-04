@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { CheckCircle, CircleNotch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { authService } from '@/services/auth.service'
 import { toAppError } from '@/lib/errors'
@@ -70,7 +70,7 @@ export function AcceptInvitePage() {
     return (
       <AuthLayout title="You're in" description="Your membership is active.">
         <div className="border-border bg-elevated mb-4 flex items-center gap-3 rounded-md border p-3">
-          <CheckCircle2 className="text-success size-4 shrink-0" aria-hidden="true" />
+          <CheckCircle className="text-success size-4 shrink-0" aria-hidden="true" />
           <p className="text-muted-foreground text-xs">Welcome to the organization.</p>
         </div>
         <Button className="w-full" onClick={() => void navigate('/', { replace: true })}>
@@ -101,7 +101,7 @@ export function AcceptInvitePage() {
         role="status"
         aria-live="polite"
       >
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        <CircleNotch className="size-4 animate-spin" aria-hidden="true" />
         Verifying your invitation…
       </div>
     </AuthLayout>

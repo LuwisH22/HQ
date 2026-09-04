@@ -30,7 +30,7 @@ export function AuthLayout({
 
         <div className="border-border bg-surface rounded-lg border p-6">
           <div className="mb-5 space-y-1.5">
-            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+            <h1 className="text-[20px] font-medium tracking-[-0.015em]">{title}</h1>
             {description ? (
               <p className="text-muted-foreground text-xs leading-relaxed">{description}</p>
             ) : null}

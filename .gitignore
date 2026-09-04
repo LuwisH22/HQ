@@ -6,6 +6,11 @@ dist/
 dist-ssr/
 *.local
 
+# Claude Design. The `.dc.html` artboards and canvas.json are the editable
+# sources and stay tracked; the full interface export is a 2.5 MB generated
+# bundle with embedded base64 fonts, larger than the rest of the repo combined.
+.design/lfg-hq-interface.html
+
 # Rust / Tauri
 src-tauri/target/
 src-tauri/gen/schemas/
@@ -23,6 +28,9 @@ src-tauri/NSIS/
 .env
 .env.*
 !.env.example
+
+# Playwright session state — contains a live access token.
+.auth/
 
 # Supabase CLI local state and secrets.
 supabase/.env

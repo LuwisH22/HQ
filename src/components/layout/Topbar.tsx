@@ -1,4 +1,4 @@
-import { Menu, Search, WifiOff } from 'lucide-react'
+import { List, MagnifyingGlass, WifiSlash } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useUiStore } from '@/stores/ui.store'
@@ -33,7 +33,7 @@ export function Topbar({ title }: { title?: string }) {
         onClick={() => setMobileNavOpen(true)}
         aria-label="Open navigation"
       >
-        <Menu aria-hidden="true" />
+        <List aria-hidden="true" />
       </Button>
 
       {title ? <h1 className="truncate text-sm font-semibold tracking-tight">{title}</h1> : null}
@@ -46,7 +46,7 @@ export function Topbar({ title }: { title?: string }) {
             role="status"
             aria-live="polite"
           >
-            <WifiOff className="size-3" aria-hidden="true" />
+            <WifiSlash className="size-3" aria-hidden="true" />
             {connection === 'offline' ? 'Offline' : 'Reconnecting…'}
           </Badge>
         ) : null}
@@ -58,9 +58,9 @@ export function Topbar({ title }: { title?: string }) {
           className="text-muted-foreground gap-2"
           aria-keyshortcuts="Control+K Meta+K"
         >
-          <Search aria-hidden="true" />
+          <MagnifyingGlass aria-hidden="true" />
           <span className="hidden sm:inline">Search</span>
-          <kbd className="border-border bg-elevated text-2xs ml-1 hidden rounded border px-1 font-mono sm:inline">
+          <kbd className="border-border bg-background text-3xs ml-1 hidden rounded-sm border px-1 font-mono sm:inline">
             {modifierKeyLabel()} K
           </kbd>
         </Button>

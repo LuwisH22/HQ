@@ -3,23 +3,10 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { Info, UserPlus } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { FormField } from '@/components/common/FormField'
 import { invitationService } from '@/services/invitation.service'
 import type { MemberRole } from '@/services/organization.service'
@@ -27,6 +14,7 @@ import { queryKeys } from '@/lib/query-keys'
 import { errorMessage } from '@/lib/errors'
 import { canGrantRank } from '@/lib/permissions'
 import { useWorkspace } from '@/hooks/use-workspace'
+import { cn } from '@/lib/utils'
 import { inviteSchema, type InviteValues } from '@/features/auth/schemas'
 
 /**
@@ -35,6 +23,12 @@ import { inviteSchema, type InviteValues } from '@/features/auth/schemas'
  * The role list is trimmed to what the inviter may actually grant. The same
  * rule is enforced inside `create_invitation`, so a tampered request fails in
  * Postgres rather than here.
+ *
+ * Role is a chip group rather than a select: with six roles whose differences
+ * matter, showing them all at once — and the selected one's description live
+ * underneath — beats hiding them behind a closed menu. This is a control
+ * change only; the form still holds a single `roleId` string exactly as the
+ * select did.
  */
 export function InviteMemberDialog({
   open,
@@ -66,6 +60,9 @@ export function InviteMemberDialog({
     }
   }, [open, defaultRole, form])
 
+  const selectedRoleId = form.watch('roleId')
+  const selectedRole = grantableRoles.find((role) => role.id === selectedRoleId)
+
   const mutation = useMutation({
     mutationFn: (values: InviteValues) =>
       invitationService.create({
@@ -89,68 +86,101 @@ export function InviteMemberDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Invite a member</DialogTitle>
-          <DialogDescription>
-            They will receive an email with a link to set a password and join. The link expires in
-            seven days and only works for this address.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent showClose={false}>
+        <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} noValidate>
+          {/* Header band */}
+          <div className="flex gap-3 px-5 pt-5 pb-4">
+            <span className="border-primary flex size-8 shrink-0 items-center justify-center rounded-sm border">
+              <UserPlus className="text-primary size-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle>Invite a member</DialogTitle>
+              <DialogDescription className="mt-1">
+                They get an email with a link to set a password and join. It expires in seven days
+                and only works for this address.
+              </DialogDescription>
+            </div>
+          </div>
 
-        <form
-          onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
-          className="space-y-4"
-          noValidate
-        >
-          <FormField label="Email address" error={form.formState.errors.email?.message} required>
-            {(props) => (
-              <Input
-                {...props}
-                {...form.register('email')}
-                type="email"
-                autoComplete="off"
-                placeholder="name@organization.gg"
-              />
-            )}
-          </FormField>
+          {/* Body band */}
+          <div className="flex flex-col gap-[18px] px-5 pt-1 pb-5">
+            <FormField label="Email address" error={form.formState.errors.email?.message} required>
+              {(props) => (
+                <Input
+                  {...props}
+                  {...form.register('email')}
+                  type="email"
+                  autoComplete="off"
+                  placeholder="name@organization.gg"
+                />
+              )}
+            </FormField>
 
-          <FormField
-            label="Role"
-            error={form.formState.errors.roleId?.message}
-            hint="You can only assign roles at or below your own level."
-            required
-          >
-            {(props) => (
-              <Controller
-                control={form.control}
-                name="roleId"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger id={props.id} aria-describedby={props['aria-describedby']}>
-                      <SelectValue placeholder="Pick a role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {grantableRoles.map((role) => (
-                        <SelectItem key={role.id} value={role.id}>
+            <Controller
+              control={form.control}
+              name="roleId"
+              render={({ field }) => (
+                <fieldset className="min-w-0 border-0 p-0">
+                  <legend className="text-foreground mb-1.5 text-xs font-medium">
+                    Role
+                    <span className="text-destructive ml-0.5" aria-hidden="true">
+                      *
+                    </span>
+                  </legend>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {grantableRoles.map((role) => {
+                      const selected = role.id === field.value
+                      return (
+                        <button
+                          key={role.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => field.onChange(role.id)}
+                          className={cn(
+                            'rounded-sm border px-[11px] py-[5px] text-xs transition-all duration-[140ms]',
+                            selected
+                              ? 'border-primary bg-primary/14 text-foreground font-medium'
+                              : 'border-border text-muted-foreground hover:bg-foreground/7',
+                          )}
+                        >
                           {role.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
-          </FormField>
+                        </button>
+                      )
+                    })}
+                  </div>
 
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                  {/* The selected role's own description, straight from the
+                      role catalogue — so the choice explains itself. */}
+                  {selectedRole?.description ? (
+                    <p className="text-muted-foreground text-2xs mt-2 flex gap-1.5 leading-relaxed">
+                      <Info className="mt-px size-3 shrink-0" aria-hidden="true" />
+                      {selectedRole.description}
+                    </p>
+                  ) : null}
+
+                  {form.formState.errors.roleId ? (
+                    <p role="alert" className="text-destructive text-2xs mt-2 font-medium">
+                      {form.formState.errors.roleId.message}
+                    </p>
+                  ) : null}
+                </fieldset>
+              )}
+            />
+          </div>
+
+          {/* Footer band */}
+          <div className="border-border bg-elevated/40 flex items-center gap-3 border-t px-5 py-3.5">
+            <p className="text-foreground/45 text-3xs min-w-0 flex-1">
+              You can only assign roles at or below your own.
+            </p>
+            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" loading={mutation.isPending}>
               Send invitation
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

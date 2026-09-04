@@ -1,6 +1,6 @@
 import { Fragment, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Check, Minus, Shield } from 'lucide-react'
+import { Check, Shield } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CardSkeleton, ErrorState, ForbiddenState } from '@/components/common/states'
@@ -9,7 +9,6 @@ import type { PermissionMatrixRow } from '@/services/organization.service'
 import { queryKeys } from '@/lib/query-keys'
 import { useWorkspace } from '@/hooks/use-workspace'
 import { usePermission } from '@/hooks/use-permission'
-import { cn } from '@/lib/utils'
 
 /**
  * Read-only view of the permission matrix.
@@ -120,7 +119,7 @@ export function RolesSettings() {
               <tr className="border-border border-b">
                 <th
                   scope="col"
-                  className="text-2xs text-muted-foreground py-2 pr-3 font-semibold tracking-wider uppercase"
+                  className="text-3xs text-muted-foreground py-2 pr-3 font-semibold tracking-[0.1em] uppercase"
                 >
                   Capability
                 </th>
@@ -128,7 +127,7 @@ export function RolesSettings() {
                   <th
                     key={role.id}
                     scope="col"
-                    className="text-2xs text-muted-foreground px-2 py-2 text-center font-semibold tracking-wider uppercase"
+                    className="text-3xs text-muted-foreground px-2 py-2 text-center font-semibold tracking-[0.1em] uppercase"
                   >
                     {role.name}
                   </th>
@@ -142,7 +141,7 @@ export function RolesSettings() {
                     <th
                       scope="colgroup"
                       colSpan={roles.length + 1}
-                      className="text-2xs text-primary/80 pt-4 pb-1 text-left font-semibold tracking-wider uppercase"
+                      className="text-3xs text-accent-text pt-3.5 pb-1 text-left font-semibold tracking-[0.1em] uppercase"
                     >
                       {category}
                     </th>
@@ -161,14 +160,11 @@ export function RolesSettings() {
                           <td key={role.id} className="px-2 py-1.5 text-center">
                             {granted ? (
                               <Check
-                                className="text-success mx-auto size-3.5"
+                                className="text-primary mx-auto size-3.5"
                                 aria-label="Granted"
                               />
                             ) : (
-                              <Minus
-                                className={cn('text-muted-foreground/30 mx-auto size-3.5')}
-                                aria-label="Not granted"
-                              />
+                              <span className="sr-only">Not granted</span>
                             )}
                           </td>
                         )

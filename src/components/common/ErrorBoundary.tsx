@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { Warning } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 
 interface Props {
@@ -46,7 +46,7 @@ export class ErrorBoundary extends Component<Props, State> {
         className="flex min-h-64 flex-col items-center justify-center gap-4 p-8 text-center"
       >
         <div className="bg-destructive/10 flex size-10 items-center justify-center rounded-md">
-          <AlertTriangle className="text-destructive size-5" aria-hidden="true" />
+          <Warning className="text-destructive size-5" aria-hidden="true" />
         </div>
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">This section failed to load</h2>

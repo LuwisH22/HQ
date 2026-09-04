@@ -1,6 +1,6 @@
 import * as React from 'react'
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu'
-import { Check, ChevronRight } from 'lucide-react'
+import { Check, CaretRight } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 const DropdownMenu = DropdownMenuPrimitive.Root
@@ -11,7 +11,7 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
 
 const contentClasses = cn(
-  'z-50 min-w-[10rem] overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-xl',
+  'bg-popover text-popover-foreground z-50 min-w-[10rem] overflow-hidden rounded-md p-1.5 shadow-lg',
   'data-[state=open]:animate-in data-[state=closed]:animate-out',
   'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
   'data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95',
@@ -20,7 +20,7 @@ const contentClasses = cn(
 
 const itemClasses = cn(
   'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors',
-  'focus:bg-accent focus:text-accent-foreground',
+  'focus:bg-foreground/7',
   'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
   '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground',
 )
@@ -54,8 +54,7 @@ const DropdownMenuItem = React.forwardRef<
       className={cn(
         itemClasses,
         inset && 'pl-8',
-        destructive &&
-          'text-destructive focus:bg-destructive/10 focus:text-destructive [&_svg]:text-destructive',
+        destructive && 'text-destructive focus:bg-destructive/12 [&_svg]:text-destructive',
         className,
       )}
       {...props}
@@ -112,7 +111,7 @@ const DropdownMenuLabel = React.forwardRef<
     <DropdownMenuPrimitive.Label
       ref={ref}
       className={cn(
-        'text-2xs text-muted-foreground px-2 py-1.5 font-semibold tracking-wider uppercase',
+        'text-3xs text-muted-foreground px-2.5 py-1.5 font-semibold tracking-[0.1em] uppercase',
         inset && 'pl-8',
         className,
       )}
@@ -128,7 +127,7 @@ const DropdownMenuSeparator = React.forwardRef<
   return (
     <DropdownMenuPrimitive.Separator
       ref={ref}
-      className={cn('bg-border -mx-1 my-1 h-px', className)}
+      className={cn('bg-border -mx-1.5 my-1.5 h-px', className)}
       {...props}
     />
   )
@@ -145,7 +144,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
       {...props}
     >
       {children}
-      <ChevronRight className="ml-auto size-4" aria-hidden="true" />
+      <CaretRight className="ml-auto size-4" aria-hidden="true" />
     </DropdownMenuPrimitive.SubTrigger>
   )
 })

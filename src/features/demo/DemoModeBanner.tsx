@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FlaskConical, RotateCcw } from 'lucide-react'
+import { Flask, ArrowCounterClockwise } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -38,9 +38,9 @@ export function DemoModeBanner() {
         <TooltipTrigger asChild>
           <span
             role="status"
-            className="border-warning/40 bg-warning/15 text-warning text-2xs inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 font-semibold tracking-wide uppercase"
+            className="border-demo/50 text-demo text-3xs inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 font-semibold tracking-[0.1em] uppercase"
           >
-            <FlaskConical className="size-3" aria-hidden="true" />
+            <Flask className="size-3" aria-hidden="true" />
             Demo mode
           </span>
         </TooltipTrigger>
@@ -60,7 +60,7 @@ export function DemoModeBanner() {
             aria-label="Reset demo data"
             className="text-muted-foreground"
           >
-            {resetting ? null : <RotateCcw aria-hidden="true" />}
+            {resetting ? null : <ArrowCounterClockwise aria-hidden="true" />}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">Reset demo data to the seed</TooltipContent>

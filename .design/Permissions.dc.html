@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --bg: oklch(0.155 0.008 265);
+      --surface: oklch(0.187 0.009 265);
+      --card: oklch(0.196 0.01 265);
+      --elevated: oklch(0.222 0.011 265);
+      --border: oklch(0.28 0.012 265);
+      --fg: oklch(0.96 0.004 265);
+      --muted: oklch(0.68 0.014 265);
+      --success: oklch(0.7 0.16 155);
+      --warning: oklch(0.78 0.15 75);
+      --signal: oklch(0.78 0.12 198);
+    }
+    body {
+      margin: 0;
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: oklch(0.66 0.185 272); text-decoration: none; }
+    a:hover { color: oklch(0.72 0.17 272); }
+  </style>
+</helmet>
+
+<div style="display: flex; width: 1440px; height: 900px; overflow: hidden;">
+
+  <aside style="width: 56px; flex: none; background: var(--surface); border-right: 1px solid var(--border);"></aside>
+
+  <div style="display: flex; flex-direction: column; flex: 1; min-width: 0;">
+    <header style="display: flex; align-items: center; height: 48px; flex: none; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--border);">
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; border: 1px solid oklch(0.78 0.15 75 / 0.4); background: oklch(0.78 0.15 75 / 0.15); color: var(--warning); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 12px; height: 12px; stroke-width: 2;"><path d="M10 2v7.5L4.2 19a2 2 0 0 0 1.7 3h12.2a2 2 0 0 0 1.7-3L14 9.5V2M8.5 2h7M7 15h10"/></svg>
+          Demo mode
+        </span>
+      </div>
+    </header>
+
+    <main style="flex: 1; overflow: hidden; padding: 24px;">
+      <div style="max-width: 768px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
+
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h1 style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Settings</h1>
+          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);">Your account and the organization's configuration.</p>
+        </div>
+
+        <!-- Tabs -->
+        <nav style="border-bottom: 1px solid var(--border);">
+          <div style="display: flex; gap: 4px; padding: 0 4px;">
+            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 2px solid transparent; font-size: 12px; font-weight: 500; color: var(--muted);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75;"><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>
+              Your profile
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 2px solid transparent; font-size: 12px; font-weight: 500; color: var(--muted);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75;"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 8h2M9 12h2M9 16h2M15 8h.01M15 12h.01M15 16h.01"/></svg>
+              Organization
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 2px solid {{accent}}; font-size: 12px; font-weight: 500; color: var(--fg);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75;"><path d="M12 2.5 20 5v6c0 5-3.4 9.2-8 10.5C7.4 20.2 4 16 4 11V5z"/></svg>
+              Roles &amp; permissions
+            </span>
+          </div>
+        </nav>
+
+        <!-- Roles card -->
+        <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card);">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 16px 16px 12px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 1.75; color: var(--muted);"><path d="M12 2.5 20 5v6c0 5-3.4 9.2-8 10.5C7.4 20.2 4 16 4 11V5z"/></svg>
+            <h3 style="margin: 0; flex: 1; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Roles</h3>
+            <span style="padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; font-weight: 500; color: var(--muted);">6</span>
+          </div>
+          <div style="padding: 0 16px 16px;">
+            <sc-for list="{{roles}}" as="r" hint-placeholder-count="6">
+              <div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid oklch(0.28 0.012 265 / 0.6);">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <p style="margin: 0; font-size: 14px; font-weight: 500; line-height: 1.2;">{{r.name}}</p>
+                    <span style="padding: 2px 6px; border-radius: 4px; background: oklch(0.25 0.012 265); font-size: 11px; font-weight: 500; color: oklch(0.94 0.005 265);">System</span>
+                  </div>
+                  <p style="margin: 2px 0 0; font-size: 11px; line-height: 1.6; color: var(--muted);">{{r.description}}</p>
+                </div>
+                <span style="flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted);">rank {{r.rank}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- Permission matrix -->
+        <div style="border: 1px solid var(--border); border-radius: 8px; background: var(--card);">
+          <div style="padding: 16px 16px 12px;">
+            <h3 style="margin: 0 0 4px; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Permission matrix</h3>
+            <p style="margin: 0; font-size: 11px; line-height: 1.6; color: var(--muted);">What each role is allowed to do. Enforced by Row Level Security in the database, not by the interface.</p>
+          </div>
+
+          <!-- Flex rows, deliberately not table markup: the HTML parser
+               foster-parents any non-table element out of a table row, so a
+               loop nested in one silently collapses to a single cell.
+               Fixed-width role columns keep every row aligned. -->
+          <div style="padding: 0 16px 16px;">
+
+            <div style="display: flex; align-items: center; border-bottom: 1px solid var(--border);">
+              <span style="flex: 1; min-width: 0; padding: 8px 12px 8px 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);">Capability</span>
+              <sc-for list="{{roleNames}}" as="n" hint-placeholder-count="6">
+                <span style="width: 72px; flex: none; padding: 8px 0; text-align: center; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);">{{n}}</span>
+              </sc-for>
+            </div>
+
+            <sc-for list="{{rows}}" as="row" hint-placeholder-count="9">
+              <div style="display: flex; align-items: center; border-bottom: 1px solid oklch(0.28 0.012 265 / 0.6);">
+                <span style="flex: 1; min-width: 0; padding: 6px 12px 6px 0;">
+                  <span style="display: block; font-size: 12px; line-height: 1.25;">{{row.label}}</span>
+                  <span style="display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: oklch(0.68 0.014 265 / 0.7);">{{row.key}}</span>
+                </span>
+                <sc-for list="{{row.cells}}" as="c" hint-placeholder-count="6">
+                  <span style="display: flex; width: 72px; flex: none; align-items: center; justify-content: center; padding: 6px 0;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; stroke-width: 2; color: {{c.color}};"><path d="{{c.d}}"/></svg>
+                  </span>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"oklch(0.66 0.185 272)","options":["oklch(0.66 0.185 272)","oklch(0.72 0.16 200)","oklch(0.72 0.17 145)","oklch(0.7 0.19 35)"],"section":"Brand"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const YES = { d: 'm5 13 4 4L19 7', color: 'oklch(0.7 0.16 155)' };
+    const NO = { d: 'M6 12h12', color: 'oklch(0.68 0.014 265 / 0.3)' };
+    const grid = (flags) => flags.map((f) => (f ? YES : NO));
+    return {
+      accent: this.props.accent ?? 'oklch(0.66 0.185 272)',
+      roleNames: ['Owner', 'Admin', 'Manager', 'Coach', 'Player', 'Staff'],
+      roles: [
+        { name: 'Owner', description: 'Full control of the organization, including ownership transfer.', rank: 0 },
+        { name: 'Admin', description: 'Manages members, permissions, channels and files.', rank: 10 },
+        { name: 'Manager', description: 'Runs projects, teams, the calendar and channels.', rank: 20 },
+        { name: 'Coach', description: 'Manages their teams, schedules and team projects.', rank: 30 },
+        { name: 'Player', description: 'Works assigned tasks, team channels, calendar and DMs.', rank: 40 },
+        { name: 'Staff', description: 'Baseline access, extended per organization as needed.', rank: 50 }
+      ],
+      rows: [
+        { label: 'View organization', key: 'organization.view', cells: grid([1, 1, 1, 1, 1, 1]) },
+        { label: 'Manage organization', key: 'organization.manage', cells: grid([1, 1, 0, 0, 0, 0]) },
+        { label: 'Delete organization', key: 'organization.delete', cells: grid([1, 0, 0, 0, 0, 0]) },
+        { label: 'View members', key: 'members.view', cells: grid([1, 1, 1, 1, 1, 1]) },
+        { label: 'Invite members', key: 'members.invite', cells: grid([1, 1, 1, 0, 0, 0]) },
+        { label: 'Manage members', key: 'members.manage', cells: grid([1, 1, 1, 0, 0, 0]) },
+        { label: 'Remove members', key: 'members.remove', cells: grid([1, 1, 0, 0, 0, 0]) },
+        { label: 'Manage roles', key: 'roles.manage', cells: grid([1, 1, 0, 0, 0, 0]) },
+        { label: 'Read audit log', key: 'audit.read', cells: grid([1, 1, 0, 0, 0, 0]) },
+        { label: 'Create channels', key: 'channels.create', cells: grid([1, 1, 1, 1, 0, 0]) },
+        { label: 'Assign tasks', key: 'tasks.assign', cells: grid([1, 1, 1, 1, 0, 0]) },
+        { label: 'Manage rosters', key: 'teams.roster_manage', cells: grid([1, 1, 1, 1, 0, 0]) },
+        { label: 'Upload files', key: 'files.upload', cells: grid([1, 1, 1, 1, 1, 0]) }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
-import type { LucideIcon } from 'lucide-react'
-import { AlertTriangle, Lock, RefreshCw, WifiOff } from 'lucide-react'
+import type { Icon } from '@phosphor-icons/react'
+import { Warning, Lock, ArrowsClockwise, WifiSlash } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toAppError } from '@/lib/errors'
@@ -17,7 +17,7 @@ export function EmptyState({
   action,
   className,
 }: {
-  icon?: LucideIcon
+  icon?: Icon
   title: string
   description?: string
   action?: React.ReactNode
@@ -59,7 +59,7 @@ export function ErrorState({
 }) {
   const appError = toAppError(error)
   const isOffline = appError.kind === 'network'
-  const Icon = isOffline ? WifiOff : appError.kind === 'forbidden' ? Lock : AlertTriangle
+  const Icon = isOffline ? WifiSlash : appError.kind === 'forbidden' ? Lock : Warning
 
   return (
     <div
@@ -82,7 +82,7 @@ export function ErrorState({
       </div>
       {onRetry && appError.retryable ? (
         <Button variant="outline" size="sm" onClick={onRetry}>
-          <RefreshCw aria-hidden="true" />
+          <ArrowsClockwise aria-hidden="true" />
           Try again
         </Button>
       ) : null}

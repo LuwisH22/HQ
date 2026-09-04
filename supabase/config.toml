@@ -63,7 +63,10 @@ otp_expiry = 3600
 
 [auth.email.template.invite]
 subject = "You have been invited to LFG HQ"
-content_path = "./templates/invite.html"
+# Paths in this file resolve from the project root (where the CLI is invoked),
+# not from `supabase/`. The template itself stays alongside the rest of the
+# Supabase project; only the prefix reflects that resolution rule.
+content_path = "./supabase/templates/invite.html"
 
 [auth.sessions]
 # Sign out sessions that have been idle for a week.

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { MoreHorizontal, PauseCircle, PlayCircle, Shield, UserMinus } from 'lucide-react'
+import { DotsThree, PauseCircle, PlayCircle, Shield, UserMinus } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback, AvatarImage, AvatarStatus } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -93,7 +93,7 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
   const assignableRoles = roles.filter((role) => canGrantRank(actorRank, role.rank))
 
   return (
-    <div className="border-border bg-card flex items-center gap-3 rounded-md border p-3">
+    <div className="bg-card flex items-center gap-3 rounded-md p-3 shadow-sm">
       <span className="relative shrink-0">
         <Avatar className="size-9">
           {member.profile.avatarUrl ? <AvatarImage src={member.profile.avatarUrl} alt="" /> : null}
@@ -135,7 +135,7 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
               loading={busy}
               aria-label={`Actions for ${displayNameFor(member.profile)}`}
             >
-              {busy ? null : <MoreHorizontal aria-hidden="true" />}
+              {busy ? null : <DotsThree aria-hidden="true" />}
             </Button>
           </DropdownMenuTrigger>
 

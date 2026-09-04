@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FlaskConical } from 'lucide-react'
+import { Flask } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { errorMessage } from '@/lib/errors'
@@ -37,11 +37,11 @@ export function DemoSignIn({ standalone = false }: { standalone?: boolean }) {
 
   return (
     <div className={standalone ? '' : 'border-border mt-5 border-t pt-5'}>
-      <div className="border-warning/30 bg-warning/10 space-y-3 rounded-md border p-3">
+      <div className="border-demo/40 bg-demo/10 space-y-3 rounded-md border p-3">
         <div className="flex items-start gap-2.5">
-          <FlaskConical className="text-warning mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <Flask className="text-demo mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div className="space-y-1">
-            <p className="text-warning text-2xs font-semibold tracking-wide uppercase">
+            <p className="text-demo text-3xs font-semibold tracking-[0.1em] uppercase">
               Development mode
             </p>
             <p className="text-muted-foreground text-xs leading-relaxed">
