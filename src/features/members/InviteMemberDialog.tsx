@@ -43,10 +43,21 @@ export function InviteMemberDialog({
 }) {
   const queryClient = useQueryClient()
   const { membership } = useWorkspace()
-  const actorRank = membership?.role.rank
+  // The owner outranks every role; otherwise authority is the most
+  // authoritative role held. Mirrors my_role_rank() in Postgres.
+  const actorRank = membership?.isOwner ? -1 : membership?.role.rank
 
   const grantableRoles = roles.filter((role) => canGrantRank(actorRank, role.rank))
-  const defaultRole = grantableRoles.find((role) => role.key === 'player') ?? grantableRoles[0]
+
+  // Default to the LEAST authoritative role that may be granted, found by rank
+  // rather than by name. Keying this off a role called "player" assumed a role
+  // set the organization is free to rename or delete outright, and it also
+  // meant the default silently became the most powerful grantable role the
+  // moment that name changed.
+  const defaultRole = grantableRoles.reduce<MemberRole | undefined>(
+    (weakest, role) => (weakest === undefined || role.rank > weakest.rank ? role : weakest),
+    undefined,
+  )
 
   const form = useForm<InviteValues>({
     resolver: zodResolver(inviteSchema),

@@ -84,6 +84,26 @@ test('a role named "Owner" grants nothing and does not move ownership', async ({
   await deleteRole(page, name)
 })
 
+test('a newly created role appears in the list and in the matrix columns', async ({
+  page,
+}, testInfo) => {
+  // The point of the dynamic model: the matrix is built from whatever roles
+  // the organization actually has, not from a fixed set of names.
+  const name = uniqueName('Content Creator', testInfo.project.name)
+  const roles = page.getByRole('list', { name: 'Roles' })
+
+  await createRole(page, name, '640')
+  await expect(roles.getByText(name)).toBeVisible({ timeout: 15_000 })
+
+  // Assert on the column itself rather than on how many there are: the mobile
+  // project is adding its own role to the same organization at the same time.
+  const column = page.locator('th[scope="col"]').filter({ hasText: name })
+  await expect(column).toHaveCount(1)
+
+  await deleteRole(page, name)
+  await expect(page.locator('th[scope="col"]').filter({ hasText: name })).toHaveCount(0)
+})
+
 test('offers no rank that would match the editor’s own authority', async ({ page }) => {
   await page.getByRole('button', { name: 'New role' }).click()
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Impossible')

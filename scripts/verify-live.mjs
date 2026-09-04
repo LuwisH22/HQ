@@ -370,6 +370,107 @@ if (probeRoleId) {
   }
 }
 
+console.log('\nB1 · a role name is only a label')
+
+let decoyAdmin = null
+let arbitraryRole = null
+
+{
+  // A role literally called "Admin", holding nothing at all.
+  const { data, error } = await supabase.rpc('create_role', {
+    p_organization_id: org?.id,
+    p_name: 'Admin',
+    p_description: 'decoy; holds no permissions',
+    p_rank: 920,
+  })
+  decoyAdmin = typeof data === 'string' ? data : null
+  check('a second role called "Admin" can be created', !error && Boolean(decoyAdmin),
+    error?.message ?? '')
+}
+{
+  const { data: rows } = await supabase
+    .from('role_permissions')
+    .select('permission_key')
+    .eq('role_id', decoyAdmin ?? '')
+  check('a role named "Admin" holds nothing by virtue of its name',
+    (rows ?? []).length === 0, `${String((rows ?? []).length)} permission(s)`)
+}
+{
+  // An arbitrary name that resembles nothing in the seed, holding a real
+  // capability. Names carry nothing; permissions carry everything.
+  const { data, error } = await supabase.rpc('create_role', {
+    p_organization_id: org?.id,
+    p_name: 'Content Creator',
+    p_description: 'arbitrary name, real capability',
+    p_rank: 930,
+  })
+  arbitraryRole = typeof data === 'string' ? data : null
+  check('an arbitrarily named role can be created', !error && Boolean(arbitraryRole),
+    error?.message ?? '')
+}
+{
+  const { error } = await supabase.rpc('set_role_permissions', {
+    p_role_id: arbitraryRole,
+    p_permission_keys: ['organization.view', 'files.upload'],
+  })
+  check('it receives exactly the capabilities it is given', !error, error?.message ?? '')
+
+  const { data: rows } = await supabase
+    .from('role_permissions')
+    .select('permission_key')
+    .eq('role_id', arbitraryRole ?? '')
+  const keys = (rows ?? []).map((r) => r.permission_key).sort()
+  check('and nothing else', JSON.stringify(keys) === JSON.stringify(['files.upload', 'organization.view']),
+    keys.join(', '))
+}
+{
+  // Renaming is free, and changes nothing about authority.
+  const { error } = await supabase.rpc('update_role', {
+    p_role_id: arbitraryRole,
+    p_name: 'Head Strategist',
+    p_description: 'renamed mid-flight',
+  })
+  check('a role can be renamed to anything', !error, error?.message ?? '')
+
+  const { data: rows } = await supabase
+    .from('role_permissions')
+    .select('permission_key')
+    .eq('role_id', arbitraryRole ?? '')
+  check('renaming leaves its capabilities untouched', (rows ?? []).length === 2,
+    `${String((rows ?? []).length)} permission(s)`)
+}
+{
+  const { error } = await supabase.rpc('set_role_rank', { p_role_id: arbitraryRole, p_rank: 940 })
+  check('a role rank can be changed', !error, error?.message ?? '')
+
+  const { data } = await supabase.from('roles').select('rank').eq('id', arbitraryRole ?? '').maybeSingle()
+  check('and the new rank is stored', data?.rank === 940, `rank ${String(data?.rank)}`)
+}
+{
+  const { data: after } = await supabase
+    .from('organizations').select('owner_id').eq('id', org?.id ?? '').maybeSingle()
+  check('none of this moved ownership', after?.owner_id === userId)
+}
+
+console.log('\nB1 · cross-organization role mutation')
+{
+  const FOREIGN = '00000000-0000-4000-8000-000000000000'
+  const { error } = await supabase.rpc('create_role', {
+    p_organization_id: FOREIGN,
+    p_name: 'Intruder',
+    p_description: null,
+    p_rank: 500,
+  })
+  check('cannot create a role in another organization', Boolean(error),
+    error ? error.message.slice(0, 44) : 'ACCEPTED — CROSS-ORG WRITE POSSIBLE')
+}
+
+for (const [label, id] of [['decoy Admin', decoyAdmin], ['renamed arbitrary role', arbitraryRole]]) {
+  if (!id) continue
+  const { error } = await supabase.rpc('delete_role', { p_role_id: id })
+  check(`${label} deleted (cleanup)`, !error, error?.message ?? '')
+}
+
 console.log('\nB1 · multi-role and the one-role minimum')
 
 if (probeRoleId && self) {
