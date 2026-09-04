@@ -1019,13 +1019,24 @@ export const demoChannelService: ChannelService = {
     await latency()
     assertPermission('channels.create', 'You do not have permission to create channels.')
 
+    // channels_name_length, expressed here too. Without it the demo would
+    // accept names the real table rejects, and the difference would only
+    // surface in production.
+    const trimmed = input.name.trim()
+    if (trimmed.length === 0 || trimmed.length > 40) {
+      throw new AppError('validation', 'A channel name must be between 1 and 40 characters.')
+    }
+
     const id = crypto.randomUUID()
     const store = db()
     store.channels.push({
       id,
       organizationId: store.organization.id,
       categoryId: input.categoryId,
-      key: `${input.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${id.slice(0, 8)}`,
+      key: `${input.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')}-${id.slice(0, 8)}`,
       name: input.name.trim(),
       topic: input.topic?.trim() || null,
       position: store.channels.length,
@@ -1035,6 +1046,48 @@ export const demoChannelService: ChannelService = {
     recordAudit('channel.created', 'channel', id, `Channel ${input.name.trim()} created`)
     persist()
     return id
+  },
+
+  async createChannelInCategory(organizationId, input) {
+    // Checked before anything is written, exactly as the routine does, so a
+    // refusal here cannot leave a section standing.
+    assertPermission('channels.create', 'You do not have permission to create channels.')
+
+    const store = db()
+    const wanted = input.categoryName?.trim() ?? ''
+    const existing =
+      wanted === ''
+        ? undefined
+        : store.channelCategories.find((c) => c.name.toLowerCase() === wanted.toLowerCase())
+
+    // The server gets this from a single transaction. The nearest honest
+    // equivalent here is to put the store back as it was on failure: a
+    // category nobody asked for is worse than the failure that created it.
+    const snapshot = {
+      categories: [...store.channelCategories],
+      channels: [...store.channels],
+      audit: [...store.auditLogs],
+    }
+
+    try {
+      const categoryId =
+        wanted === ''
+          ? null
+          : (existing?.id ?? (await demoChannelService.createCategory(organizationId, wanted)))
+
+      return await demoChannelService.createChannel(organizationId, {
+        name: input.name,
+        topic: null,
+        categoryId,
+        isPrivate: input.isPrivate,
+      })
+    } catch (error) {
+      store.channelCategories = snapshot.categories
+      store.channels = snapshot.channels
+      store.auditLogs = snapshot.audit
+      persist()
+      throw error
+    }
   },
 
   async updateChannel(channelId, patch) {
@@ -1145,13 +1198,21 @@ export const demoChannelService: ChannelService = {
     }
 
     // Delegation: you cannot hand out a capability you do not hold.
-    if (effect === 'allow' && member && !permissionsForMember(member).can(permissionKey as Permission)) {
-      throw new AppError('forbidden', `You cannot grant a permission you do not hold: ${permissionKey}`)
+    if (
+      effect === 'allow' &&
+      member &&
+      !permissionsForMember(member).can(permissionKey as Permission)
+    ) {
+      throw new AppError(
+        'forbidden',
+        `You cannot grant a permission you do not hold: ${permissionKey}`,
+      )
     }
 
     const store = db()
     store.channelOverrides = store.channelOverrides.filter(
-      (o) => !(o.channelId === channelId && o.roleId === roleId && o.permissionKey === permissionKey),
+      (o) =>
+        !(o.channelId === channelId && o.roleId === roleId && o.permissionKey === permissionKey),
     )
     if (effect !== null) {
       store.channelOverrides.push({ channelId, roleId, permissionKey, effect })
@@ -1189,8 +1250,7 @@ function toMessage(m: DemoMessage): Message {
     authorId: m.authorId,
     // A deleted message keeps its row so replies survive; the body is gone.
     body: m.deletedAt === null ? m.body : '',
-    authorName:
-      profile?.displayName ?? profile?.fullName ?? profile?.email ?? 'Removed member',
+    authorName: profile?.displayName ?? profile?.fullName ?? profile?.email ?? 'Removed member',
     authorAvatarUrl: profile?.avatarUrl ?? null,
     pinnedAt: m.pinnedAt,
     editedAt: m.editedAt,

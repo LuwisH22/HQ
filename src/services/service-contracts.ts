@@ -305,6 +305,16 @@ export interface ChannelService {
   reorderCategories(organizationId: string, ids: readonly string[]): Promise<void>
 
   createChannel(organizationId: string, input: ChannelInput): Promise<string>
+  /**
+   * A channel and, when `categoryName` names one that does not exist yet, the
+   * category holding it — in one atomic step, so a channel that fails to
+   * insert cannot leave an empty category behind. A name that matches an
+   * existing category reuses it rather than making a second one.
+   */
+  createChannelInCategory(
+    organizationId: string,
+    input: { name: string; categoryName: string | null; isPrivate: boolean },
+  ): Promise<string>
   updateChannel(channelId: string, patch: ChannelPatch): Promise<void>
   /** Permanent. Archiving via updateChannel is the reversible alternative. */
   deleteChannel(channelId: string): Promise<void>

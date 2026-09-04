@@ -28,11 +28,29 @@ test.beforeEach(async ({ page }) => {
  * exercised when there was nobody to moderate.
  */
 async function requireSecondMember(page: Page): Promise<void> {
-  const present = await otherMemberRow(page).count()
-  test.skip(present === 0, 'the organization has no member other than the owner')
+  await rosterReady(page)
+  test.skip(
+    (await otherMemberRow(page).count()) === 0,
+    'the organization has no member other than the owner',
+  )
+}
+
+/**
+ * Wait for the roster to actually render.
+ *
+ * `count()` resolves immediately against whatever is on the page, so calling
+ * it while the members query is still in flight reads zero and skips a test
+ * that should have run. Your own row is always there, so waiting for one row
+ * is enough to know the list has arrived.
+ */
+async function rosterReady(page: Page): Promise<void> {
+  await expect(
+    page.getByRole('list', { name: 'Members' }).getByRole('listitem').first(),
+  ).toBeVisible({ timeout: 20_000 })
 }
 
 async function restoreMember(page: Page): Promise<void> {
+  await rosterReady(page)
   const row = otherMemberRow(page)
   if ((await row.count()) === 0) return
   const banned = await row.getByText('Banned').count()

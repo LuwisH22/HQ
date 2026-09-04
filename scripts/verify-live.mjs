@@ -944,6 +944,97 @@ console.log('\nC1 · messages are not writable in a channel you cannot reach')
     error ? `blocked (${error.code ?? ''})` : 'ACCEPTED')
 }
 
+console.log('\nB3 · a channel and its category in one call')
+
+const comboName = `probe-combo-${String(Date.now() % 100000)}`
+let comboChannel = null
+let comboCategory = null
+let comboSecond = null
+
+{
+  const { data, error } = await supabase.rpc('create_channel_in_category', {
+    p_organization_id: org?.id,
+    p_name: `${comboName}-first`,
+    p_category_name: comboName,
+    p_is_private: false,
+  })
+  comboChannel = typeof data === 'string' ? data : null
+  check('a channel and a new category are created together', !error && Boolean(comboChannel),
+    error?.message ?? '')
+
+  const { data: row } = await supabase
+    .from('channels').select('category_id').eq('id', comboChannel).maybeSingle()
+  comboCategory = row?.category_id ?? null
+
+  const { data: cat } = await supabase
+    .from('channel_categories').select('name').eq('id', comboCategory).maybeSingle()
+  check('the channel lands in that category', cat?.name === comboName, cat?.name ?? 'no category')
+}
+
+{
+  // Typed in a different case, as a person would.
+  const { data, error } = await supabase.rpc('create_channel_in_category', {
+    p_organization_id: org?.id,
+    p_name: `${comboName}-second`,
+    p_category_name: comboName.toUpperCase(),
+    p_is_private: true,
+  })
+  comboSecond = typeof data === 'string' ? data : null
+  check('a second channel reuses the category', !error, error?.message ?? '')
+
+  const { data: rows } = await supabase
+    .from('channel_categories').select('id').ilike('name', comboName)
+  check('no duplicate category was made', (rows ?? []).length === 1,
+    `${String((rows ?? []).length)} found`)
+
+  const { data: row } = await supabase
+    .from('channels').select('category_id, is_private').eq('id', comboSecond).maybeSingle()
+  check('the private channel is in the same category', row?.category_id === comboCategory)
+  check('and it is private', row?.is_private === true)
+}
+
+console.log('\nB3 · a refused channel leaves no category behind')
+{
+  const orphanName = `probe-orphan-${String(Date.now() % 100000)}`
+  // Past channels_name_length: the category half would succeed and the channel
+  // half cannot, so the call has to come back as if nothing had happened.
+  const { error } = await supabase.rpc('create_channel_in_category', {
+    p_organization_id: org?.id,
+    p_name: 'x'.repeat(41),
+    p_category_name: orphanName,
+    p_is_private: false,
+  })
+  check('the call is refused', Boolean(error), error ? `refused (${error.code ?? ''})` : 'ACCEPTED')
+
+  const { data: rows } = await supabase
+    .from('channel_categories').select('id').eq('name', orphanName)
+  check('and the category was rolled back with it', (rows ?? []).length === 0,
+    `${String((rows ?? []).length)} left behind`)
+}
+
+console.log('\nB3 · the combined call cannot reach another organization')
+{
+  const { error } = await supabase.rpc('create_channel_in_category', {
+    p_organization_id: '00000000-0000-4000-8000-000000000000',
+    p_name: 'elsewhere',
+    p_category_name: 'Elsewhere',
+    p_is_private: false,
+  })
+  check('creating into an unknown organization is refused', Boolean(error),
+    error ? `blocked (${error.code ?? ''})` : 'ACCEPTED — CROSS-ORG WRITE')
+}
+
+console.log('\nB3 · combined-call cleanup')
+for (const [label, id] of [['first', comboChannel], ['second', comboSecond]]) {
+  if (!id) continue
+  const { error } = await supabase.rpc('delete_channel', { p_channel_id: id })
+  check(`${label} combined channel deleted`, !error, error?.message ?? '')
+}
+if (comboCategory) {
+  const { error } = await supabase.rpc('delete_category', { p_category_id: comboCategory })
+  check('combined category deleted', !error, error?.message ?? '')
+}
+
 console.log('\nB3 · cleanup')
 for (const [label, id] of [['public', probePublic], ['private', probePrivate]]) {
   const { error } = await supabase.rpc('delete_channel', { p_channel_id: id })

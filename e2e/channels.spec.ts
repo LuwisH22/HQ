@@ -20,9 +20,17 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible({ timeout: 20_000 })
 })
 
-async function createChannel(page: Page, name: string, visibility: 'Public' | 'Private') {
+async function createChannel(
+  page: Page,
+  name: string,
+  visibility: 'Public' | 'Private',
+  category?: string,
+) {
+  // Left empty, the channel is uncategorised — which is what most of these
+  // specs want, and what the section says it will do.
+  await page.getByLabel('New category name').fill(category ?? '')
   await page.getByRole('textbox', { name: 'New channel name' }).fill(name)
-  await page.getByRole('button', { name: visibility, exact: true }).click()
+  await page.getByRole('button', { name: `${visibility} channel`, exact: true }).click()
   await expect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
 }
 
@@ -93,4 +101,53 @@ test('offers Allow, Inherit and Deny for each overridable permission', async ({
 
   await page.getByRole('button', { name: 'Done' }).click()
   await deleteChannel(page, name)
+})
+
+test('creates a category and its first channel in one action', async ({ page }, testInfo) => {
+  const category = uniqueName('section', testInfo.project.name)
+  const channel = uniqueName('inside', testInfo.project.name)
+
+  await createChannel(page, channel, 'Public', category)
+
+  // The point of the change: the channel is under the category just typed,
+  // not sitting in Uncategorised beneath it.
+  await expect(
+    page.getByRole('list', { name: `${category} channels` }).getByText(channel, { exact: true }),
+  ).toBeVisible({ timeout: 15_000 })
+
+  // A second channel names the same category and must not make a duplicate.
+  const second = uniqueName('alongside', testInfo.project.name)
+  await createChannel(page, second, 'Private', category.toUpperCase())
+  await expect(page.getByRole('heading', { name: category, exact: true })).toHaveCount(1)
+  await expect(
+    page.getByRole('list', { name: `${category} channels` }).getByRole('listitem'),
+  ).toHaveCount(2)
+
+  await deleteChannel(page, channel)
+  await deleteChannel(page, second)
+  page.once('dialog', (dialog) => void dialog.accept())
+  await page.getByRole('button', { name: `Delete category ${category}` }).click()
+  await expect(page.getByText(category, { exact: true })).toHaveCount(0, { timeout: 15_000 })
+})
+
+test('names an existing category before it is used, and offers no duplicate', async ({
+  page,
+}, testInfo) => {
+  const category = uniqueName('reuse', testInfo.project.name)
+
+  await page.getByLabel('New category name').fill(category)
+  await page.getByRole('button', { name: 'Category only' }).click()
+  await expect(page.getByRole('heading', { name: category, exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
+
+  // Typing it again recognises it, and the category-only button steps aside
+  // rather than offering to make a second one.
+  await page.getByLabel('New category name').fill(category)
+  await expect(page.getByText(`${category} already exists.`)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Category only' })).toBeDisabled()
+
+  page.once('dialog', (dialog) => void dialog.accept())
+  await page.getByRole('button', { name: `Delete category ${category}` }).click()
+  await expect(page.getByText(category, { exact: true })).toHaveCount(0, { timeout: 15_000 })
 })

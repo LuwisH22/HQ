@@ -68,6 +68,7 @@ export const demoChannelService: ChannelService = {
   deleteCategory: unreachable,
   reorderCategories: unreachable,
   createChannel: unreachable,
+  createChannelInCategory: unreachable,
   updateChannel: unreachable,
   deleteChannel: unreachable,
   reorderChannels: unreachable,

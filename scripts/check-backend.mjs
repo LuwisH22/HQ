@@ -175,6 +175,8 @@ const HELPERS = [
   ['delete_message', { p_message_id: ORG, p_reason: 'probe' }],
   ['pin_message', { p_message_id: ORG, p_pinned: true }],
   ['can_join_channel_topic', { p_topic: 'channel:' + ORG, p_permission: 'channels.view' }],
+  ['create_channel_in_category', { p_organization_id: ORG, p_name: 'probe',
+                                  p_category_name: 'probe', p_is_private: false }],
 ]
 for (const [fn, args] of HELPERS) {
   const { error } = await supabase.rpc(fn, args)

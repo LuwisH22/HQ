@@ -568,6 +568,15 @@ export interface Database {
         }
         Returns: string
       }
+      create_channel_in_category: {
+        Args: {
+          p_organization_id: string
+          p_name: string
+          p_category_name?: string | null
+          p_is_private?: boolean
+        }
+        Returns: string
+      }
       update_channel: {
         Args: {
           p_channel_id: string

@@ -17,8 +17,9 @@ function uniqueName(project: string): string {
 async function createChannel(page: Page, name: string): Promise<void> {
   await page.goto('/#/settings/channels')
   await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible({ timeout: 20_000 })
+  await page.getByLabel('New category name').fill('')
   await page.getByRole('textbox', { name: 'New channel name' }).fill(name)
-  await page.getByRole('button', { name: 'Public', exact: true }).click()
+  await page.getByRole('button', { name: 'Public channel', exact: true }).click()
   await expect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
 }
 

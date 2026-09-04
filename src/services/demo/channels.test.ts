@@ -328,9 +328,9 @@ describe('hierarchy and delegation', () => {
 
   it('refuses channel management without the permission', async () => {
     await actAsNonOwner()
-    await expect(
-      demoChannelService.createCategory('any', 'Should fail'),
-    ).rejects.toThrow(/permission/i)
+    await expect(demoChannelService.createCategory('any', 'Should fail')).rejects.toThrow(
+      /permission/i,
+    )
   })
 })
 
@@ -378,5 +378,186 @@ describe('archive and delete', () => {
 
     expect(db().channels.find((c) => c.id === secret.id)).toBeUndefined()
     expect(db().channelOverrides.filter((o) => o.channelId === secret.id)).toHaveLength(0)
+  })
+})
+
+/**
+ * Creating a channel and its section in one step.
+ *
+ * The settings screen used to offer two unrelated buttons, so a channel
+ * created just after typing a category name landed outside it. These prove
+ * the replacement: one call, one transaction, and nothing left behind when it
+ * fails.
+ */
+describe('creating a channel with its category', () => {
+  const categories = () => db().channelCategories
+  const named = (name: string) =>
+    db().channelCategories.find((c) => c.name.toLowerCase() === name.toLowerCase())
+
+  it('creates the category and the public channel, and links them', async () => {
+    const before = categories().length
+
+    const id = await demoChannelService.createChannelInCategory('any', {
+      name: 'scrims',
+      categoryName: 'Competitive',
+      isPrivate: false,
+    })
+
+    const category = named('Competitive')
+    const channel = db().channels.find((c) => c.id === id)
+    expect(categories().length).toBe(before + 1)
+    expect(channel?.categoryId).toBe(category?.id)
+    expect(channel?.isPrivate).toBe(false)
+  })
+
+  it('does the same for a private channel', async () => {
+    const id = await demoChannelService.createChannelInCategory('any', {
+      name: 'staff room',
+      categoryName: 'Backstage',
+      isPrivate: true,
+    })
+
+    const channel = db().channels.find((c) => c.id === id)
+    expect(channel?.categoryId).toBe(named('Backstage')?.id)
+    expect(channel?.isPrivate).toBe(true)
+  })
+
+  it('leaves the channel uncategorised when no category is named', async () => {
+    const before = categories().length
+
+    const id = await demoChannelService.createChannelInCategory('any', {
+      name: 'random',
+      categoryName: null,
+      isPrivate: false,
+    })
+
+    // No empty category invented to hold it.
+    expect(categories().length).toBe(before)
+    expect(db().channels.find((c) => c.id === id)?.categoryId).toBeNull()
+  })
+
+  it('reuses an existing category instead of making a second one', async () => {
+    const before = categories().length
+    const existing = named('GENERAL')!
+
+    // Typed in a different case, which is how a person would actually type it.
+    const id = await demoChannelService.createChannelInCategory('any', {
+      name: 'off topic',
+      categoryName: 'general',
+      isPrivate: false,
+    })
+
+    expect(categories().length).toBe(before)
+    expect(db().channels.find((c) => c.id === id)?.categoryId).toBe(existing.id)
+  })
+
+  it('creates no category when the channel is refused', async () => {
+    const before = categories().length
+    const channelsBefore = db().channels.length
+    const auditBefore = db().auditLogs.length
+
+    await expect(
+      demoChannelService.createChannelInCategory('any', {
+        // Past channels_name_length, so the channel half fails after the
+        // category half would have succeeded.
+        name: 'x'.repeat(41),
+        categoryName: 'Orphaned',
+        isPrivate: false,
+      }),
+    ).rejects.toThrow(/between 1 and 40/i)
+
+    expect(named('Orphaned')).toBeUndefined()
+    expect(categories().length).toBe(before)
+    expect(db().channels.length).toBe(channelsBefore)
+    // Not even a record that it briefly existed.
+    expect(db().auditLogs.length).toBe(auditBefore)
+  })
+
+  it('refuses outright without channels.create, before touching the category', async () => {
+    const before = categories().length
+    await actAsNonOwner('Player')
+
+    await expect(
+      demoChannelService.createChannelInCategory('any', {
+        name: 'not allowed',
+        categoryName: 'Uninvited',
+        isPrivate: false,
+      }),
+    ).rejects.toThrow(/permission to create channels/i)
+
+    expect(categories().length).toBe(before)
+  })
+
+  it('lets someone who may create but not manage use a category that exists', async () => {
+    const filer = await demoOrganizationService.createRole('any', {
+      name: 'Filer',
+      description: null,
+      rank: 100,
+    })
+    // channels.create without channels.manage: may add a channel, may not
+    // invent a section for it.
+    await demoOrganizationService.setRolePermissions(filer, [
+      'organization.view',
+      'members.view',
+      'channels.view',
+      'channels.create',
+    ])
+
+    const target = await actAsNonOwner()
+    db().currentUserId = null
+    await signInAsDemoAdmin()
+    await demoOrganizationService.updateMemberRole(target.id, filer)
+
+    db().currentUserId = target.userId
+    const existing = named('GENERAL')!
+    const id = await demoChannelService.createChannelInCategory('any', {
+      name: 'filed away',
+      categoryName: 'GENERAL',
+      isPrivate: false,
+    })
+    expect(db().channels.find((c) => c.id === id)?.categoryId).toBe(existing.id)
+
+    // A new name needs channels.manage, and takes the channel down with it.
+    const channelsBefore = db().channels.length
+    await expect(
+      demoChannelService.createChannelInCategory('any', {
+        name: 'new section please',
+        categoryName: 'Invented',
+        isPrivate: false,
+      }),
+    ).rejects.toThrow(/permission/i)
+    expect(named('Invented')).toBeUndefined()
+    expect(db().channels.length).toBe(channelsBefore)
+  })
+
+  it('shows the new channel under its category in what the screen reads', async () => {
+    await demoChannelService.createChannelInCategory('any', {
+      name: 'vods',
+      categoryName: 'Review',
+      isPrivate: false,
+    })
+
+    // Exactly the two queries the settings screen renders from — no reload.
+    const [cats, channels] = await Promise.all([
+      demoChannelService.listCategories('any'),
+      demoChannelService.listChannels('any'),
+    ])
+
+    const review = cats.find((c) => c.name === 'Review')
+    expect(review).toBeTruthy()
+    expect(channels.filter((c) => c.categoryId === review?.id).map((c) => c.name)).toEqual(['vods'])
+  })
+
+  it('keeps a private channel created this way private', async () => {
+    const id = await demoChannelService.createChannelInCategory('any', {
+      name: 'war room',
+      categoryName: 'Competitive',
+      isPrivate: true,
+    })
+
+    await actAsNonOwner('Player')
+    const channels = await demoChannelService.listChannels('any')
+    // Absent, not merely hidden — the same rule as every other private channel.
+    expect(channels.some((c) => c.id === id)).toBe(false)
   })
 })

@@ -1,11 +1,19 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Hash, LockSimple, Plus, Trash, Archive, ArrowCounterClockwise } from '@phosphor-icons/react'
+import {
+  Hash,
+  LockSimple,
+  Plus,
+  Trash,
+  Archive,
+  ArrowCounterClockwise,
+} from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { CardSkeleton, ErrorState, ForbiddenState } from '@/components/common/states'
 import { channelService } from '@/services/channel.service'
 import type { Channel } from '@/services/channel.service'
@@ -66,18 +74,30 @@ export function ChannelsSettings() {
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
 
+  /**
+   * One routine creates the channel and, when the category named above it does
+   * not exist yet, the category too — in a single transaction. Creating them
+   * from here as two calls would leave an empty category behind whenever the
+   * channel failed, which is precisely the mess this replaces.
+   */
   const createChannel = useMutation({
-    mutationFn: (input: { name: string; isPrivate: boolean }) =>
-      channelService.createChannel(organizationId as string, {
-        name: input.name,
-        topic: null,
-        categoryId: null,
-        isPrivate: input.isPrivate,
+    mutationFn: (isPrivate: boolean) =>
+      channelService.createChannelInCategory(organizationId as string, {
+        name: newChannel.trim(),
+        categoryName: newCategory.trim() || null,
+        isPrivate,
       }),
     onSuccess: async () => {
+      const category = newCategory.trim()
       setNewChannel('')
+      // The category name stays put: filing several channels under one
+      // section is the common case, and retyping it each time is friction.
       await refresh()
-      toast.success('Channel created.')
+      toast.success(
+        category
+          ? `Channel created in ${matchingCategory?.name ?? category}.`
+          : 'Channel created. It is uncategorised.',
+      )
     },
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
@@ -109,6 +129,18 @@ export function ChannelsSettings() {
     },
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
+
+  /**
+   * The category the typed name already refers to, if any. Matching is
+   * case-insensitive because "Competitive" and "competitive" are one section
+   * to everyone reading the sidebar — the server matches the same way, and
+   * this only tells the person which of the two things is about to happen.
+   */
+  const matchingCategory = useMemo(() => {
+    const wanted = newCategory.trim().toLowerCase()
+    if (wanted === '') return null
+    return (categoriesQuery.data ?? []).find((c) => c.name.toLowerCase() === wanted) ?? null
+  }, [newCategory, categoriesQuery.data])
 
   const grouped = useMemo(() => {
     const categories = categoriesQuery.data ?? []
@@ -148,57 +180,94 @@ export function ChannelsSettings() {
 
   return (
     <div className="space-y-4">
-      {canManage ? (
+      {canCreate || canManage ? (
         <Card>
           <CardHeader>
             <CardTitle>Add</CardTitle>
           </CardHeader>
+          {/* The two fields read top to bottom as one sentence — this channel,
+              in that category — because the previous layout put a button
+              beside each and made them look like unrelated actions. */}
           <CardContent className="space-y-3">
-            <div className="flex gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-category">Category</Label>
               <Input
+                id="new-category"
+                list="existing-categories"
                 value={newCategory}
                 onChange={(event) => setNewCategory(event.target.value)}
-                placeholder="New category name"
+                placeholder="Optional — leave empty for an uncategorised channel"
                 aria-label="New category name"
+                autoComplete="off"
               />
-              <Button
-                loading={createCategory.isPending}
-                disabled={newCategory.trim().length === 0}
-                onClick={() => createCategory.mutate(newCategory.trim())}
-              >
-                <Plus className="size-3.5" aria-hidden="true" />
-                Category
-              </Button>
+              {/* Autocomplete over what already exists, so the usual way to
+                  reach a category is to pick it rather than retype it. */}
+              <datalist id="existing-categories">
+                {(categoriesQuery.data ?? []).map((category) => (
+                  <option key={category.id} value={category.name} />
+                ))}
+              </datalist>
+              <p className="text-muted-foreground text-2xs">
+                {newCategory.trim() === ''
+                  ? 'The channel will be uncategorised.'
+                  : matchingCategory
+                    ? `Goes into the existing ${matchingCategory.name}.`
+                    : `Creates ${newCategory.trim()} and puts the channel in it.`}
+              </p>
             </div>
 
             {canCreate ? (
-              <div className="flex gap-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="new-channel">Channel</Label>
                 <Input
+                  id="new-channel"
                   value={newChannel}
                   onChange={(event) => setNewChannel(event.target.value)}
                   placeholder="New channel name"
                   aria-label="New channel name"
+                  maxLength={40}
                 />
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    loading={createChannel.isPending}
+                    disabled={newChannel.trim().length === 0}
+                    onClick={() => createChannel.mutate(false)}
+                  >
+                    <Hash className="size-3.5" aria-hidden="true" />
+                    Public channel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    loading={createChannel.isPending}
+                    disabled={newChannel.trim().length === 0}
+                    onClick={() => createChannel.mutate(true)}
+                  >
+                    <LockSimple className="size-3.5" aria-hidden="true" />
+                    Private channel
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Kept for the one case the flow above cannot express: a section
+                created deliberately empty, to be filled in later. */}
+            {canManage ? (
+              <div className="border-border border-t pt-3">
                 <Button
-                  variant="outline"
-                  loading={createChannel.isPending}
-                  disabled={newChannel.trim().length === 0}
-                  onClick={() =>
-                    createChannel.mutate({ name: newChannel.trim(), isPrivate: false })
-                  }
+                  size="sm"
+                  variant="ghost"
+                  loading={createCategory.isPending}
+                  disabled={newCategory.trim().length === 0 || matchingCategory !== null}
+                  onClick={() => createCategory.mutate(newCategory.trim())}
                 >
-                  <Hash className="size-3.5" aria-hidden="true" />
-                  Public
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Category only
                 </Button>
-                <Button
-                  variant="outline"
-                  loading={createChannel.isPending}
-                  disabled={newChannel.trim().length === 0}
-                  onClick={() => createChannel.mutate({ name: newChannel.trim(), isPrivate: true })}
-                >
-                  <LockSimple className="size-3.5" aria-hidden="true" />
-                  Private
-                </Button>
+                <p className="text-muted-foreground text-2xs mt-1.5">
+                  {matchingCategory
+                    ? `${matchingCategory.name} already exists.`
+                    : 'Creates the category above and no channel.'}
+                </p>
               </div>
             ) : null}
           </CardContent>
@@ -233,7 +302,10 @@ export function ChannelsSettings() {
             {group.channels.length === 0 ? (
               <p className="text-muted-foreground text-2xs">No channels in this category.</p>
             ) : (
-              <ul className="divide-border divide-y" aria-label="Channels">
+              <ul
+                className="divide-border divide-y"
+                aria-label={`${group.category?.name ?? 'Uncategorised'} channels`}
+              >
                 {group.channels.map((channel) => (
                   <li key={channel.id} className="flex items-center gap-3 py-2.5">
                     {channel.isPrivate ? (
@@ -251,11 +323,7 @@ export function ChannelsSettings() {
                     {channel.archivedAt ? <Badge variant="warning">Archived</Badge> : null}
 
                     {canManagePermissions ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setPermissionsFor(channel)}
-                      >
+                      <Button size="sm" variant="ghost" onClick={() => setPermissionsFor(channel)}>
                         Permissions
                       </Button>
                     ) : null}
@@ -265,9 +333,7 @@ export function ChannelsSettings() {
                         size="icon"
                         variant="ghost"
                         aria-label={
-                          channel.archivedAt
-                            ? `Restore ${channel.name}`
-                            : `Archive ${channel.name}`
+                          channel.archivedAt ? `Restore ${channel.name}` : `Archive ${channel.name}`
                         }
                         onClick={() =>
                           archive.mutate({ id: channel.id, archived: !channel.archivedAt })

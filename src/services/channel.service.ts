@@ -133,6 +133,23 @@ export const supabaseChannelService: ChannelService = {
     return data
   },
 
+  async createChannelInCategory(
+    organizationId: string,
+    input: { name: string; categoryName: string | null; isPrivate: boolean },
+  ): Promise<string> {
+    const { data, error } = await getSupabase().rpc('create_channel_in_category', {
+      p_organization_id: organizationId,
+      p_name: input.name,
+      p_category_name: input.categoryName,
+      p_is_private: input.isPrivate,
+    })
+    if (error) throw toAppError(error)
+    if (typeof data !== 'string') {
+      throw new AppError('server', 'The channel was not created. Please try again.')
+    }
+    return data
+  },
+
   async updateChannel(channelId: string, patch: ChannelPatch): Promise<void> {
     const { error } = await getSupabase().rpc('update_channel', {
       p_channel_id: channelId,
@@ -203,6 +220,8 @@ export const channelService: ChannelService = {
   deleteCategory: (categoryId) => impl().deleteCategory(categoryId),
   reorderCategories: (organizationId, ids) => impl().reorderCategories(organizationId, ids),
   createChannel: (organizationId, input) => impl().createChannel(organizationId, input),
+  createChannelInCategory: (organizationId, input) =>
+    impl().createChannelInCategory(organizationId, input),
   updateChannel: (channelId, patch) => impl().updateChannel(channelId, patch),
   deleteChannel: (channelId) => impl().deleteChannel(channelId),
   reorderChannels: (organizationId, ids) => impl().reorderChannels(organizationId, ids),
