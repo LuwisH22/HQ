@@ -31,8 +31,15 @@ export interface NavItem {
    * messages are still to come, and one number cannot say that.
    */
   shipped: boolean
-  /** Grouping in the sidebar. */
-  group: 'workspace' | 'organization'
+  /**
+   * Where the sidebar puts it.
+   *
+   * `chat` is the exception: those two are not rendered as rows at all when
+   * the sidebar is open, because the channel list itself stands in for them.
+   * They stay in this list so the command palette, the mobile drawer and the
+   * routes still agree on one description of the product.
+   */
+  group: 'primary' | 'chat' | 'organization'
 }
 
 /**
@@ -50,17 +57,17 @@ export const NAV_ITEMS: readonly NavItem[] = [
     requires: [],
     phase: 1,
     shipped: true,
-    group: 'workspace',
+    group: 'primary',
   },
   {
     id: 'messages',
-    label: 'Messages',
+    label: 'Direct messages',
     path: '/messages',
     icon: ChatTeardropText,
     requires: ['channels.view'],
     phase: 2,
     shipped: false,
-    group: 'workspace',
+    group: 'chat',
   },
   {
     id: 'channels',
@@ -70,7 +77,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     requires: ['channels.view'],
     phase: 2,
     shipped: true,
-    group: 'workspace',
+    group: 'chat',
   },
   {
     id: 'projects',
@@ -80,7 +87,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     requires: ['projects.view'],
     phase: 3,
     shipped: false,
-    group: 'workspace',
+    group: 'organization',
   },
   {
     id: 'calendar',
@@ -90,7 +97,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     requires: ['calendar.view'],
     phase: 4,
     shipped: false,
-    group: 'workspace',
+    group: 'organization',
   },
   {
     id: 'teams',
@@ -100,7 +107,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     requires: ['teams.view'],
     phase: 3,
     shipped: false,
-    group: 'workspace',
+    group: 'organization',
   },
   {
     id: 'files',
@@ -110,7 +117,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     requires: ['files.view'],
     phase: 5,
     shipped: false,
-    group: 'workspace',
+    group: 'organization',
   },
   {
     id: 'notifications',
@@ -120,7 +127,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     requires: [],
     phase: 6,
     shipped: false,
-    group: 'workspace',
+    group: 'organization',
   },
   {
     id: 'members',

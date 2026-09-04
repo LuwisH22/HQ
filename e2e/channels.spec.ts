@@ -11,6 +11,11 @@ import { expect, test, type Page } from '@playwright/test'
 
 test.use({ storageState: '.auth/owner.json' })
 
+/** The page itself, excluding the sidebar and the drawer around it. */
+function main(page: Page) {
+  return page.getByRole('main')
+}
+
 function uniqueName(prefix: string, project: string): string {
   return `${prefix}-${project}-${String(Date.now() % 100000)}`
 }
@@ -31,13 +36,13 @@ async function createChannel(
   await page.getByLabel('New category name').fill(category ?? '')
   await page.getByRole('textbox', { name: 'New channel name' }).fill(name)
   await page.getByRole('button', { name: `${visibility} channel`, exact: true }).click()
-  await expect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(main(page).getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
 }
 
 async function deleteChannel(page: Page, name: string) {
   page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('button', { name: `Delete ${name}` }).click()
-  await expect(page.getByText(name, { exact: true })).toHaveCount(0, { timeout: 15_000 })
+  await expect(main(page).getByText(name, { exact: true })).toHaveCount(0, { timeout: 15_000 })
 }
 
 test('creates a channel, archives it, restores it, then deletes it', async ({ page }, testInfo) => {
@@ -67,7 +72,7 @@ test('a private channel is marked as private and reachable from the directory', 
   // The owner sees it, because ownership is a column and not a role.
   await page.goto('/#/channels')
   await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible()
-  await expect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(main(page).getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
 
   await page.goto('/#/settings/channels')
   await deleteChannel(page, name)
@@ -127,7 +132,7 @@ test('creates a category and its first channel in one action', async ({ page }, 
   await deleteChannel(page, second)
   page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('button', { name: `Delete category ${category}` }).click()
-  await expect(page.getByText(category, { exact: true })).toHaveCount(0, { timeout: 15_000 })
+  await expect(main(page).getByText(category, { exact: true })).toHaveCount(0, { timeout: 15_000 })
 })
 
 test('names an existing category before it is used, and offers no duplicate', async ({
@@ -149,5 +154,5 @@ test('names an existing category before it is used, and offers no duplicate', as
 
   page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('button', { name: `Delete category ${category}` }).click()
-  await expect(page.getByText(category, { exact: true })).toHaveCount(0, { timeout: 15_000 })
+  await expect(main(page).getByText(category, { exact: true })).toHaveCount(0, { timeout: 15_000 })
 })

@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { useWorkspace } from '@/hooks/use-workspace'
 import { useUiStore } from '@/stores/ui.store'
 import { cn } from '@/lib/utils'
-import { MOBILE_NAV_IDS, NAV_ITEMS } from './navigation'
+import { ChannelNav } from '@/features/channels/ChannelNav'
+import { MOBILE_NAV_IDS, NAV_ITEMS, type NavItem } from './navigation'
 import { OrganizationSwitcher } from './OrganizationSwitcher'
 import { UserMenu } from './UserMenu'
 
@@ -60,6 +61,30 @@ export function MobileTabBar() {
   )
 }
 
+function DrawerRow({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
+  return (
+    <NavLink
+      to={item.path}
+      end={item.path === '/'}
+      onClick={onNavigate}
+      className={({ isActive }) =>
+        cn(
+          'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm transition-colors',
+          isActive ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground',
+        )
+      }
+    >
+      <item.icon className="size-4 shrink-0" aria-hidden="true" />
+      <span className="truncate">{item.label}</span>
+      {!item.shipped ? (
+        <span className="text-2xs text-muted-foreground/60 ml-auto tracking-wider uppercase">
+          Soon
+        </span>
+      ) : null}
+    </NavLink>
+  )
+}
+
 /** Slide-in drawer holding the full navigation on small screens. */
 export function MobileNavDrawer() {
   const open = useUiStore((state) => state.mobileNavOpen)
@@ -69,6 +94,11 @@ export function MobileNavDrawer() {
   const items = NAV_ITEMS.filter(
     (item) => item.requires.length === 0 || permissions.canAny(item.requires),
   )
+  // Same shape as the desktop sidebar: the channel list stands in for the two
+  // `chat` rows, so the drawer is a way into a conversation and not just a
+  // list of screens.
+  const primaryItems = items.filter((item) => item.group === 'primary')
+  const organizationItems = items.filter((item) => item.group === 'organization')
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -97,31 +127,24 @@ export function MobileNavDrawer() {
             </DialogPrimitive.Close>
           </div>
 
-          <nav aria-label="All sections" className="flex-1 overflow-y-auto p-3">
+          <nav aria-label="All sections" className="min-h-0 flex-1 overflow-y-auto p-3">
             <ul className="space-y-0.5">
-              {items.map((item) => (
+              {primaryItems.map((item) => (
                 <li key={item.id}>
-                  <NavLink
-                    to={item.path}
-                    end={item.path === '/'}
-                    onClick={() => setOpen(false)}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm transition-colors',
-                        isActive
-                          ? 'bg-accent text-accent-foreground font-medium'
-                          : 'text-muted-foreground',
-                      )
-                    }
-                  >
-                    <item.icon className="size-4 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{item.label}</span>
-                    {!item.shipped ? (
-                      <span className="text-2xs text-muted-foreground/60 ml-auto tracking-wider uppercase">
-                        Soon
-                      </span>
-                    ) : null}
-                  </NavLink>
+                  <DrawerRow item={item} onNavigate={() => setOpen(false)} />
+                </li>
+              ))}
+            </ul>
+
+            <ChannelNav onNavigate={() => setOpen(false)} />
+
+            <p className="text-3xs text-foreground/42 px-1 pt-4 pb-1 font-semibold tracking-[0.1em] uppercase">
+              Organization
+            </p>
+            <ul className="space-y-0.5">
+              {organizationItems.map((item) => (
+                <li key={item.id}>
+                  <DrawerRow item={item} onNavigate={() => setOpen(false)} />
                 </li>
               ))}
             </ul>

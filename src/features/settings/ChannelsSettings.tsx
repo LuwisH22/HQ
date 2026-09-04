@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Hash,
@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CardSkeleton, ErrorState, ForbiddenState } from '@/components/common/states'
 import { channelService } from '@/services/channel.service'
+import { useChannelDirectory } from '@/features/channels/use-channels'
 import type { Channel } from '@/services/channel.service'
 import { errorMessage } from '@/lib/errors'
 import { useWorkspace } from '@/hooks/use-workspace'
@@ -33,7 +34,6 @@ import { ChannelPermissionsDialog } from './ChannelPermissionsDialog'
 export function ChannelsSettings() {
   const { organization } = useWorkspace()
   const organizationId = organization?.id
-  const queryClient = useQueryClient()
 
   const canView = usePermission('channels.view')
   const canCreate = usePermission('channels.create')
@@ -45,23 +45,10 @@ export function ChannelsSettings() {
   const [newChannel, setNewChannel] = useState('')
   const [permissionsFor, setPermissionsFor] = useState<Channel | null>(null)
 
-  const categoriesQuery = useQuery({
-    queryKey: ['channel-categories', organizationId ?? 'none'],
-    queryFn: () => channelService.listCategories(organizationId as string),
-    enabled: Boolean(organizationId) && canView,
-  })
-
-  const channelsQuery = useQuery({
-    queryKey: ['channels', organizationId ?? 'none'],
-    queryFn: () => channelService.listChannels(organizationId as string),
-    enabled: Boolean(organizationId) && canView,
-  })
+  const directory = useChannelDirectory()
 
   async function refresh(): Promise<void> {
-    await queryClient.invalidateQueries({ queryKey: ['channels', organizationId ?? 'none'] })
-    await queryClient.invalidateQueries({
-      queryKey: ['channel-categories', organizationId ?? 'none'],
-    })
+    await directory.invalidate()
   }
 
   const createCategory = useMutation({
@@ -139,24 +126,14 @@ export function ChannelsSettings() {
   const matchingCategory = useMemo(() => {
     const wanted = newCategory.trim().toLowerCase()
     if (wanted === '') return null
-    return (categoriesQuery.data ?? []).find((c) => c.name.toLowerCase() === wanted) ?? null
-  }, [newCategory, categoriesQuery.data])
+    return directory.categories.find((c) => c.name.toLowerCase() === wanted) ?? null
+  }, [newCategory, directory.categories])
 
-  const grouped = useMemo(() => {
-    const categories = categoriesQuery.data ?? []
-    const channels = channelsQuery.data ?? []
-    return [
-      ...categories.map((category) => ({
-        category,
-        channels: channels.filter((c) => c.categoryId === category.id),
-      })),
-      { category: null, channels: channels.filter((c) => c.categoryId === null) },
-    ].filter((group) => group.category !== null || group.channels.length > 0)
-  }, [categoriesQuery.data, channelsQuery.data])
+  const grouped = directory.groupsWithEmpty
 
   if (!canView) return <ForbiddenState />
 
-  if (categoriesQuery.isPending || channelsQuery.isPending) {
+  if (directory.isPending) {
     return (
       <Card>
         <CardContent className="pt-4">
@@ -166,16 +143,8 @@ export function ChannelsSettings() {
     )
   }
 
-  if (categoriesQuery.isError || channelsQuery.isError) {
-    return (
-      <ErrorState
-        error={categoriesQuery.error ?? channelsQuery.error}
-        onRetry={() => {
-          void categoriesQuery.refetch()
-          void channelsQuery.refetch()
-        }}
-      />
-    )
+  if (directory.isError) {
+    return <ErrorState error={directory.error} onRetry={directory.refetch} />
   }
 
   return (
@@ -203,7 +172,7 @@ export function ChannelsSettings() {
               {/* Autocomplete over what already exists, so the usual way to
                   reach a category is to pick it rather than retype it. */}
               <datalist id="existing-categories">
-                {(categoriesQuery.data ?? []).map((category) => (
+                {directory.categories.map((category) => (
                   <option key={category.id} value={category.name} />
                 ))}
               </datalist>
@@ -274,107 +243,119 @@ export function ChannelsSettings() {
         </Card>
       ) : null}
 
-      {grouped.map((group) => (
-        <Card key={group.category?.id ?? 'uncategorised'}>
-          <CardHeader className="flex-row items-center gap-2 space-y-0">
-            <CardTitle className="flex-1">{group.category?.name ?? 'Uncategorised'}</CardTitle>
-            <Badge variant="outline">{group.channels.length}</Badge>
-            {group.category && canManage ? (
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label={`Delete category ${group.category.name}`}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Delete the category "${group.category?.name ?? ''}"? Its channels are kept and become uncategorised.`,
-                    )
-                  ) {
-                    removeCategory.mutate(group.category.id)
-                  }
-                }}
-              >
-                <Trash className="size-3.5" aria-hidden="true" />
-              </Button>
-            ) : null}
-          </CardHeader>
-          <CardContent>
-            {group.channels.length === 0 ? (
-              <p className="text-muted-foreground text-2xs">No channels in this category.</p>
-            ) : (
-              <ul
-                className="divide-border divide-y"
-                aria-label={`${group.category?.name ?? 'Uncategorised'} channels`}
-              >
-                {group.channels.map((channel) => (
-                  <li key={channel.id} className="flex items-center gap-3 py-2.5">
-                    {channel.isPrivate ? (
-                      <LockSimple className="text-muted-foreground size-3.5" aria-label="Private" />
-                    ) : (
-                      <Hash className="text-muted-foreground size-3.5" aria-hidden="true" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm leading-tight font-medium">{channel.name}</p>
-                      {channel.topic ? (
-                        <p className="text-2xs text-muted-foreground truncate">{channel.topic}</p>
+      {grouped.map((group) => {
+        // Bound out here: narrowing `group.category` does not survive into the
+        // click handler's closure, and Uncategorised has no row to delete.
+        const category = group.category
+
+        return (
+          <Card key={group.id}>
+            <CardHeader className="flex-row items-center gap-2 space-y-0">
+              <CardTitle className="flex-1">{group.name}</CardTitle>
+              <Badge variant="outline">{group.channels.length}</Badge>
+              {category && canManage ? (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={`Delete category ${category.name}`}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Delete the category "${category.name}"? Its channels are kept and become uncategorised.`,
+                      )
+                    ) {
+                      removeCategory.mutate(category.id)
+                    }
+                  }}
+                >
+                  <Trash className="size-3.5" aria-hidden="true" />
+                </Button>
+              ) : null}
+            </CardHeader>
+            <CardContent>
+              {group.channels.length === 0 ? (
+                <p className="text-muted-foreground text-2xs">No channels in this category.</p>
+              ) : (
+                <ul className="divide-border divide-y" aria-label={`${group.name} channels`}>
+                  {group.channels.map((channel) => (
+                    <li key={channel.id} className="flex items-center gap-3 py-2.5">
+                      {channel.isPrivate ? (
+                        <LockSimple
+                          className="text-muted-foreground size-3.5"
+                          aria-label="Private"
+                        />
+                      ) : (
+                        <Hash className="text-muted-foreground size-3.5" aria-hidden="true" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm leading-tight font-medium">{channel.name}</p>
+                        {channel.topic ? (
+                          <p className="text-2xs text-muted-foreground truncate">{channel.topic}</p>
+                        ) : null}
+                      </div>
+
+                      {channel.archivedAt ? <Badge variant="warning">Archived</Badge> : null}
+
+                      {canManagePermissions ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setPermissionsFor(channel)}
+                        >
+                          Permissions
+                        </Button>
                       ) : null}
-                    </div>
 
-                    {channel.archivedAt ? <Badge variant="warning">Archived</Badge> : null}
-
-                    {canManagePermissions ? (
-                      <Button size="sm" variant="ghost" onClick={() => setPermissionsFor(channel)}>
-                        Permissions
-                      </Button>
-                    ) : null}
-
-                    {canManage ? (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={
-                          channel.archivedAt ? `Restore ${channel.name}` : `Archive ${channel.name}`
-                        }
-                        onClick={() =>
-                          archive.mutate({ id: channel.id, archived: !channel.archivedAt })
-                        }
-                      >
-                        {channel.archivedAt ? (
-                          <ArrowCounterClockwise className="size-3.5" aria-hidden="true" />
-                        ) : (
-                          <Archive className="size-3.5" aria-hidden="true" />
-                        )}
-                      </Button>
-                    ) : null}
-
-                    {canDelete ? (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={`Delete ${channel.name}`}
-                        onClick={() => {
-                          // Permanent, and it will take the message history with
-                          // it once Phase 2 lands. Archiving is the reversible
-                          // option and is one button to the left.
-                          if (
-                            window.confirm(
-                              `Permanently delete #${channel.name}? This cannot be undone — archiving is reversible.`,
-                            )
-                          ) {
-                            remove.mutate(channel.id)
+                      {canManage ? (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={
+                            channel.archivedAt
+                              ? `Restore ${channel.name}`
+                              : `Archive ${channel.name}`
                           }
-                        }}
-                      >
-                        <Trash className="size-3.5" aria-hidden="true" />
-                      </Button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+                          onClick={() =>
+                            archive.mutate({ id: channel.id, archived: !channel.archivedAt })
+                          }
+                        >
+                          {channel.archivedAt ? (
+                            <ArrowCounterClockwise className="size-3.5" aria-hidden="true" />
+                          ) : (
+                            <Archive className="size-3.5" aria-hidden="true" />
+                          )}
+                        </Button>
+                      ) : null}
+
+                      {canDelete ? (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Delete ${channel.name}`}
+                          onClick={() => {
+                            // Permanent, and it will take the message history with
+                            // it once Phase 2 lands. Archiving is the reversible
+                            // option and is one button to the left.
+                            if (
+                              window.confirm(
+                                `Permanently delete #${channel.name}? This cannot be undone — archiving is reversible.`,
+                              )
+                            ) {
+                              remove.mutate(channel.id)
+                            }
+                          }}
+                        >
+                          <Trash className="size-3.5" aria-hidden="true" />
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })}
 
       {permissionsFor && organizationId ? (
         <ChannelPermissionsDialog

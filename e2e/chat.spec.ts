@@ -10,6 +10,11 @@ import { expect, test, type Page } from '@playwright/test'
 
 test.use({ storageState: '.auth/owner.json' })
 
+/** The page itself, excluding the sidebar and the drawer around it. */
+function main(page: Page) {
+  return page.getByRole('main')
+}
+
 function uniqueName(project: string): string {
   return `chat-${project}-${String(Date.now() % 100000)}`
 }
@@ -20,22 +25,79 @@ async function createChannel(page: Page, name: string): Promise<void> {
   await page.getByLabel('New category name').fill('')
   await page.getByRole('textbox', { name: 'New channel name' }).fill(name)
   await page.getByRole('button', { name: 'Public channel', exact: true }).click()
-  await expect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(main(page).getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
 }
 
 async function deleteChannel(page: Page, name: string): Promise<void> {
   await page.goto('/#/settings/channels')
   page.once('dialog', (dialog) => void dialog.accept())
-  await page.getByRole('button', { name: `Delete ${name}` }).click()
-  await expect(page.getByText(name, { exact: true })).toHaveCount(0, { timeout: 15_000 })
+  await page.getByRole('button', { name: `Delete ${name}`, exact: true }).click()
+  await expect(main(page).getByText(name, { exact: true })).toHaveCount(0, { timeout: 15_000 })
 }
 
 async function openChannel(page: Page, name: string): Promise<void> {
   await page.goto('/#/channels')
   await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible({ timeout: 20_000 })
-  await page.getByRole('link').filter({ hasText: name }).first().click()
+  await main(page).getByRole('link').filter({ hasText: name }).first().click()
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 })
 }
+
+/** The channel list lives in the sidebar on desktop and the drawer on phones. */
+async function openNav(page: Page): Promise<void> {
+  const opener = page.getByRole('button', { name: 'Open navigation' })
+  if (await opener.isVisible()) await opener.click()
+}
+
+test('opens and switches channels from the navigation', async ({ page }, testInfo) => {
+  const first = uniqueName(testInfo.project.name)
+  const second = `${uniqueName(testInfo.project.name)}-alt`
+  await createChannel(page, first)
+  await createChannel(page, second)
+
+  // Starting somewhere else entirely: reaching a conversation must not mean
+  // going through the directory first.
+  await page.goto('/#/')
+  await openNav(page)
+  await page.getByRole('link', { name: first, exact: true }).click()
+  await expect(page.getByRole('heading', { name: first })).toBeVisible({ timeout: 15_000 })
+  await expect(page).toHaveURL(/#\/channels\//)
+
+  // And switching is one click, from inside the conversation.
+  await openNav(page)
+  await page.getByRole('link', { name: second, exact: true }).click()
+  await expect(page.getByRole('heading', { name: second })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('textbox', { name: `Message ${second}` })).toBeVisible()
+
+  await deleteChannel(page, first)
+  await deleteChannel(page, second)
+})
+
+test('sends a message with Enter and keeps Shift+Enter for a new line', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName(testInfo.project.name)
+  await createChannel(page, name)
+  await openChannel(page, name)
+
+  const composer = page.getByRole('textbox', { name: `Message ${name}` })
+  await composer.click()
+  await composer.pressSequentially('first line')
+  await composer.press('Shift+Enter')
+  await composer.pressSequentially('second line')
+
+  // Still a draft: Shift+Enter breaks the line rather than sending.
+  await expect(page.getByText('No messages yet')).toBeVisible()
+  // Written as a pattern rather than a literal so the newline between the two
+  // lines is the thing under test, not something to escape into the source.
+  await expect(composer).toHaveValue(/^first line\s+second line$/)
+
+  await composer.press('Enter')
+  await expect(page.getByRole('list', { name: 'Messages' })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('listitem').filter({ hasText: 'second line' })).toBeVisible()
+  await expect(composer).toHaveValue('')
+
+  await deleteChannel(page, name)
+})
 
 test('sends, edits and deletes a message', async ({ page }, testInfo) => {
   const name = uniqueName(testInfo.project.name)

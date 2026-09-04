@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { CaretDoubleLeft, CaretDoubleRight } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ChannelNav } from '@/features/channels/ChannelNav'
 import { useWorkspace } from '@/hooks/use-workspace'
 import { useUiStore } from '@/stores/ui.store'
 import { cn } from '@/lib/utils'
@@ -70,7 +71,12 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
 }
 
 /**
- * Primary desktop navigation.
+ * Primary desktop navigation, and the channel list with it.
+ *
+ * The channels are here rather than behind a directory page because talking is
+ * what the product is for: the conversation should be one click from wherever
+ * you are, and the one you are reading should be obvious without going back to
+ * a list to check.
  *
  * Items the member has no permission for are removed rather than disabled —
  * showing a player a greyed-out "Manage roles" entry tells them about a door
@@ -87,34 +93,46 @@ export function Sidebar() {
     [permissions],
   )
 
-  const workspaceItems = visibleItems.filter((item) => item.group === 'workspace')
+  const primaryItems = visibleItems.filter((item) => item.group === 'primary')
   const organizationItems = visibleItems.filter((item) => item.group === 'organization')
+  // Collapsed to icons there is no room for a channel list, so the directory
+  // link stands in for it rather than the channels becoming unreachable.
+  const chatItems = visibleItems.filter((item) => item.group === 'chat' && item.shipped)
 
   return (
     <aside
       data-testid="sidebar"
       className={cn(
         'border-border bg-surface flex h-full shrink-0 flex-col border-r transition-[width] duration-200',
-        collapsed ? 'w-14' : 'w-60',
+        collapsed ? 'w-14' : 'w-64',
       )}
     >
       <div className={cn('p-2', collapsed && 'px-1.5')}>
         <OrganizationSwitcher collapsed={collapsed} />
       </div>
 
-      <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 py-1">
+      <nav aria-label="Main" className="min-h-0 flex-1 overflow-y-auto px-3 py-1">
         <ul className="space-y-0.5">
-          {workspaceItems.map((item) => (
+          {primaryItems.map((item) => (
             <li key={item.id}>
               <NavRow item={item} collapsed={collapsed} />
             </li>
           ))}
+          {collapsed
+            ? chatItems.map((item) => (
+                <li key={item.id}>
+                  <NavRow item={item} collapsed />
+                </li>
+              ))
+            : null}
         </ul>
+
+        {collapsed ? null : <ChannelNav />}
 
         {organizationItems.length > 0 ? (
           <>
             {!collapsed ? (
-              <p className="text-3xs text-foreground/42 px-2.5 pt-4 pb-1 font-semibold tracking-[0.1em] uppercase">
+              <p className="text-3xs text-foreground/42 px-1 pt-4 pb-1 font-semibold tracking-[0.1em] uppercase">
                 Organization
               </p>
             ) : (
@@ -131,7 +149,7 @@ export function Sidebar() {
         ) : null}
       </nav>
 
-      <div className={cn('border-border border-t p-2', collapsed && 'px-1.5')}>
+      <div className={cn('border-border shrink-0 border-t p-2', collapsed && 'px-1.5')}>
         <UserMenu collapsed={collapsed} />
         <Button
           variant="ghost"

@@ -20,6 +20,14 @@ interface UiState {
   mobileNavOpen: boolean
   commandPaletteOpen: boolean
   theme: ThemePreference
+  /**
+   * Channel categories the member has folded shut in the sidebar, by id.
+   *
+   * A list of what is closed rather than what is open: a category created
+   * after this was written should start visible, not hidden because nobody
+   * had opened it yet.
+   */
+  collapsedCategories: string[]
 
   setActiveOrganization: (organizationId: string | null) => void
   setSidebarCollapsed: (collapsed: boolean) => void
@@ -28,6 +36,7 @@ interface UiState {
   setCommandPaletteOpen: (open: boolean) => void
   toggleCommandPalette: () => void
   setTheme: (theme: ThemePreference) => void
+  toggleCategory: (categoryId: string) => void
 }
 
 export const useUiStore = create<UiState>()(
@@ -38,6 +47,7 @@ export const useUiStore = create<UiState>()(
       mobileNavOpen: false,
       commandPaletteOpen: false,
       theme: 'dark',
+      collapsedCategories: [],
 
       setActiveOrganization: (activeOrganizationId) => set({ activeOrganizationId }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
@@ -47,17 +57,24 @@ export const useUiStore = create<UiState>()(
       toggleCommandPalette: () =>
         set((state) => ({ commandPaletteOpen: !state.commandPaletteOpen })),
       setTheme: (theme) => set({ theme }),
+      toggleCategory: (categoryId) =>
+        set((state) => ({
+          collapsedCategories: state.collapsedCategories.includes(categoryId)
+            ? state.collapsedCategories.filter((id) => id !== categoryId)
+            : [...state.collapsedCategories, categoryId],
+        })),
     }),
     {
       name: 'lfg-hq-ui',
       storage: createJSONStorage(() => localStorage),
-      version: 1,
+      version: 2,
       // Transient state must not survive a restart: nobody wants to reopen the
       // app to a command palette they closed yesterday.
       partialize: (state) => ({
         activeOrganizationId: state.activeOrganizationId,
         sidebarCollapsed: state.sidebarCollapsed,
         theme: state.theme,
+        collapsedCategories: state.collapsedCategories,
       }),
     },
   ),

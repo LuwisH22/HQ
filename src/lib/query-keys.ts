@@ -40,6 +40,16 @@ export const queryKeys = {
     all: (organizationId: string) => ['invitations', organizationId] as const,
   },
 
+  channels: {
+    categories: (organizationId: string) => ['channel-categories', organizationId] as const,
+    all: (organizationId: string) => ['channels', organizationId] as const,
+    overrides: (channelId: string) => ['channel-overrides', channelId] as const,
+  },
+
+  messages: {
+    list: (channelId: string) => ['messages', channelId] as const,
+  },
+
   audit: {
     recent: (organizationId: string, limit: number) =>
       ['audit', organizationId, 'recent', limit] as const,

@@ -57,7 +57,7 @@ export function ChannelPermissionsDialog({
   })
 
   const overridesQuery = useQuery({
-    queryKey: ['channel-overrides', channel.id],
+    queryKey: queryKeys.channels.overrides(channel.id),
     queryFn: () => channelService.listOverrides(channel.id),
     enabled: open,
   })
@@ -68,8 +68,10 @@ export function ChannelPermissionsDialog({
     onSuccess: async () => {
       // Never optimistic: who can see a channel is not something to render
       // before the database has agreed to it.
-      await queryClient.invalidateQueries({ queryKey: ['channel-overrides', channel.id] })
-      await queryClient.invalidateQueries({ queryKey: ['channels', organizationId] })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.channels.overrides(channel.id),
+      })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.channels.all(organizationId) })
     },
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
@@ -128,7 +130,7 @@ export function ChannelPermissionsDialog({
                                 })
                               }
                               className={cn(
-                                'rounded-sm border px-2 py-0.5 text-2xs transition-colors duration-[140ms]',
+                                'text-2xs rounded-sm border px-2 py-0.5 transition-colors duration-[140ms]',
                                 value === choice.value
                                   ? choice.value === 'deny'
                                     ? 'border-destructive text-destructive bg-destructive/10'
