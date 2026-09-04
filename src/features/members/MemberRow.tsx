@@ -96,7 +96,6 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
     onError: (error) => toast.error(errorMessage(error)),
   })
 
-
   const removeMutation = useMutation({
     mutationFn: () => organizationService.removeMember(member.id),
     onSuccess: async () => {
@@ -130,7 +129,9 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
           {isSelf ? <Badge variant="secondary">You</Badge> : null}
           {effective === 'suspended' ? (
             <Badge variant="warning">
-              {suspendedUntil ? `Suspended until ${formatDate(suspendedUntil.toISOString())}` : 'Suspended'}
+              {suspendedUntil
+                ? `Suspended until ${formatDate(suspendedUntil.toISOString())}`
+                : 'Suspended'}
             </Badge>
           ) : null}
           {effective === 'banned' ? <Badge variant="destructive">Banned</Badge> : null}

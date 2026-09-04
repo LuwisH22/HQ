@@ -13,12 +13,7 @@ import { SetPasswordForm } from './SetPasswordForm'
 import { consumeInviteToken } from './invite-token'
 
 type Phase =
-  | 'waiting-for-session'
-  | 'redeeming'
-  | 'set-password'
-  | 'password-failed'
-  | 'done'
-  | 'error'
+  'waiting-for-session' | 'redeeming' | 'set-password' | 'password-failed' | 'done' | 'error'
 
 /**
  * Redeems an invitation, then lets the new member choose a password.

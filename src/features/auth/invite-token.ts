@@ -56,11 +56,7 @@ function stripParamFromUrl(): void {
     const url = new URL(window.location.href)
     if (!url.searchParams.has(PARAM)) return
     url.searchParams.delete(PARAM)
-    window.history.replaceState(
-      window.history.state,
-      '',
-      `${url.pathname}${url.search}${url.hash}`,
-    )
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
   } catch {
     // A browser that refuses replaceState is not a reason to fail the invite.
   }

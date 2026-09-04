@@ -70,7 +70,9 @@ async function fetchRolesByMember(memberIds: string[]): Promise<Map<string, Memb
 
   const { data, error } = await getSupabase()
     .from('member_roles')
-    .select(`member_id, role:roles!member_roles_role_id_fkey ( id, key, name, description, rank, is_system, created_by, organization_id, created_at, updated_at )`)
+    .select(
+      `member_id, role:roles!member_roles_role_id_fkey ( id, key, name, description, rank, is_system, created_by, organization_id, created_at, updated_at )`,
+    )
     .in('member_id', memberIds)
 
   if (error) throw toAppError(error)
@@ -116,9 +118,7 @@ async function moderateThroughFunction(
     // supabase-js surfaces a non-2xx as an error without the body, so the
     // server's own message is dug out where it is available.
     const context: unknown =
-      typeof error === 'object' && error !== null && 'context' in error
-        ? error.context
-        : null
+      typeof error === 'object' && error !== null && 'context' in error ? error.context : null
     let message = 'The moderation action could not be completed.'
     if (context instanceof Response) {
       try {
@@ -142,7 +142,9 @@ export const supabaseOrganizationService: OrganizationService = {
   async listMine(): Promise<OrganizationSummary[]> {
     const { data, error } = await getSupabase()
       .from('organizations')
-      .select('id, slug, name, tagline, logo_url, timezone, owner_id, created_at, updated_at, deleted_at')
+      .select(
+        'id, slug, name, tagline, logo_url, timezone, owner_id, created_at, updated_at, deleted_at',
+      )
       .is('deleted_at', null)
       .order('name')
 
@@ -495,7 +497,9 @@ export const supabaseOrganizationService: OrganizationService = {
       .from('organizations')
       .update(patch)
       .eq('id', organizationId)
-      .select('id, slug, name, tagline, logo_url, timezone, owner_id, created_at, updated_at, deleted_at')
+      .select(
+        'id, slug, name, tagline, logo_url, timezone, owner_id, created_at, updated_at, deleted_at',
+      )
       .single()
 
     if (error) throw toAppError(error)
@@ -524,8 +528,7 @@ export const organizationService: OrganizationService = {
   setRolePermissions: (roleId, keys) => impl().setRolePermissions(roleId, keys),
   assignRole: (membershipId, roleId) => impl().assignRole(membershipId, roleId),
   unassignRole: (membershipId, roleId) => impl().unassignRole(membershipId, roleId),
-  suspendMember: (membershipId, reason, days) =>
-    impl().suspendMember(membershipId, reason, days),
+  suspendMember: (membershipId, reason, days) => impl().suspendMember(membershipId, reason, days),
   unsuspendMember: (membershipId, reason) => impl().unsuspendMember(membershipId, reason),
   banMember: (membershipId, reason) => impl().banMember(membershipId, reason),
   unbanMember: (membershipId, reason) => impl().unbanMember(membershipId, reason),

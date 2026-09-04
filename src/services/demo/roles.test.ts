@@ -140,9 +140,9 @@ describe('role hierarchy', () => {
 
     // Renaming the most authoritative role would be a way to sow confusion
     // even though it grants nothing — the hierarchy check blocks it anyway.
-    await expect(
-      demoOrganizationService.updateRole(ownerRole.id, 'Puppet', null),
-    ).rejects.toThrow(/below your own authority/i)
+    await expect(demoOrganizationService.updateRole(ownerRole.id, 'Puppet', null)).rejects.toThrow(
+      /below your own authority/i,
+    )
   })
 
   it('refuses to delete a role that would strand a member', async () => {
@@ -200,9 +200,9 @@ describe('multiple roles per member', () => {
     const members = await demoOrganizationService.listMembers('any')
     const single = members.find((m) => m.roles.length === 1)!
 
-    await expect(
-      demoOrganizationService.unassignRole(single.id, single.role.id),
-    ).rejects.toThrow(/at least one role/i)
+    await expect(demoOrganizationService.unassignRole(single.id, single.role.id)).rejects.toThrow(
+      /at least one role/i,
+    )
   })
 })
 

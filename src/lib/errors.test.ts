@@ -98,9 +98,9 @@ describe('authored database messages', () => {
       toAppError({ code: 'P0002', message: 'This invitation link is not valid' }).userMessage,
     ).toBe('This invitation link is not valid')
 
-    expect(
-      toAppError({ code: '23514', message: 'This invitation has expired' }).userMessage,
-    ).toBe('This invitation has expired')
+    expect(toAppError({ code: '23514', message: 'This invitation has expired' }).userMessage).toBe(
+      'This invitation has expired',
+    )
 
     expect(
       toAppError({ code: '23514', message: 'This invitation has already been used' }).userMessage,

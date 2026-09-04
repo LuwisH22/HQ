@@ -32,15 +32,15 @@ async function createRole(
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name)
   await page.getByRole('spinbutton', { name: 'Rank' }).fill(rank)
   if (options.grantViewOrganization) {
-    await page.getByRole('checkbox', { name: /^View organization/i }).first().check()
+    await page
+      .getByRole('checkbox', { name: /^View organization/i })
+      .first()
+      .check()
   }
   await page.getByRole('button', { name: 'Create role' }).click()
 }
 
-async function deleteRole(
-  page: Page,
-  name: string,
-): Promise<void> {
+async function deleteRole(page: Page, name: string): Promise<void> {
   page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('button', { name: `Delete ${name}` }).click()
   await expect(page.getByRole('list', { name: 'Roles' }).getByText(name)).toHaveCount(0, {
@@ -48,7 +48,9 @@ async function deleteRole(
   })
 }
 
-test('creates a custom role, edits its permissions, then deletes it', async ({ page }, testInfo) => {
+test('creates a custom role, edits its permissions, then deletes it', async ({
+  page,
+}, testInfo) => {
   const name = uniqueName('E2E Probe', testInfo.project.name)
   const roles = page.getByRole('list', { name: 'Roles' })
 

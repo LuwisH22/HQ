@@ -22,8 +22,7 @@ const COPY: Record<
 > = {
   suspend: {
     title: 'Suspend member',
-    description:
-      'They keep their roles but lose access until the suspension lapses or is lifted.',
+    description: 'They keep their roles but lose access until the suspension lapses or is lifted.',
     confirm: 'Suspend',
     destructive: false,
   },
@@ -179,8 +178,8 @@ export function ModerateMemberDialog({
                 <Warning className="text-destructive mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 <p className="text-muted-foreground text-2xs leading-relaxed">
                   Organization data is blocked immediately. An access token already issued to them
-                  stays valid until it expires — up to an hour — but it returns no organization
-                  data during that time.
+                  stays valid until it expires — up to an hour — but it returns no organization data
+                  during that time.
                 </p>
               </div>
 
