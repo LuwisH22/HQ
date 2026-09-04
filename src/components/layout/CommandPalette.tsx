@@ -7,7 +7,7 @@ import { useWorkspace } from '@/hooks/use-workspace'
 import { useUiStore } from '@/stores/ui.store'
 import { useKeyboardShortcut } from '@/hooks/use-keyboard-shortcut'
 import { cn } from '@/lib/utils'
-import { CURRENT_PHASE, NAV_ITEMS } from './navigation'
+import { NAV_ITEMS } from './navigation'
 
 /**
  * Ctrl/⌘+K launcher.
@@ -136,7 +136,7 @@ export function CommandPalette() {
                 >
                   <item.icon className="size-4 shrink-0" aria-hidden="true" />
                   <span className="truncate">{item.label}</span>
-                  {item.phase > CURRENT_PHASE ? (
+                  {!item.shipped ? (
                     <span className="text-2xs text-muted-foreground/60 ml-auto tracking-wider uppercase">
                       Soon
                     </span>

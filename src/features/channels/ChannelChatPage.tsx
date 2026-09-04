@@ -156,7 +156,9 @@ export function ChannelChatPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    // Full height so the transcript scrolls and the composer stays put, but
+    // bounded and padded like every other screen.
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl flex-col p-4 sm:p-6">
       <header className="border-border flex items-center gap-2 border-b pb-3">
         <Button asChild size="icon-sm" variant="ghost">
           <Link to="/channels" aria-label="Back to channels">

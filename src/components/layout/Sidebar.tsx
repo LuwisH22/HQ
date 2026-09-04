@@ -6,12 +6,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useWorkspace } from '@/hooks/use-workspace'
 import { useUiStore } from '@/stores/ui.store'
 import { cn } from '@/lib/utils'
-import { CURRENT_PHASE, NAV_ITEMS, type NavItem } from './navigation'
+import { NAV_ITEMS, type NavItem } from './navigation'
 import { OrganizationSwitcher } from './OrganizationSwitcher'
 import { UserMenu } from './UserMenu'
 
 function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
-  const upcoming = item.phase > CURRENT_PHASE
+  const upcoming = !item.shipped
 
   const link = (
     <NavLink

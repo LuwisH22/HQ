@@ -21,10 +21,16 @@ export interface NavItem {
   /** Hidden unless the member holds at least one of these. Empty means always. */
   requires: readonly Permission[]
   /**
-   * The build phase that makes this section real. Anything above Phase 1
-   * routes to a placeholder rather than pretending to work.
+   * The build phase that makes this section real, used for the copy on the
+   * placeholder pages.
    */
   phase: 1 | 2 | 3 | 4 | 5 | 6
+  /**
+   * Whether the section actually works yet. Kept separate from `phase`
+   * because a phase ships in parts: Phase 2 built channels while direct
+   * messages are still to come, and one number cannot say that.
+   */
+  shipped: boolean
   /** Grouping in the sidebar. */
   group: 'workspace' | 'organization'
 }
@@ -43,6 +49,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: SquaresFour,
     requires: [],
     phase: 1,
+    shipped: true,
     group: 'workspace',
   },
   {
@@ -52,6 +59,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: ChatTeardropText,
     requires: ['channels.view'],
     phase: 2,
+    shipped: false,
     group: 'workspace',
   },
   {
@@ -61,6 +69,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Hash,
     requires: ['channels.view'],
     phase: 2,
+    shipped: true,
     group: 'workspace',
   },
   {
@@ -70,6 +79,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Kanban,
     requires: ['projects.view'],
     phase: 3,
+    shipped: false,
     group: 'workspace',
   },
   {
@@ -79,6 +89,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: CalendarBlank,
     requires: ['calendar.view'],
     phase: 4,
+    shipped: false,
     group: 'workspace',
   },
   {
@@ -88,6 +99,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: UsersThree,
     requires: ['teams.view'],
     phase: 3,
+    shipped: false,
     group: 'workspace',
   },
   {
@@ -97,6 +109,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Files,
     requires: ['files.view'],
     phase: 5,
+    shipped: false,
     group: 'workspace',
   },
   {
@@ -106,6 +119,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Bell,
     requires: [],
     phase: 6,
+    shipped: false,
     group: 'workspace',
   },
   {
@@ -115,6 +129,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Users,
     requires: ['members.view'],
     phase: 1,
+    shipped: true,
     group: 'organization',
   },
   {
@@ -124,12 +139,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Gear,
     requires: [],
     phase: 1,
+    shipped: true,
     group: 'organization',
   },
 ] as const
 
-/** Sections shown in the bottom bar on phones, in order. */
-export const MOBILE_NAV_IDS = ['dashboard', 'messages', 'projects', 'calendar', 'members'] as const
-
-/** Which build phase is live. Sections above this render a placeholder. */
-export const CURRENT_PHASE = 1
+/**
+ * Sections shown in the bottom bar on phones, in order.
+ *
+ * Five slots, and they go to what works: channels rather than direct
+ * messages, which is still a placeholder.
+ */
+export const MOBILE_NAV_IDS = ['dashboard', 'channels', 'projects', 'calendar', 'members'] as const

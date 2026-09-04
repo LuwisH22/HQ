@@ -63,7 +63,10 @@ export function ChannelsPage() {
   if (!canView) return <ForbiddenState />
 
   return (
-    <div className="space-y-4">
+    // The same page frame as every other screen: centred, bounded, padded.
+    // Without it the directory ran flush against the sidebar and stretched
+    // the full width of a desktop monitor.
+    <div className="mx-auto w-full max-w-4xl space-y-5 p-4 sm:p-6">
       <PageHeader
         title="Channels"
         description="Where the organization talks. Pick a channel to open the conversation."
