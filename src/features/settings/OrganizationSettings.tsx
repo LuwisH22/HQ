@@ -26,7 +26,7 @@ import { organizationSchema, type OrganizationValues } from '@/features/auth/sch
 /**
  * Mounted only once the organization is loaded, and keyed on its id.
  *
- * Same reasoning as `ProfileSettings`: seeding an already-mounted form with
+ * Same reasoning as `ProfileDialog`: seeding an already-mounted form with
  * async data makes the timezone Select transition after mount, which clears it.
  * Mounting with the final values avoids the problem rather than patching it.
  */

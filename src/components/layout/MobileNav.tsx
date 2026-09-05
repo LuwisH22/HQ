@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { ChannelNav } from '@/features/channels/ChannelNav'
 import { MOBILE_NAV_IDS, NAV_ITEMS, type NavItem } from './navigation'
 import { OrganizationSwitcher } from './OrganizationSwitcher'
-import { UserMenu } from './UserMenu'
+import { ProfileButton, SignOutButton } from './UserMenu'
 
 /**
  * Bottom bar for phones.
@@ -150,8 +150,9 @@ export function MobileNavDrawer() {
             </ul>
           </nav>
 
-          <div className="border-border pb-safe border-t p-2">
-            <UserMenu collapsed={false} />
+          <div className="border-border pb-safe flex items-center gap-1 border-t p-2">
+            <ProfileButton collapsed={false} />
+            <SignOutButton />
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

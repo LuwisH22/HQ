@@ -19,6 +19,14 @@ interface UiState {
   sidebarCollapsed: boolean
   mobileNavOpen: boolean
   commandPaletteOpen: boolean
+  /**
+   * Whether the profile dialog is open.
+   *
+   * It lives here rather than inside the button that opens it because the
+   * button exists twice — in the sidebar and in the phone drawer — and the
+   * dialog has to be mounted outside the drawer to be reachable at all.
+   */
+  profileOpen: boolean
   theme: ThemePreference
   /**
    * Channel categories the member has folded shut in the sidebar, by id.
@@ -35,6 +43,7 @@ interface UiState {
   setMobileNavOpen: (open: boolean) => void
   setCommandPaletteOpen: (open: boolean) => void
   toggleCommandPalette: () => void
+  setProfileOpen: (open: boolean) => void
   setTheme: (theme: ThemePreference) => void
   toggleCategory: (categoryId: string) => void
 }
@@ -46,6 +55,7 @@ export const useUiStore = create<UiState>()(
       sidebarCollapsed: false,
       mobileNavOpen: false,
       commandPaletteOpen: false,
+      profileOpen: false,
       theme: 'dark',
       collapsedCategories: [],
 
@@ -56,6 +66,10 @@ export const useUiStore = create<UiState>()(
       setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
       toggleCommandPalette: () =>
         set((state) => ({ commandPaletteOpen: !state.commandPaletteOpen })),
+      // Opening the profile closes the drawer it may have been opened from:
+      // two stacked overlays is one more than anyone needs.
+      setProfileOpen: (profileOpen) =>
+        set(profileOpen ? { profileOpen, mobileNavOpen: false } : { profileOpen }),
       setTheme: (theme) => set({ theme }),
       toggleCategory: (categoryId) =>
         set((state) => ({

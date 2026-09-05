@@ -26,8 +26,8 @@ const MembersPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 )
-const ProfileSettings = lazy(() =>
-  import('@/features/settings/ProfileSettings').then((m) => ({ default: m.ProfileSettings })),
+const SettingsIndex = lazy(() =>
+  import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsIndex })),
 )
 const OrganizationSettings = lazy(() =>
   import('@/features/settings/OrganizationSettings').then((m) => ({
@@ -113,8 +113,7 @@ export const router = createHashRouter([
             path: 'settings',
             element: <SettingsPage />,
             children: [
-              { index: true, element: <Navigate to="/settings/profile" replace /> },
-              { path: 'profile', element: <ProfileSettings /> },
+              { index: true, element: <SettingsIndex /> },
               { path: 'organization', element: <OrganizationSettings /> },
               { path: 'roles', element: <RolesSettings /> },
               { path: 'channels', element: <ChannelsSettings /> },

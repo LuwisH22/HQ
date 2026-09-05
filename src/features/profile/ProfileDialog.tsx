@@ -2,9 +2,11 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -14,12 +16,25 @@ import {
 } from '@/components/ui/select'
 import { FormField } from '@/components/common/FormField'
 import { CardSkeleton, ErrorState } from '@/components/common/states'
-import { profileService } from '@/services/profile.service'
+import { displayNameFor, initialsFor, profileService } from '@/services/profile.service'
 import type { Profile } from '@/services/service-contracts'
 import { queryKeys } from '@/lib/query-keys'
 import { errorMessage } from '@/lib/errors'
+import { useWorkspace } from '@/hooks/use-workspace'
+import { useUiStore } from '@/stores/ui.store'
 import { COMMON_TIMEZONES } from '@/utils/datetime'
 import { profileSchema, type ProfileValues } from '@/features/auth/schemas'
+
+/**
+ * Your own profile, reachable from the sidebar in one click.
+ *
+ * It used to be a tab inside Settings, which put a personal detail in among
+ * the organization's configuration and made changing your own title a
+ * navigation exercise. Settings is now the organization's; this is yours.
+ *
+ * The service beneath is unchanged: the same `profileService.update`, the same
+ * row, the same policy. Nothing here can edit anybody else's profile.
+ */
 
 /**
  * The form itself, mounted only once the profile is known.
@@ -32,9 +47,9 @@ import { profileSchema, type ProfileValues } from '@/features/auth/schemas'
  * so the bug was invisible until a save wiped the user's timezone.
  *
  * Mounting with the final values in `defaultValues` removes the transition
- * entirely. `ProfileSettings.test.tsx` covers it.
+ * entirely. `ProfileDialog.test.tsx` covers it.
  */
-function ProfileForm({ profile }: { profile: Profile }) {
+function ProfileForm({ profile, onDone }: { profile: Profile; onDone: () => void }) {
   const queryClient = useQueryClient()
 
   const form = useForm<ProfileValues>({
@@ -76,13 +91,9 @@ function ProfileForm({ profile }: { profile: Profile }) {
   return (
     <form
       onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
-      className="space-y-4"
+      className="flex flex-col gap-4 px-5 pt-1 pb-5"
       noValidate
     >
-      <FormField label="Email" hint="Your sign-in address. Contact an admin to change it.">
-        {(props) => <Input {...props} value={profile.email} readOnly disabled />}
-      </FormField>
-
       <FormField
         label="Display name"
         error={form.formState.errors.displayName?.message}
@@ -106,11 +117,11 @@ function ProfileForm({ profile }: { profile: Profile }) {
 
       <FormField label="Bio" error={form.formState.errors.bio?.message}>
         {(props) => (
-          <textarea
+          <Textarea
             {...props}
             {...form.register('bio')}
             rows={3}
-            className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring focus-visible:ring-offset-background flex w-full resize-y rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+            className="resize-y"
             placeholder="Availability, timezone quirks, anything the team should know."
           />
         )}
@@ -145,13 +156,8 @@ function ProfileForm({ profile }: { profile: Profile }) {
       </FormField>
 
       <div className="flex justify-end gap-2 pt-1">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => form.reset()}
-          disabled={!form.formState.isDirty || mutation.isPending}
-        >
-          Discard
+        <Button type="button" variant="ghost" onClick={onDone}>
+          Close
         </Button>
         <Button type="submit" loading={mutation.isPending} disabled={!form.formState.isDirty}>
           Save changes
@@ -161,39 +167,66 @@ function ProfileForm({ profile }: { profile: Profile }) {
   )
 }
 
-export function ProfileSettings() {
+/** Identity below the title: who you are, and the address you sign in with. */
+function ProfileHeader({ profile }: { profile: Profile }) {
+  const { membership } = useWorkspace()
+
+  return (
+    <div className="flex items-center gap-3 px-5 pt-3 pb-4">
+      <Avatar className="size-11">
+        {profile.avatarUrl ? <AvatarImage src={profile.avatarUrl} alt="" /> : null}
+        <AvatarFallback>{initialsFor(profile)}</AvatarFallback>
+      </Avatar>
+      <div className="min-w-0">
+        <p className="truncate text-sm leading-tight font-semibold">{displayNameFor(profile)}</p>
+        <p className="text-2xs text-muted-foreground mt-0.5 truncate">
+          {membership?.role.name ?? 'Member'}
+        </p>
+        {/* Read-only on purpose: the sign-in address is changed by an
+            administrator, not from here. Shown as text rather than a disabled
+            field, which is both smaller and less of an invitation. */}
+        <p className="text-2xs text-muted-foreground/70 truncate">{profile.email}</p>
+      </div>
+    </div>
+  )
+}
+
+export function ProfileDialog() {
+  const open = useUiStore((state) => state.profileOpen)
+  const setOpen = useUiStore((state) => state.setProfileOpen)
+
   const query = useQuery({
     queryKey: queryKeys.profile.me(),
     queryFn: () => profileService.getMine(),
+    enabled: open,
   })
 
-  if (query.isPending) {
-    return (
-      <Card>
-        <CardContent className="pt-4">
-          <CardSkeleton lines={7} />
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (query.isError) {
-    return <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-  }
-
-  if (!query.data) {
-    return <ErrorState error={new Error('Your profile could not be loaded.')} />
-  }
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Your profile</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* Keyed on the record so switching account remounts with fresh values. */}
-        <ProfileForm key={query.data.id} profile={query.data} />
-      </CardContent>
-    </Card>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent aria-describedby={undefined}>
+        <DialogTitle className="px-5 pt-5">Your profile</DialogTitle>
+
+        {query.isPending ? (
+          <div className="px-5 pt-4 pb-5">
+            <CardSkeleton lines={6} />
+          </div>
+        ) : query.isError ? (
+          <div className="px-5 pt-4 pb-5">
+            <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+          </div>
+        ) : !query.data ? (
+          <div className="px-5 pt-4 pb-5">
+            <ErrorState error={new Error('Your profile could not be loaded.')} />
+          </div>
+        ) : (
+          <>
+            <ProfileHeader profile={query.data} />
+            {/* Keyed on the record so switching account remounts with fresh
+                values rather than reusing the previous person's. */}
+            <ProfileForm key={query.data.id} profile={query.data} onDone={() => setOpen(false)} />
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

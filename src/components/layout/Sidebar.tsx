@@ -9,7 +9,7 @@ import { useUiStore } from '@/stores/ui.store'
 import { cn } from '@/lib/utils'
 import { NAV_ITEMS, type NavItem } from './navigation'
 import { OrganizationSwitcher } from './OrganizationSwitcher'
-import { UserMenu } from './UserMenu'
+import { ProfileButton, SignOutButton } from './UserMenu'
 
 function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const upcoming = !item.shipped
@@ -149,8 +149,14 @@ export function Sidebar() {
         ) : null}
       </nav>
 
+      {/* Three controls, three jobs: your profile, the way out, and the
+          width of this panel. They used to be a dropdown and one small arrow,
+          which made signing out something you had to go looking for. */}
       <div className={cn('border-border shrink-0 border-t p-2', collapsed && 'px-1.5')}>
-        <UserMenu collapsed={collapsed} />
+        <div className={cn('flex items-center gap-1', collapsed && 'flex-col gap-1.5')}>
+          <ProfileButton collapsed={collapsed} />
+          <SignOutButton />
+        </div>
         <Button
           variant="ghost"
           size="icon-sm"

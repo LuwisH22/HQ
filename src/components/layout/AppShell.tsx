@@ -8,6 +8,7 @@ import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { MobileNavDrawer, MobileTabBar } from './MobileNav'
 import { CommandPalette } from './CommandPalette'
+import { ProfileDialog } from '@/features/profile/ProfileDialog'
 
 /**
  * The persistent application frame.
@@ -54,6 +55,9 @@ export function AppShell() {
 
       <MobileNavDrawer />
       <CommandPalette />
+      {/* Outside the drawer deliberately: a dialog rendered inside it would be
+          marked hidden along with everything else the drawer covers. */}
+      <ProfileDialog />
     </div>
   )
 }

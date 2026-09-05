@@ -1,6 +1,7 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import { Buildings, Hash, Shield, User } from '@phosphor-icons/react'
+import { Navigate, NavLink, Outlet } from 'react-router-dom'
+import { Buildings, Hash, Shield, type Icon } from '@phosphor-icons/react'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ForbiddenState } from '@/components/common/states'
 import { useWorkspace } from '@/hooks/use-workspace'
 import { cn } from '@/lib/utils'
 import type { Permission } from '@/lib/permissions'
@@ -8,12 +9,18 @@ import type { Permission } from '@/lib/permissions'
 interface SettingsTab {
   label: string
   path: string
-  icon: typeof User
+  icon: Icon
   requires?: Permission
 }
 
+/**
+ * Organization and application configuration only.
+ *
+ * Your own profile used to sit here as the first tab, which filed a personal
+ * detail under the organization's settings. It now opens from the sidebar
+ * footer, where your name already is.
+ */
 const TABS: readonly SettingsTab[] = [
-  { label: 'Your profile', path: '/settings/profile', icon: User },
   {
     label: 'Organization',
     path: '/settings/organization',
@@ -30,10 +37,7 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-5 p-4 sm:p-6">
-      <PageHeader
-        title="Settings"
-        description="Your account and the organization's configuration."
-      />
+      <PageHeader title="Settings" description="How this organization is configured." />
 
       <nav aria-label="Settings sections" className="-mx-1 overflow-x-auto">
         <ul className="border-border flex gap-1 border-b px-1">
@@ -62,4 +66,19 @@ export function SettingsPage() {
       <Outlet />
     </div>
   )
+}
+
+/**
+ * `/settings` on its own.
+ *
+ * It used to land on the profile tab, which every member could open. With
+ * that gone, the first section depends on what the member may see — and a
+ * member who may see none of them gets told so rather than a blank frame.
+ */
+export function SettingsIndex() {
+  const { permissions } = useWorkspace()
+  const first = TABS.find((tab) => !tab.requires || permissions.can(tab.requires))
+
+  if (!first) return <ForbiddenState />
+  return <Navigate to={first.path} replace />
 }

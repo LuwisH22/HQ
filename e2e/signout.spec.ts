@@ -28,8 +28,7 @@ test('signing out returns to the sign-in screen and blocks the app', async ({ pa
     page.getByRole('heading', { name: /Good (morning|afternoon|evening)|Still up/ }),
   ).toBeVisible({ timeout: 20_000 })
 
-  await page.getByRole('button', { name: 'Account menu' }).first().click()
-  await page.getByRole('menuitem', { name: 'Sign out' }).click()
+  await page.getByRole('button', { name: 'Log out' }).first().click()
 
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
 

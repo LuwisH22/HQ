@@ -35,6 +35,23 @@ async function openNavIfMobile(page: Page) {
   if (await openNav.isVisible()) await openNav.click()
 }
 
+/**
+ * Open the profile dialog from the sidebar footer.
+ *
+ * Keyed off the viewport rather than off whether the opener happens to be
+ * visible yet: asking a page that has not finished loading gets `false`, the
+ * drawer never opens, and the failure lands somewhere else entirely.
+ */
+async function openProfile(page: Page): Promise<void> {
+  if ((page.viewportSize()?.width ?? 1280) < 768) {
+    await page.getByRole('button', { name: 'Open navigation' }).click()
+  }
+  await page.getByRole('button', { name: 'Your profile' }).first().click()
+  await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible({
+    timeout: 15_000,
+  })
+}
+
 // One shared session, established by e2e/auth.setup.ts. Signing in per test
 // would issue a password grant per spec and trip the hosted auth rate limit.
 test.use({ storageState: '.auth/owner.json' })
@@ -135,9 +152,14 @@ test.describe('members', () => {
   })
 })
 
-test.describe('settings', () => {
-  test('saves a profile change and persists it across a reload', async ({ page }) => {
-    await page.goto('/#/settings/profile')
+test.describe('profile', () => {
+  test('opens from the sidebar, saves, and never leaves the page', async ({ page }) => {
+    const url = page.url()
+
+    await openProfile(page)
+    await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible()
+    // A quick overlay, not a destination: the address bar does not move.
+    await expect(page).toHaveURL(url)
 
     // A dashboard-created account starts with display_name NULL and the form
     // requires it, so fill it before expecting a save to go through.
@@ -151,7 +173,33 @@ test.describe('settings', () => {
     await expect(page.getByText('Profile updated.')).toBeVisible()
 
     await page.reload()
+    await openProfile(page)
     await expect(page.getByLabel('Title')).toHaveValue(next)
+  })
+
+  test('offers a distinct log out control with its own label', async ({ page }) => {
+    await openNavIfMobile(page)
+    const logout = page.getByRole('button', { name: 'Log out' }).first()
+    await expect(logout).toBeVisible()
+    // Signing out and collapsing the sidebar are different things, and the
+    // arrow that does the second used to be the only control down there.
+    await expect(logout).not.toHaveAttribute('aria-expanded', /.*/)
+  })
+})
+
+test.describe('settings', () => {
+  test('holds organization configuration and no personal profile', async ({ page }) => {
+    await page.goto('/#/settings')
+
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+
+    // Scoped to the settings tabs: the phone's bottom bar has a Channels link
+    // of its own, and it is not what this is about.
+    const tabs = page.getByRole('navigation', { name: 'Settings sections' })
+    await expect(tabs.getByRole('link', { name: 'Your profile' })).toHaveCount(0)
+    await expect(tabs.getByRole('link', { name: 'Organization' })).toBeVisible()
+    await expect(tabs.getByRole('link', { name: 'Roles & permissions' })).toBeVisible()
+    await expect(tabs.getByRole('link', { name: 'Channels' })).toBeVisible()
   })
 
   test('shows the permission matrix', async ({ page }) => {
