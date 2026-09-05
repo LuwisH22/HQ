@@ -430,3 +430,85 @@ test('keeps the hover timestamp in the gutter, clear of the words', async ({ pag
 
   await deleteChannel(page, name)
 })
+
+test('gives the conversation the whole width of the column it is in', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName(testInfo.project.name)
+  await createChannel(page, name)
+  await openChannel(page, name)
+
+  await page.getByRole('textbox', { name: `Message ${name}` }).fill('a line to measure')
+  await page.getByRole('button', { name: 'Send' }).click()
+  await expect(page.getByText('a line to measure', { exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
+
+  const layout = async () =>
+    page.evaluate(() => {
+      const list = document.querySelector('ul[aria-label="Messages"]')
+      const column = list?.closest('div.overflow-y-auto') ?? null
+      const row = list?.querySelector('li') ?? null
+      const group = document.querySelector('[role="group"][aria-label^="Composer for"]')
+      // The bordered box, which is what a reader sees as the composer; the
+      // group around it spans the column and carries the gutter as padding,
+      // exactly as the message row does.
+      const composer = group?.querySelector('div.border-input') ?? null
+      if (!column || !row || !composer) return null
+
+      const columnBox = column.getBoundingClientRect()
+      const rowBox = row.getBoundingClientRect()
+      const composerBox = composer.getBoundingClientRect()
+      const rowStyle = getComputedStyle(row)
+
+      return {
+        column: Math.round(columnBox.width),
+        // The row itself, which is also what the hover background fills.
+        row: Math.round(rowBox.width),
+        rowLeftGap: Math.round(rowBox.left - columnBox.left),
+        rowRightGap: Math.round(columnBox.right - rowBox.right),
+        // Inside the row, which is where the words actually start.
+        textGutter: Number.parseFloat(rowStyle.paddingLeft),
+        composerLeftGap: Math.round(composerBox.left - columnBox.left),
+        composerRightGap: Math.round(columnBox.right - composerBox.right),
+      }
+    })
+
+  const before = await layout()
+  if (!before) throw new Error('the conversation was not on screen')
+
+  // The row is the column: no centred box, no dead margin either side. This is
+  // what a `max-width` on the wrapper would break, and it broke it silently —
+  // at 1440px the clamp does not bite, so only a wide window showed it.
+  expect(before.row).toBe(before.column)
+  expect(before.rowLeftGap).toBe(0)
+  expect(before.rowRightGap).toBe(0)
+
+  // A gutter, though: the words must not touch the edges.
+  expect(before.textGutter).toBeGreaterThanOrEqual(12)
+  expect(before.textGutter).toBeLessThanOrEqual(20)
+
+  // And the composer keeps the same gutter as the rows above it, on both sides.
+  expect(before.composerLeftGap).toBe(before.composerRightGap)
+  expect(before.composerLeftGap).toBeGreaterThanOrEqual(12)
+  expect(before.composerLeftGap).toBeLessThanOrEqual(20)
+
+  if (testInfo.project.name !== 'mobile') {
+    // Wide enough that a thousand-pixel clamp would leave a visible margin on
+    // each side, which is exactly how this was reported.
+    await page.setViewportSize({ width: 1920, height: 1000 })
+    await page.waitForTimeout(400)
+
+    const wide = await layout()
+    if (!wide) throw new Error('the conversation was not on screen')
+
+    expect(wide.column).toBeGreaterThan(before.column)
+    expect(wide.row).toBe(wide.column)
+    expect(wide.composerLeftGap).toBe(wide.composerRightGap)
+    expect(wide.composerLeftGap).toBeLessThanOrEqual(20)
+
+    await page.setViewportSize({ width: 1440, height: 900 })
+  }
+
+  await deleteChannel(page, name)
+})

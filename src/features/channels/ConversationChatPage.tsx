@@ -352,7 +352,9 @@ export function ConversationChatPage() {
         ) : null}
 
         <div className={cn('min-h-0 flex-1 overflow-y-auto', searchOpen && 'hidden')}>
-          <div className="mx-auto flex min-h-full w-full max-w-[1000px] flex-col justify-end px-2 py-4 sm:px-4">
+          {/* The full width of the column; the gutter is the message row's
+              own padding. See ChannelChatPage. */}
+          <div className="flex min-h-full w-full flex-col justify-end py-4">
             {messagesQuery.isPending ? (
               <div className="px-4">
                 <CardSkeleton lines={6} />
@@ -419,7 +421,7 @@ export function ConversationChatPage() {
           </div>
         </div>
 
-        <div className="mx-auto w-full max-w-[1000px] shrink-0 px-2 sm:px-4">
+        <div className="w-full shrink-0">
           <TypingIndicator names={typingNames} />
           <Composer
             placeName={name}
