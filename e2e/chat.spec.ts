@@ -266,7 +266,7 @@ test('never shows your own typing indicator back to you', async ({ page }, testI
   await deleteChannel(page, name)
 })
 
-test('a continued message is only as tall as the words in it', async ({ page }, testInfo) => {
+test('keeps a run of messages compact and a long one intact', async ({ page }, testInfo) => {
   const name = uniqueName(testInfo.project.name)
   await createChannel(page, name)
   await openChannel(page, name)
@@ -274,42 +274,86 @@ test('a continued message is only as tall as the words in it', async ({ page }, 
   const composer = page.getByRole('textbox', { name: `Message ${name}` })
   const send = page.getByRole('button', { name: 'Send' })
 
-  // The second one continues the first: same author, same minute, so it drops
-  // the avatar and the name and should be one line of text and nothing else.
-  await composer.fill('opening line')
+  // One author, one minute: the first message opens the group and the rest
+  // continue it, which is how a burst is meant to read as one person talking.
+  const run = ['memeg', 'slurpies', 'kecepatan setahun', 'yagasi', 'kenapa jadi gini']
+  for (const line of run) {
+    await composer.fill(line)
+    await send.click()
+    await expect(page.getByText(line, { exact: true })).toBeVisible({ timeout: 15_000 })
+  }
+  await composer.fill('satu\ndua\ntiga')
   await send.click()
-  await expect(page.getByText('opening line')).toBeVisible({ timeout: 15_000 })
-  await composer.fill('continued line')
-  await send.click()
-  await expect(page.getByText('continued line')).toBeVisible({ timeout: 15_000 })
+  // Matched as a pattern: the three lines are one text node, not three.
+  await expect(page.getByText(/satu\s+dua\s+tiga/)).toBeVisible({ timeout: 15_000 })
 
   const measured = await page.evaluate(() => {
-    const rows = Array.from(document.querySelectorAll<HTMLElement>('ul[aria-label="Messages"] li'))
-    const row = rows.find((li) => li.innerText.includes('continued line'))
-    if (!row) return null
+    const rows = Array.from(
+      document.querySelectorAll<HTMLElement>('ul[aria-label="Messages"] li'),
+    ).filter((li) => li.querySelector('p.whitespace-pre-wrap'))
 
-    const body = row.querySelector<HTMLElement>('p.whitespace-pre-wrap')
-    const gutter = row.querySelector<HTMLElement>('div.w-8 > span')
-    const lineHeight = gutter ? Number.parseFloat(getComputedStyle(gutter).lineHeight) : 0
-
-    return {
-      row: Math.round(row.getBoundingClientRect().height),
-      body: body ? Math.round(body.getBoundingClientRect().height) : 0,
-      // Rounded up: a fraction of a line must not read as none of one.
-      gutterLines:
-        gutter && lineHeight > 0
-          ? Math.ceil(gutter.getBoundingClientRect().height / lineHeight)
-          : 0,
+    const line = (li: HTMLElement) => {
+      const body = li.querySelector<HTMLElement>('p.whitespace-pre-wrap')
+      const gutter = li.querySelector<HTMLElement>('div.w-8 > span')
+      const lineHeight = body ? Number.parseFloat(getComputedStyle(body).lineHeight) : 0
+      return {
+        text: li.innerText,
+        top: li.getBoundingClientRect().top,
+        height: li.getBoundingClientRect().height,
+        body: body ? body.getBoundingClientRect().height : 0,
+        lineHeight,
+        // A message that opens a group keeps its author's name and the space
+        // that sets it apart; a continuation has neither.
+        opensGroup: li.querySelectorAll('p').length > 1,
+        marginTop: Number.parseFloat(getComputedStyle(li).marginTop),
+        gutterLines:
+          gutter && lineHeight > 0
+            ? Math.ceil(gutter.getBoundingClientRect().height / lineHeight)
+            : 0,
+      }
     }
+
+    return rows.map(line)
   })
 
-  if (!measured) throw new Error('the continued message was not in the timeline')
+  const continued = measured.filter((row) => !row.opensGroup)
+  const oneLiners = continued.filter((row) => !row.text.includes('satu'))
+  const multiLine = continued.find((row) => row.text.includes('satu'))
 
-  // The hover timestamp lives in the 32px gutter, and a locale time is wider
-  // than that. Left in the flow it wrapped onto a second line and made every
-  // continued message a blank line taller than its own text.
-  expect(measured.gutterLines).toBe(1)
-  expect(measured.row).toBeLessThanOrEqual(measured.body + 8)
+  expect(oneLiners).toHaveLength(run.length - 1)
+  expect(multiLine).toBeDefined()
+
+  const lineHeight = oneLiners[0].lineHeight
+  expect(lineHeight).toBeGreaterThan(0)
+
+  for (const row of oneLiners) {
+    // One line of text, and the row is that line plus its own padding —
+    // nothing in it reserves space for a second.
+    expect(Math.round(row.body)).toBe(Math.round(lineHeight))
+    expect(row.height).toBeLessThanOrEqual(row.body + 8)
+    expect(row.gutterLines).toBe(1)
+    // Continuations sit directly under one another; only a new group is spaced.
+    expect(row.marginTop).toBe(0)
+  }
+
+  // Consecutive rows are exactly as far apart as the row above is tall: no
+  // collapsed margin, no phantom gap between them.
+  for (let i = 1; i < oneLiners.length; i += 1) {
+    const gap = oneLiners[i].top - oneLiners[i - 1].top
+    expect(gap).toBeCloseTo(oneLiners[i - 1].height, 0)
+    expect(gap).toBeLessThanOrEqual(lineHeight + 8)
+  }
+
+  // Three lines are three lines tall: the compactness above must not have come
+  // from clamping a message to one.
+  expect(Math.round(multiLine!.body)).toBe(Math.round(lineHeight * 3))
+  expect(multiLine!.height).toBeLessThanOrEqual(multiLine!.body + 8)
+
+  // And the message that opened the group keeps the wider separation that
+  // marks a change of speaker.
+  const opener = measured.find((row) => row.opensGroup)
+  expect(opener).toBeDefined()
+  expect(opener!.marginTop).toBeGreaterThan(oneLiners[0].marginTop)
 
   await deleteChannel(page, name)
 })
