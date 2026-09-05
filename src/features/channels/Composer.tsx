@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { PaperPlaneTilt } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import type { MentionCandidate } from '@/services/channel.service'
 import { cn } from '@/lib/utils'
+import { MentionAutocomplete } from './MentionAutocomplete'
+import { applyMention, mentionQueryAt, useMentionMenu } from './mentions'
 
 /**
  * The message composer.
@@ -26,6 +29,7 @@ export function Composer({
   sending,
   onSend,
   onTyping,
+  mentionCandidates = [],
 }: {
   channelName: string
   disabled: boolean
@@ -34,9 +38,34 @@ export function Composer({
   sending: boolean
   onSend: (body: string) => void
   onTyping: () => void
+  /** Who may be mentioned here. Empty disables the menu entirely. */
+  mentionCandidates?: readonly MentionCandidate[]
 }) {
   const [draft, setDraft] = useState('')
+  const [caret, setCaret] = useState(0)
   const ref = useRef<HTMLTextAreaElement | null>(null)
+
+  // Only while the caret sits inside an unfinished `@handle`. Typing an
+  // address or a price never opens it.
+  const query = mentionCandidates.length === 0 ? null : mentionQueryAt(draft, caret)
+  const menu = useMentionMenu(mentionCandidates, query?.term ?? null)
+  const menuOpen = query !== null && menu.matches.length > 0
+
+  function choose(candidate: MentionCandidate): void {
+    if (!query) return
+    const next = applyMention(draft, query, candidate.handle, caret)
+    setDraft(next.value)
+    setCaret(next.caret)
+
+    // The caret has to land after the inserted handle, or the next character
+    // typed reopens the menu on text that is already finished.
+    requestAnimationFrame(() => {
+      const el = ref.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(next.caret, next.caret)
+    })
+  }
 
   // Re-measure from scratch each time: shrinking back after a deletion needs
   // the height reset before scrollHeight means anything.
@@ -52,6 +81,7 @@ export function Composer({
     if (!body || disabled || sending) return
     onSend(body)
     setDraft('')
+    setCaret(0)
   }
 
   if (disabled) {
@@ -65,7 +95,18 @@ export function Composer({
   }
 
   return (
-    <div className="px-4 pb-3" role="group" aria-label={`Composer for ${channelName}`}>
+    <div className="relative px-4 pb-3" role="group" aria-label={`Composer for ${channelName}`}>
+      {menuOpen ? (
+        <div className="absolute inset-x-4 bottom-full">
+          <MentionAutocomplete
+            candidates={menu.matches}
+            term={query.term}
+            activeIndex={menu.activeIndex}
+            onPick={choose}
+            onHover={menu.setActiveIndex}
+          />
+        </div>
+      ) : null}
       <div
         className={cn(
           'border-input bg-background rounded-md border transition-[border-color] duration-[140ms]',
@@ -82,11 +123,42 @@ export function Composer({
           className="max-h-[168px] min-h-[38px] border-0 bg-transparent px-3 py-2.5 focus-visible:border-0"
           onChange={(event) => {
             setDraft(event.target.value)
+            setCaret(event.target.selectionStart)
             // Throttled inside the realtime hook: a burst of keystrokes sends
             // at most one event, and silence sends a stop after two seconds.
             onTyping()
           }}
+          onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+          onBlur={() => setCaret(-1)}
           onKeyDown={(event) => {
+            // The menu owns these keys while it is open, or Enter would send a
+            // half-typed handle instead of completing it.
+            if (menuOpen) {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault()
+                menu.move(1)
+                return
+              }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault()
+                menu.move(-1)
+                return
+              }
+              if (event.key === 'Enter' || event.key === 'Tab') {
+                event.preventDefault()
+                const picked = menu.matches[menu.activeIndex]
+                if (picked) choose(picked)
+                return
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                // Dismiss without touching the text: the caret moves out of
+                // the handle, which is what closes the menu.
+                setCaret(-1)
+                return
+              }
+            }
+
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
               submit()

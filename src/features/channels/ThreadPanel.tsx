@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { ArrowLeft } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { CardSkeleton, ErrorState } from '@/components/common/states'
+import { channelService } from '@/services/channel.service'
 import { messageService } from '@/services/message.service'
 import type { Message } from '@/services/message.service'
 import { queryKeys } from '@/lib/query-keys'
@@ -44,6 +45,17 @@ export function ThreadPanel({
   const replies = repliesQuery.data ?? []
   const ids = [root.id, ...replies.map((r) => r.id)]
 
+  const mentionsQuery = useQuery({
+    queryKey: [...queryKeys.messages.mentions(root.channelId), 'thread', root.id, ids.length],
+    queryFn: () => messageService.listMentions(ids),
+  })
+
+  const mentionCandidatesQuery = useQuery({
+    queryKey: queryKeys.channelMembers.mentionable(root.channelId),
+    queryFn: () => channelService.listMentionCandidates(root.channelId),
+    staleTime: 5 * 60_000,
+  })
+
   const reactionsQuery = useQuery({
     queryKey: [...queryKeys.messages.reactions(root.channelId), 'thread', root.id, ids.length],
     queryFn: () => messageService.listReactions(ids),
@@ -51,6 +63,9 @@ export function ThreadPanel({
 
   async function refresh(): Promise<void> {
     await queryClient.invalidateQueries({ queryKey: queryKeys.messages.replies(root.id) })
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.messages.mentions(root.channelId),
+    })
     // The root's reply count lives on the message itself, so the timeline is
     // stale as soon as a reply lands.
     await queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(root.channelId) })
@@ -145,6 +160,8 @@ export function ThreadPanel({
             message={root}
             grouped={false}
             reactions={reactionsQuery.data?.get(root.id) ?? []}
+            mentions={mentionsQuery.data?.get(root.id) ?? []}
+            currentUserId={user?.id ?? null}
             actions={actionsFor(root)}
             {...rowHandlers(root)}
           />
@@ -181,6 +198,8 @@ export function ThreadPanel({
                   replies[index - 1]?.deletedAt === null
                 }
                 reactions={reactionsQuery.data?.get(message.id) ?? []}
+                mentions={mentionsQuery.data?.get(message.id) ?? []}
+                currentUserId={user?.id ?? null}
                 actions={actionsFor(message)}
                 {...rowHandlers(message)}
               />
@@ -197,6 +216,7 @@ export function ThreadPanel({
             sending={reply.isPending}
             onSend={(body) => reply.mutate(body)}
             onTyping={() => undefined}
+            mentionCandidates={mentionCandidatesQuery.data ?? []}
           />
         ) : (
           <div className="px-4 pb-4">

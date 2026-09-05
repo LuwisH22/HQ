@@ -5,6 +5,7 @@ import { demoMessageService } from '@/services/demo'
 import { firstOf } from './postgrest'
 import type {
   Message,
+  MessageMention,
   MessagePage,
   MessageReaction,
   MessageSearchInput,
@@ -14,6 +15,7 @@ import type {
 
 export type {
   Message,
+  MessageMention,
   MessagePage,
   MessageReaction,
   MessageSearchInput,
@@ -242,6 +244,28 @@ export const supabaseMessageService: MessageService = {
     return byMessage
   },
 
+  async listMentions(messageIds: readonly string[]): Promise<Map<string, MessageMention[]>> {
+    const byMessage = new Map<string, MessageMention[]>()
+    if (messageIds.length === 0) return byMessage
+
+    // Rows arrive already scoped: a mention on a message the caller cannot
+    // read is not in the response.
+    const { data, error } = await getSupabase()
+      .from('message_mentions')
+      .select('message_id, user_id, handle')
+      .in('message_id', [...messageIds])
+
+    if (error) throw toAppError(error)
+
+    for (const row of data ?? []) {
+      const list = byMessage.get(row.message_id) ?? []
+      list.push({ userId: row.user_id, handle: row.handle })
+      byMessage.set(row.message_id, list)
+    }
+
+    return byMessage
+  },
+
   async addReaction(messageId: string, emoji: string): Promise<void> {
     const supabase = getSupabase()
     const { data: userData } = await supabase.auth.getUser()
@@ -338,6 +362,7 @@ export const messageService: MessageService = {
   setPinned: (messageId, pinned) => impl().setPinned(messageId, pinned),
   listPinned: (channelId) => impl().listPinned(channelId),
   listReactions: (messageIds) => impl().listReactions(messageIds),
+  listMentions: (messageIds) => impl().listMentions(messageIds),
   addReaction: (messageId, emoji) => impl().addReaction(messageId, emoji),
   removeReaction: (messageId, emoji) => impl().removeReaction(messageId, emoji),
   search: (input) => impl().search(input),

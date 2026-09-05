@@ -461,6 +461,25 @@ export interface Database {
           },
         ]
       }
+      message_mentions: {
+        Row: {
+          message_id: string
+          user_id: string
+          handle: string
+        }
+        /** No INSERT policy exists: only the mention trigger writes these. */
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'message_mentions_message_id_fkey'
+            columns: ['message_id']
+            isOneToOne: false
+            referencedRelation: 'messages'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       channel_reads: {
         Row: {
           channel_id: string

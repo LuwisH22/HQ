@@ -50,6 +50,7 @@ export const queryKeys = {
     list: (channelId: string) => ['messages', channelId] as const,
     pinned: (channelId: string) => ['messages', channelId, 'pinned'] as const,
     replies: (rootMessageId: string) => ['messages', 'thread', rootMessageId] as const,
+    mentions: (channelId: string) => ['messages', channelId, 'mentions'] as const,
     reactions: (channelId: string) => ['messages', channelId, 'reactions'] as const,
     search: (channelId: string | null, query: string) =>
       ['messages', 'search', channelId ?? 'all', query] as const,
@@ -57,6 +58,7 @@ export const queryKeys = {
 
   channelMembers: {
     forChannel: (channelId: string) => ['channel-members', channelId] as const,
+    mentionable: (channelId: string) => ['mention-candidates', channelId] as const,
   },
 
   reads: {

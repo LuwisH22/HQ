@@ -16,7 +16,7 @@ import type { InvitationStatus, MemberStatus } from '@/types/database.types'
 const STORAGE_KEY = 'lfg-hq-demo-db'
 // Bumped when the seed shape changes, so a stale store is discarded rather
 // than half-migrated.
-const SCHEMA_VERSION = 7
+const SCHEMA_VERSION = 8
 
 // --- Row shapes (camelCase; the demo layer sits above the SQL naming) -------
 
@@ -113,6 +113,7 @@ export interface DemoDatabase {
   channelOverrides: DemoChannelOverride[]
   messages: DemoMessage[]
   reactions: DemoReaction[]
+  mentions: DemoMention[]
   channelReads: DemoChannelRead[]
   notifications: DemoNotification[]
 }
@@ -157,6 +158,13 @@ export interface DemoReaction {
   userId: string
   emoji: string
   channelId: string
+}
+
+/** Who a message mentions. Written only by the mention pass, never by a caller. */
+export interface DemoMention {
+  messageId: string
+  userId: string
+  handle: string
 }
 
 export interface DemoChannelRead {
@@ -663,6 +671,7 @@ function buildSeed(): DemoDatabase {
     ],
     channelOverrides: [],
     reactions: [],
+    mentions: [],
     channelReads: [],
     notifications: [],
     messages: [

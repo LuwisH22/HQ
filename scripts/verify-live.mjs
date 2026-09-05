@@ -1328,6 +1328,114 @@ console.log('\nC3 · a deleted reply stops counting')
   check('one deleted, one counted', after?.reply_count === 1, String(after?.reply_count))
 }
 
+console.log('\nC3 · mentions are recorded, and only for people who could read them')
+{
+  // Somebody other than the caller, resolved the way the trigger resolves a
+  // handle. Without a second member there is nothing here to prove: the owner
+  // cannot mention themselves, and every other check below is about somebody
+  // else's eligibility.
+  const { data: roster } = await supabase
+    .from('organization_members')
+    .select('user_id, profile:profiles!organization_members_user_id_fkey ( display_name, email )')
+    .neq('user_id', userId)
+
+  const other = (roster ?? [])[0]
+  const otherProfile = Array.isArray(other?.profile) ? other?.profile[0] : other?.profile
+  const handle = otherProfile?.display_name ?? (otherProfile?.email ?? '').split('@')[0] ?? ''
+
+  check('a second member exists to be mentioned', Boolean(other) && handle !== '',
+    handle === '' ? 'ADD A SECOND MEMBER — this section proves nothing alone' : handle)
+
+  if (other && handle !== '') {
+    const rowsFor = async (id) =>
+      (await supabase.from('message_mentions').select('user_id, handle').eq('message_id', id)).data ?? []
+
+    // --- a plain mention in a channel they can read ------------------------
+    const { data: named } = await supabase
+      .from('messages')
+      .insert({
+        channel_id: probePublic, author_id: userId,
+        body: `@${handle} @${handle} and @nobodyatall`,
+      })
+      .select('id')
+      .single()
+
+    const recorded = await rowsFor(named?.id)
+    check('the mention is recorded as a row', recorded.length === 1,
+      `${String(recorded.length)} rows`)
+    check('pointing at the person named', recorded[0]?.user_id === other.user_id)
+    check('keeping the handle as written', recorded[0]?.handle === handle.toLowerCase(),
+      String(recorded[0]?.handle))
+    // Naming somebody three times is still one mention, and a handle nobody
+    // holds is not a mention at all.
+    check('a handle nobody holds records nothing',
+      !recorded.some((r) => r.handle === 'nobodyatall'))
+
+    // --- the client cannot write its own ----------------------------------
+    const { error: forge } = await supabase
+      .from('message_mentions')
+      .insert({ message_id: named?.id, user_id: userId, handle: 'forged' })
+    check('a client cannot manufacture a mention', Boolean(forge),
+      forge ? `blocked (${forge.code ?? ''})` : 'ACCEPTED — FORGERY POSSIBLE')
+
+    const { error: retarget } = await supabase
+      .from('message_mentions')
+      .update({ user_id: userId })
+      .eq('message_id', named?.id)
+    const stillTheirs = (await rowsFor(named?.id))[0]?.user_id === other.user_id
+    check('nor redirect one at somebody else', Boolean(retarget) || stillTheirs,
+      retarget ? `blocked (${retarget.code ?? ''})` : 'no policy matched the update')
+
+    await supabase.from('message_mentions').delete().eq('message_id', named?.id)
+    check('nor delete one', (await rowsFor(named?.id)).length === 1)
+
+    // --- an edit re-derives them ------------------------------------------
+    await supabase.from('messages').update({ body: 'nobody at all' }).eq('id', named?.id)
+    const afterRemoval = await rowsFor(named?.id)
+    // The row stays: it is the record that this person was already told.
+    // Re-adding the handle must not notify them a second time, which is what
+    // the primary key and the ON CONFLICT in the trigger are for.
+    check('an edit does not re-notify somebody already named',
+      afterRemoval.length === 1, `${String(afterRemoval.length)} rows`)
+
+    const { data: blank } = await supabase
+      .from('messages')
+      .insert({ channel_id: probePublic, author_id: userId, body: 'no names yet' })
+      .select('id')
+      .single()
+    check('a message naming nobody records nothing', (await rowsFor(blank?.id)).length === 0)
+
+    await supabase.from('messages').update({ body: `actually @${handle}` }).eq('id', blank?.id)
+    check('an edit that adds a name records it', (await rowsFor(blank?.id)).length === 1)
+
+    // --- a soft delete forgets them ---------------------------------------
+    await supabase.rpc('delete_message', { p_message_id: blank?.id })
+    check('a deleted message keeps no mentions', (await rowsFor(blank?.id)).length === 0)
+
+    // --- and the check the owner cannot short-circuit ----------------------
+    //
+    // The caller sees every channel by design, so nothing above depends on
+    // eligibility. This does: the person named is somebody else, and they have
+    // no way into a private channel with no overrides.
+    const { data: allowed } = await supabase.rpc('can_in_channel_for', {
+      p_user_id: other.user_id, p_channel_id: probePrivate, p_permission: 'channels.view',
+    })
+    check('the other member cannot see the private channel', allowed === false, String(allowed))
+
+    const { data: secret } = await supabase
+      .from('messages')
+      .insert({ channel_id: probePrivate, author_id: userId, body: `@${handle} classified` })
+      .select('id')
+      .single()
+    check('naming them there records nothing at all',
+      (await rowsFor(secret?.id)).length === 0,
+      'a row would be a record of a message they cannot open')
+
+    await supabase.rpc('delete_message', { p_message_id: named?.id })
+    await supabase.rpc('delete_message', { p_message_id: secret?.id })
+  }
+}
+
 console.log('\nB3 · a channel and its category in one call')
 
 const comboName = `probe-combo-${String(Date.now() % 100000)}`

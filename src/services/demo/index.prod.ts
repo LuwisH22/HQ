@@ -77,6 +77,7 @@ export const demoChannelService: ChannelService = {
   setOverride: unreachable,
   unreadCounts: unreachable,
   markRead: unreachable,
+  listMentionCandidates: unreachable,
   listChannelMembers: unreachable,
 }
 
@@ -90,6 +91,7 @@ export const demoMessageService: MessageService = {
   setPinned: unreachable,
   listPinned: unreachable,
   listReactions: unreachable,
+  listMentions: unreachable,
   addReaction: unreachable,
   removeReaction: unreachable,
   search: unreachable,

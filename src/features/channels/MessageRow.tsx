@@ -10,8 +10,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { initialsFor } from '@/services/profile.service'
-import type { Message, MessageReaction } from '@/services/message.service'
+import type { Message, MessageMention, MessageReaction } from '@/services/message.service'
 import { MessageReactions, ReactionPicker } from './MessageReactions'
+import { MessageBody } from './MessageBody'
 import { ThreadSummary } from './ThreadPanel'
 import { cn } from '@/lib/utils'
 
@@ -45,6 +46,8 @@ export function MessageRow({
   grouped,
   actions,
   reactions,
+  mentions,
+  currentUserId,
   onEdit,
   onTogglePin,
   onDelete,
@@ -57,6 +60,9 @@ export function MessageRow({
   grouped: boolean
   actions: MessageActions
   reactions: readonly MessageReaction[]
+  mentions: readonly MessageMention[]
+  /** Who is reading, so a mention of them can look different. */
+  currentUserId: string | null
   onEdit: (body: string) => void
   onTogglePin: () => void
   onDelete: () => void
@@ -148,12 +154,12 @@ export function MessageRow({
           </form>
         ) : (
           <>
-            <p className="text-foreground/92 text-sm leading-relaxed break-words whitespace-pre-wrap">
-              {message.body}
-              {message.editedAt ? (
-                <span className="text-3xs text-muted-foreground/60"> (edited)</span>
-              ) : null}
-            </p>
+            <MessageBody
+              body={message.body}
+              mentions={mentions}
+              currentUserId={currentUserId}
+              edited={message.editedAt !== null}
+            />
             <MessageReactions
               reactions={reactions}
               canReact={actions.canReact}

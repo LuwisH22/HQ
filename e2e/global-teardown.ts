@@ -40,6 +40,13 @@ const PREFIXES = [
   'threadcount-',
   'threadback-',
   'thread-',
+  'mentionthread-',
+  'mentionsend-',
+  'mentionopen-',
+  'mentionshut-',
+  'mentionkeys-',
+  'mentionmail-',
+  'mention-',
 ]
 
 function readEnvFile(path: string): Record<string, string> {

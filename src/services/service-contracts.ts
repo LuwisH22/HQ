@@ -326,6 +326,13 @@ export interface ChannelService {
   /** Records that the caller has read this channel up to now. */
   markRead(channelId: string): Promise<void>
   /**
+   * Members who may be mentioned in a channel: those who can actually see it.
+   *
+   * The same resolution `channel_member_ids` performs, joined to the roster so
+   * the composer can offer names rather than uuids.
+   */
+  listMentionCandidates(channelId: string): Promise<MentionCandidate[]>
+  /**
    * The members who can actually see a channel.
    *
    * Resolved in Postgres through the same rules that govern the channel, so a
@@ -402,6 +409,13 @@ export interface MessageService {
    * is one request, not fifty.
    */
   listReactions(messageIds: readonly string[]): Promise<Map<string, MessageReaction[]>>
+  /**
+   * Mentions on a set of messages, resolved server-side.
+   *
+   * Fetched for a whole page at once, like reactions: fifty messages is one
+   * request rather than fifty.
+   */
+  listMentions(messageIds: readonly string[]): Promise<Map<string, MessageMention[]>>
   addReaction(messageId: string, emoji: string): Promise<void>
   removeReaction(messageId: string, emoji: string): Promise<void>
   /**
@@ -409,6 +423,17 @@ export interface MessageService {
    * see — which is decided by the messages policy, not here.
    */
   search(input: MessageSearchInput): Promise<MessageSearchResult[]>
+}
+
+/**
+ * Who a message mentions.
+ *
+ * `handle` is the text as written, so rendering can highlight exactly that
+ * span; `userId` is who it resolved to, which survives a rename.
+ */
+export interface MessageMention {
+  userId: string
+  handle: string
 }
 
 /** One emoji on one message, counted. */
@@ -438,6 +463,16 @@ export interface MessageSearchResult {
 }
 
 // --- Read state (Phase 2 · C2) ---------------------------------------------
+
+/** Somebody the composer may offer as a mention. */
+export interface MentionCandidate {
+  userId: string
+  /** What typing `@` should insert. */
+  handle: string
+  displayName: string
+  avatarUrl: string | null
+  roleName: string
+}
 
 export interface ChannelUnread {
   channelId: string

@@ -134,6 +134,9 @@ export function ChannelChatPage() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.messages.pinned(channel?.id ?? 'none'),
       })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.messages.mentions(channel?.id ?? 'none'),
+      })
     },
     () => {
       void queryClient.invalidateQueries({
@@ -176,6 +179,21 @@ export function ChannelChatPage() {
     queryKey: [...queryKeys.messages.reactions(channel?.id ?? 'none'), messageIds.length],
     queryFn: () => messageService.listReactions(messageIds),
     enabled: messageIds.length > 0,
+  })
+
+  const mentionsQuery = useQuery({
+    queryKey: [...queryKeys.messages.mentions(channel?.id ?? 'none'), messageIds.length],
+    queryFn: () => messageService.listMentions(messageIds),
+    enabled: messageIds.length > 0,
+  })
+
+  // Only people this channel would actually deliver a mention to. A private
+  // channel must not become a way to enumerate the organization.
+  const mentionCandidatesQuery = useQuery({
+    queryKey: queryKeys.channelMembers.mentionable(channel?.id ?? 'none'),
+    queryFn: () => channelService.listMentionCandidates(channel?.id as string),
+    enabled: Boolean(channel),
+    staleTime: 5 * 60_000,
   })
 
   const pinnedQuery = useQuery({
@@ -414,6 +432,8 @@ export function ChannelChatPage() {
                         message={message}
                         grouped={continues(previous, message)}
                         reactions={reactionsQuery.data?.get(message.id) ?? []}
+                        mentions={mentionsQuery.data?.get(message.id) ?? []}
+                        currentUserId={user?.id ?? null}
                         actions={{
                           // Editing belongs to the author. Moderation confers
                           // removal, never rewriting somebody else's words.
@@ -457,6 +477,7 @@ export function ChannelChatPage() {
             sending={send.isPending}
             onSend={(body) => send.mutate(body)}
             onTyping={realtime.noteTyping}
+            mentionCandidates={mentionCandidatesQuery.data ?? []}
           />
         </div>
       </div>

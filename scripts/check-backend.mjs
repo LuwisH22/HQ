@@ -63,6 +63,7 @@ const TABLES = [
   'message_reactions',
   'channel_reads',
   'notifications',
+  'message_mentions',
 ]
 
 /** Functions that must never be callable without a session. */

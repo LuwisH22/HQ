@@ -17,6 +17,7 @@ import type {
   Channel,
   ChannelService,
   Message,
+  MessageMention,
   MessageReaction,
   MessageService,
   NotificationService,
@@ -935,6 +936,16 @@ function recordMentions(message: DemoMessage): void {
     // Never tell somebody about a message in a channel they cannot see.
     if (!member || !canInChannel(channel, member, 'channels.view')) continue
 
+    // Two handles can name the same person — a display name and an email
+    // local part — so the guard is the resolved id, not the text. Already
+    // recorded means already notified: an edit must not notify twice.
+    const already = store.mentions.some(
+      (m) => m.messageId === message.id && m.userId === profile.id,
+    )
+    if (already) continue
+
+    store.mentions.push({ messageId: message.id, userId: profile.id, handle })
+
     store.notifications.push({
       id: store.notifications.length + 1,
       recipientId: profile.id,
@@ -964,6 +975,7 @@ function recordMentions(message: DemoMessage): void {
 function clearAfterSoftDelete(message: DemoMessage): void {
   const store = db()
   store.reactions = store.reactions.filter((r) => r.messageId !== message.id)
+  store.mentions = store.mentions.filter((m) => m.messageId !== message.id)
   message.pinnedAt = null
 }
 
@@ -1264,6 +1276,30 @@ export const demoChannelService: ChannelService = {
     persist()
   },
 
+  async listMentionCandidates(channelId) {
+    await latency()
+    const channel = db().channels.find((c) => c.id === channelId)
+    const me = memberOf(requireCurrentUserId())
+    // Empty rather than an error, matching channel_member_ids: a guessed id
+    // must look the same as a channel with nobody in it.
+    if (!channel || !me || !canInChannel(channel, me, 'channels.view')) return []
+
+    return db()
+      .members.filter((m) => canInChannel(channel, m, 'channels.view'))
+      .map((member) => {
+        const profile = db().profiles.find((p) => p.id === member.userId)
+        // The same rule the mention pass resolves by.
+        const handle = profile?.displayName ?? (profile?.email ?? '').split('@')[0] ?? ''
+        return {
+          userId: member.userId,
+          handle,
+          displayName: profile?.displayName ?? profile?.fullName ?? profile?.email ?? handle,
+          avatarUrl: profile?.avatarUrl ?? null,
+          roleName: roleById(member.roleId).name,
+        }
+      })
+  },
+
   async listChannelMembers(channelId) {
     await latency()
     const channel = db().channels.find((c) => c.id === channelId)
@@ -1512,6 +1548,9 @@ export const demoMessageService: MessageService = {
 
     message.body = trimmed
     message.editedAt = new Date().toISOString()
+    // An edit re-derives mentions, as the trigger does. Somebody already
+    // recorded is not notified a second time.
+    recordMentions(message)
     persist()
   },
 
@@ -1608,6 +1647,26 @@ export const demoMessageService: MessageService = {
         list.push({ emoji: reaction.emoji, count: 1, mine: reaction.userId === me })
       }
       byMessage.set(reaction.messageId, list)
+    }
+
+    return byMessage
+  },
+
+  async listMentions(messageIds) {
+    await latency()
+    const byMessage = new Map<string, MessageMention[]>()
+    const wanted = new Set(messageIds)
+
+    for (const mention of db().mentions) {
+      if (!wanted.has(mention.messageId)) continue
+
+      // A mention is only visible where its message is.
+      const message = db().messages.find((m) => m.id === mention.messageId)
+      if (!message || !canReadChannel(message.channelId)) continue
+
+      const list = byMessage.get(mention.messageId) ?? []
+      list.push({ userId: mention.userId, handle: mention.handle })
+      byMessage.set(mention.messageId, list)
     }
 
     return byMessage

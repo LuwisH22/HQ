@@ -2,10 +2,12 @@ import { getSupabase } from '@/lib/supabase'
 import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
 import { demoChannelService } from '@/services/demo'
+import { firstOf } from './postgrest'
 import type {
   Channel,
   ChannelCategory,
   ChannelUnread,
+  MentionCandidate,
   ChannelInput,
   ChannelOverride,
   ChannelPatch,
@@ -17,6 +19,7 @@ export type {
   Channel,
   ChannelCategory,
   ChannelUnread,
+  MentionCandidate,
   ChannelInput,
   ChannelOverride,
   ChannelPatch,
@@ -206,6 +209,47 @@ export const supabaseChannelService: ChannelService = {
     if (error) throw toAppError(error)
   },
 
+  async listMentionCandidates(channelId: string): Promise<MentionCandidate[]> {
+    const supabase = getSupabase()
+
+    // Resolved in Postgres through the same rules that govern the channel, so
+    // a private channel offers the people actually allowed into it rather
+    // than the whole organization.
+    const { data: ids, error } = await supabase.rpc('channel_member_ids', {
+      p_channel_id: channelId,
+    })
+    if (error) throw toAppError(error)
+    if ((ids ?? []).length === 0) return []
+
+    const { data, error: rosterError } = await supabase
+      .from('organization_members')
+      .select(
+        `user_id,
+         profile:profiles!organization_members_user_id_fkey ( display_name, full_name, email, avatar_url ),
+         role:roles!organization_members_role_id_fkey ( name )`,
+      )
+      .in('user_id', ids ?? [])
+
+    if (rosterError) throw toAppError(rosterError)
+
+    return (data ?? []).map((row) => {
+      const profile = firstOf(row.profile)
+      const role = firstOf(row.role)
+
+      // The same rule the trigger resolves by: a display name, or the local
+      // part of the sign-in address.
+      const handle = profile?.display_name ?? (profile?.email ?? '').split('@')[0] ?? ''
+
+      return {
+        userId: row.user_id,
+        handle,
+        displayName: profile?.display_name ?? profile?.full_name ?? profile?.email ?? handle,
+        avatarUrl: profile?.avatar_url ?? null,
+        roleName: role?.name ?? 'Member',
+      }
+    })
+  },
+
   async listChannelMembers(channelId: string): Promise<string[]> {
     const { data, error } = await getSupabase().rpc('channel_member_ids', {
       p_channel_id: channelId,
@@ -265,6 +309,7 @@ export const channelService: ChannelService = {
   reorderChannels: (organizationId, ids) => impl().reorderChannels(organizationId, ids),
   unreadCounts: () => impl().unreadCounts(),
   markRead: (channelId) => impl().markRead(channelId),
+  listMentionCandidates: (channelId) => impl().listMentionCandidates(channelId),
   listChannelMembers: (channelId) => impl().listChannelMembers(channelId),
   listOverrides: (channelId) => impl().listOverrides(channelId),
   setOverride: (channelId, roleId, permissionKey, effect) =>
