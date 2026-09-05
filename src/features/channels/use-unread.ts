@@ -61,8 +61,23 @@ export function useUnreadRealtime(): void {
     const supabase = getSupabase()
     const channel = supabase
       .channel(`org:${organizationId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.reads.unread(organizationId) })
+
+        // A direct message reaches this topic too — Postgres Changes filters
+        // delivery by RLS, so only the ones the caller could read arrive. That
+        // makes this the reliable delivery path for a conversation, and leaves
+        // the dm: topic responsible only for typing.
+        const row = (payload.new ?? payload.old) as { conversation_id?: string | null } | null
+        const conversationId = row?.conversation_id
+        if (typeof conversationId !== 'string') return
+
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.conversations.all(organizationId),
+        })
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.messages.list(conversationId),
+        })
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
         void queryClient.invalidateQueries({

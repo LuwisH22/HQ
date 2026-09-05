@@ -6,74 +6,69 @@ import {
   ArrowLeft,
   CaretDoubleLeft,
   CaretDoubleRight,
-  Gear,
-  Hash,
-  LockSimple,
+  ChatTeardropText,
   MagnifyingGlass,
   X,
 } from '@phosphor-icons/react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
-import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { CardSkeleton, EmptyState, ErrorState, ForbiddenState } from '@/components/common/states'
-import { channelService } from '@/services/channel.service'
+import { CardSkeleton, EmptyState, ErrorState } from '@/components/common/states'
+import { conversationService } from '@/services/conversation.service'
 import { messageService } from '@/services/message.service'
+import type { Message } from '@/services/message.service'
 import { organizationService } from '@/services/organization.service'
+import { initialsFor } from '@/services/profile.service'
 import { queryKeys } from '@/lib/query-keys'
 import { errorMessage } from '@/lib/errors'
 import { useAuth } from '@/hooks/use-auth'
 import { useWorkspace } from '@/hooks/use-workspace'
-import { usePermission } from '@/hooks/use-permission'
 import { useIsDesktop } from '@/hooks/use-media-query'
 import { useUiStore } from '@/stores/ui.store'
 import { cn } from '@/lib/utils'
-import { useChannelByKey } from './use-channels'
-import { useChannelRealtime } from './use-channel-realtime'
+import { useConversation } from './use-conversations'
+import { useConversationRealtime } from './use-conversation-realtime'
 import { TypingIndicator } from './TypingIndicator'
 import { MessageRow, DayDivider } from './MessageRow'
 import { Composer } from './Composer'
 import { MessageSearch } from './MessageSearch'
 import { ThreadPanel } from './ThreadPanel'
-import { ChannelPanelColumn, ChannelPanelContent } from './ChannelPanel'
+import { ChannelPanelColumn } from './ChannelPanel'
+import { ConversationPanelContent } from './ConversationPanel'
 import { continuesRun, sameDay } from './grouping'
 
 /**
- * One channel's conversation, and the primary surface of the product.
+ * One direct conversation.
  *
- * Access is not decided here. The channel row and its messages only arrive if
- * RLS allowed them, so an inaccessible channel produces an empty result rather
- * than a hidden one — including for a guessed key in the address bar. The
- * permissions read below only decide which controls are worth drawing; every
- * one of them is checked again by the database.
+ * Every primitive on screen is the channel one: the same MessageRow, the same
+ * Composer with the same mention menu, the same thread panel, the same search.
+ * What differs is which place the messages come from and who is allowed in —
+ * and "who is allowed in" is not decided here at all. The conversation and its
+ * messages arrive only if RLS allowed them, so a conversation the member is not
+ * in produces nothing, including for a guessed id in the address bar and
+ * including for the organization's owner.
+ *
+ * There are no permissions to read. Inside a conversation there is nothing to
+ * hold: being in it is the whole of it, moderation does not reach into one, and
+ * either person may pin.
  */
-
-export function ChannelChatPage() {
-  const { channelKey } = useParams<{ channelKey: string }>()
+export function ConversationChatPage() {
+  const { conversationId } = useParams<{ conversationId: string }>()
   const { organization } = useWorkspace()
   const { user } = useAuth()
   const organizationId = organization?.id
-  const canView = usePermission('channels.view')
-  const canSend = usePermission('messages.send')
-  const canModerate = usePermission('messages.moderate')
-  const canPin = usePermission('messages.pin')
-  const canManage = usePermission('channels.manage')
   const queryClient = useQueryClient()
 
-  const { channel, directory } = useChannelByKey(channelKey)
+  const { conversation, query: conversationsQuery } = useConversation(conversationId)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
-  // A column on a wide screen and a sheet on a phone are two different
-  // controls: the column's state is remembered, the sheet's is not, and one
-  // flag describing both would be wrong for one of them.
   const isDesktop = useIsDesktop()
   const panelOpen = useUiStore((state) => state.channelPanelOpen)
   const setPanelOpen = useUiStore((state) => state.setChannelPanelOpen)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  // Which thread the panel is showing, if any. The panel has a mode; there
-  // is no fourth column.
   const [threadRootId, setThreadRootId] = useState<string | null>(null)
 
   const detailsOpen = isDesktop ? panelOpen : sheetOpen
@@ -81,20 +76,18 @@ export function ChannelChatPage() {
 
   function openThread(rootId: string): void {
     setThreadRootId(rootId)
-    // A thread that opened into a collapsed panel would look like nothing
-    // happened at all.
     if (isDesktop) setPanelOpen(true)
     else setSheetOpen(true)
   }
 
   const messagesQuery = useQuery({
-    queryKey: queryKeys.messages.list(channel?.id ?? 'none'),
-    queryFn: () => messageService.list(channel?.id as string),
-    enabled: Boolean(channel),
+    queryKey: queryKeys.messages.list(conversationId ?? 'none'),
+    queryFn: () => messageService.listConversation(conversationId as string),
+    enabled: Boolean(conversation),
   })
 
-  // The roster is what turns a typing user id into a name. Loading it here
-  // means a broadcast payload never has to carry one.
+  // The roster turns a typing user id into a name, so a broadcast payload
+  // never has to carry one.
   const membersQuery = useQuery({
     queryKey: queryKeys.members.all(organizationId ?? 'none'),
     queryFn: () => organizationService.listMembers(organizationId as string),
@@ -102,47 +95,35 @@ export function ChannelChatPage() {
   })
 
   const invalidateMessages = () =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(channel?.id ?? 'none') })
+    queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(conversationId ?? 'none') })
 
-  const realtime = useChannelRealtime(
-    channel?.id ?? null,
+  const realtime = useConversationRealtime(
+    conversation ? (conversationId ?? null) : null,
     user?.id ?? null,
     () => {
       void invalidateMessages()
-      // Pinning is an UPDATE on the message, so it arrives on this same event.
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.messages.pinned(channel?.id ?? 'none'),
+        queryKey: queryKeys.messages.pinned(conversationId ?? 'none'),
       })
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.messages.mentions(channel?.id ?? 'none'),
+        queryKey: queryKeys.messages.mentions(conversationId ?? 'none'),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.all(organizationId ?? 'none'),
       })
     },
     () => {
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.messages.reactions(channel?.id ?? 'none'),
+        queryKey: queryKeys.messages.reactions(conversationId ?? 'none'),
       })
     },
   )
-
-  // Resolved in Postgres through the same rules that govern the channel, so a
-  // private channel lists the people actually allowed into it rather than the
-  // whole organization.
-  const channelMemberIdsQuery = useQuery({
-    queryKey: queryKeys.channelMembers.forChannel(channel?.id ?? 'none'),
-    queryFn: () => channelService.listChannelMembers(channel?.id as string),
-    enabled: Boolean(channel),
-  })
-
-  const channelMembers = useMemo(() => {
-    const allowed = new Set(channelMemberIdsQuery.data ?? [])
-    return (membersQuery.data ?? []).filter((m) => allowed.has(m.userId))
-  }, [membersQuery.data, channelMemberIdsQuery.data])
 
   const typingNames = useMemo(() => {
     const byUser = new Map((membersQuery.data ?? []).map((m) => [m.userId, m.profile]))
     return (
       realtime.typingUserIds
-        // Someone the roster does not recognise is dropped rather than
+        // Somebody the roster does not recognise is dropped rather than
         // rendered: a spoofed id cannot put an arbitrary label on screen.
         .map((id) => byUser.get(id))
         .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile))
@@ -151,39 +132,38 @@ export function ChannelChatPage() {
   }, [realtime.typingUserIds, membersQuery.data])
 
   const messages = useMemo(() => messagesQuery.data?.messages ?? [], [messagesQuery.data])
-
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages])
 
   const reactionsQuery = useQuery({
-    queryKey: [...queryKeys.messages.reactions(channel?.id ?? 'none'), messageIds.length],
+    queryKey: [...queryKeys.messages.reactions(conversationId ?? 'none'), messageIds.length],
     queryFn: () => messageService.listReactions(messageIds),
     enabled: messageIds.length > 0,
   })
 
   const mentionsQuery = useQuery({
-    queryKey: [...queryKeys.messages.mentions(channel?.id ?? 'none'), messageIds.length],
+    queryKey: [...queryKeys.messages.mentions(conversationId ?? 'none'), messageIds.length],
     queryFn: () => messageService.listMentions(messageIds),
     enabled: messageIds.length > 0,
   })
 
-  // Only people this channel would actually deliver a mention to. A private
-  // channel must not become a way to enumerate the organization.
+  // The people in the conversation, never channel_member_ids: a DM has no
+  // channel, and its roster is exactly who is in it.
   const mentionCandidatesQuery = useQuery({
-    queryKey: queryKeys.channelMembers.mentionable(channel?.id ?? 'none'),
-    queryFn: () => channelService.listMentionCandidates(channel?.id as string),
-    enabled: Boolean(channel),
+    queryKey: queryKeys.channelMembers.mentionable(conversationId ?? 'none'),
+    queryFn: () => conversationService.listMentionCandidates(conversationId as string),
+    enabled: Boolean(conversation),
     staleTime: 5 * 60_000,
   })
 
   const pinnedQuery = useQuery({
-    queryKey: queryKeys.messages.pinned(channel?.id ?? 'none'),
-    queryFn: () => messageService.listPinned(channel?.id as string),
-    enabled: Boolean(channel),
+    queryKey: queryKeys.messages.pinned(conversationId ?? 'none'),
+    queryFn: () => messageService.listConversationPinned(conversationId as string),
+    enabled: Boolean(conversation),
   })
 
   const invalidateReactions = () =>
     queryClient.invalidateQueries({
-      queryKey: queryKeys.messages.reactions(channel?.id ?? 'none'),
+      queryKey: queryKeys.messages.reactions(conversationId ?? 'none'),
     })
 
   const react = useMutation({
@@ -200,26 +180,32 @@ export function ChannelChatPage() {
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
 
-  // Opening a channel is what marks it read. Fired on arrival and again
+  // Opening a conversation is what marks it read. Fired on arrival and again
   // whenever new messages land while it is on screen, so the badge does not
   // reappear behind the reader's back.
   useEffect(() => {
-    if (!channel || !organizationId) return
-    void channelService.markRead(channel.id).then(
-      () => queryClient.invalidateQueries({ queryKey: queryKeys.reads.unread(organizationId) }),
+    if (!conversation || !organizationId) return
+    void conversationService.markRead(conversation.id).then(
+      () =>
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.conversations.all(organizationId),
+        }),
       () => undefined,
     )
-  }, [channel, organizationId, messages.length, queryClient])
+  }, [conversation, organizationId, messages.length, queryClient])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
-  }, [messages.length, channel?.id])
+  }, [messages.length, conversationId])
 
   const send = useMutation({
-    mutationFn: (body: string) => messageService.send(channel?.id as string, body),
+    mutationFn: (body: string) => messageService.sendToConversation(conversationId as string, body),
     onSuccess: async () => {
       realtime.clearTyping()
       await invalidateMessages()
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.all(organizationId ?? 'none'),
+      })
     },
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
@@ -243,9 +229,7 @@ export function ChannelChatPage() {
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
 
-  if (!canView) return <ForbiddenState />
-
-  if (directory.isPending) {
+  if (conversationsQuery.isPending) {
     return (
       <div className="p-4 sm:p-6">
         <CardSkeleton lines={8} />
@@ -253,32 +237,45 @@ export function ChannelChatPage() {
     )
   }
 
-  if (!channel) {
+  if (conversationsQuery.isError) {
     return (
       <div className="p-4 sm:p-6">
-        <EmptyState
-          icon={Hash}
-          title="Channel not found"
-          description="It may have been deleted or archived, or you may not have access to it."
+        <ErrorState
+          error={conversationsQuery.error}
+          onRetry={() => void conversationsQuery.refetch()}
         />
       </div>
     )
   }
 
+  if (!conversation) {
+    // Absent rather than forbidden, and the same page either way: a
+    // conversation you are not in must be indistinguishable from one that does
+    // not exist.
+    return (
+      <div className="p-4 sm:p-6">
+        <EmptyState
+          icon={ChatTeardropText}
+          title="Conversation not found"
+          description="It may not exist, or you may not be part of it."
+        />
+      </div>
+    )
+  }
+
+  const name = conversation.otherName
   const threadRoot = threadRootId ? (messages.find((m) => m.id === threadRootId) ?? null) : null
 
   const panel = threadRoot ? (
     <ThreadPanel
       root={threadRoot}
-      placeName={channel.name}
-      placeArchived={channel.archivedAt !== null}
+      placeName={name}
+      placeArchived={false}
       onClose={() => setThreadRootId(null)}
     />
   ) : (
-    <ChannelPanelContent
-      channel={channel}
-      members={channelMembers}
-      membersPending={membersQuery.isPending || channelMemberIdsQuery.isPending}
+    <ConversationPanelContent
+      conversation={conversation}
       pinned={pinnedQuery.data ?? []}
       pinnedPending={pinnedQuery.isPending}
     />
@@ -287,8 +284,6 @@ export function ChannelChatPage() {
   return (
     <div className="flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Two lines, not one: the topic is what the channel is for, and
-            squeezing it beside the name meant it was usually truncated away. */}
         <header className="border-border bg-surface/40 flex shrink-0 items-center gap-3 border-b px-4 py-2.5 sm:px-6">
           <Button asChild size="icon-sm" variant="ghost" className="-ml-1 md:hidden">
             <Link to="/channels" aria-label="Back to channels">
@@ -296,22 +291,16 @@ export function ChannelChatPage() {
             </Link>
           </Button>
 
-          <div className="min-w-0 flex-1">
-            <h1 className="flex items-center gap-1.5 text-sm leading-tight font-semibold">
-              {channel.isPrivate ? (
-                <LockSimple
-                  className="text-muted-foreground size-3.5 shrink-0"
-                  aria-label="Private"
-                />
-              ) : (
-                <Hash className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
-              )}
-              <span className="truncate">{channel.name}</span>
-              {channel.archivedAt ? <Badge variant="warning">Archived</Badge> : null}
-            </h1>
-            {channel.topic ? (
-              <p className="text-2xs text-muted-foreground mt-0.5 truncate">{channel.topic}</p>
+          <Avatar className="size-7 shrink-0">
+            {conversation.otherAvatarUrl ? (
+              <AvatarImage src={conversation.otherAvatarUrl} alt="" />
             ) : null}
+            <AvatarFallback>{initialsFor({ displayName: name })}</AvatarFallback>
+          </Avatar>
+
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-sm leading-tight font-semibold">{name}</h1>
+            <p className="text-2xs text-muted-foreground mt-0.5 truncate">Direct message</p>
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
@@ -321,7 +310,7 @@ export function ChannelChatPage() {
                   size="icon"
                   variant="ghost"
                   onClick={() => setSearchOpen((open) => !open)}
-                  aria-label="Search this channel"
+                  aria-label="Search this conversation"
                   aria-expanded={searchOpen}
                   className="text-muted-foreground hover:text-foreground size-8"
                 >
@@ -330,14 +319,6 @@ export function ChannelChatPage() {
               </TooltipTrigger>
               <TooltipContent>Search messages</TooltipContent>
             </Tooltip>
-
-            {canManage ? (
-              <Button asChild size="icon" variant="ghost" className="text-muted-foreground size-8">
-                <Link to="/settings/channels" aria-label="Channel settings">
-                  <Gear className="size-[18px]" aria-hidden="true" />
-                </Link>
-              </Button>
-            ) : null}
 
             <Tooltip>
               <TooltipTrigger asChild>
@@ -364,16 +345,13 @@ export function ChannelChatPage() {
         {searchOpen ? (
           <div className="min-h-0 flex-1">
             <MessageSearch
-              place={{ kind: 'channel', id: channel.id, name: channel.name }}
+              place={{ kind: 'conversation', id: conversation.id, name }}
               onClose={() => setSearchOpen(false)}
             />
           </div>
         ) : null}
 
         <div className={cn('min-h-0 flex-1 overflow-y-auto', searchOpen && 'hidden')}>
-          {/* Centred and bounded in both states, so closing the panel widens
-              the conversation rather than stranding it against the left edge.
-              `justify-end` keeps a short conversation on the composer. */}
           <div className="mx-auto flex min-h-full w-full max-w-[1000px] flex-col justify-end px-2 py-4 sm:px-4">
             {messagesQuery.isPending ? (
               <div className="px-4">
@@ -389,9 +367,9 @@ export function ChannelChatPage() {
             ) : messages.length === 0 ? (
               <div className="px-4">
                 <EmptyState
-                  icon={channel.isPrivate ? LockSimple : Hash}
+                  icon={ChatTeardropText}
                   title="No messages yet"
-                  description={`This is the beginning of #${channel.name}.`}
+                  description={`This is the beginning of your conversation with ${name}.`}
                   className="border-0"
                 />
               </div>
@@ -413,14 +391,13 @@ export function ChannelChatPage() {
                         mentions={mentionsQuery.data?.get(message.id) ?? []}
                         currentUserId={user?.id ?? null}
                         actions={{
-                          // Editing belongs to the author. Moderation confers
-                          // removal, never rewriting somebody else's words.
                           canEdit: isMine,
-                          canPin,
-                          canDelete: isMine || canModerate,
-                          // Reacting is speaking in the channel, so it rides on
-                          // the same permission as sending.
-                          canReact: canSend && channel.archivedAt === null,
+                          // Either person may keep something at the top; there
+                          // is no permission inside a conversation to hold.
+                          canPin: true,
+                          // And no moderation: only the author may remove.
+                          canDelete: isMine,
+                          canReact: true,
                         }}
                         onReply={() => openThread(message.id)}
                         onReact={(emoji) => react.mutate({ id: message.id, emoji })}
@@ -445,13 +422,9 @@ export function ChannelChatPage() {
         <div className="mx-auto w-full max-w-[1000px] shrink-0 px-2 sm:px-4">
           <TypingIndicator names={typingNames} />
           <Composer
-            placeName={channel.name}
-            disabled={!canSend || channel.archivedAt !== null}
-            disabledReason={
-              channel.archivedAt !== null
-                ? 'This channel is archived. Restore it from settings to post again.'
-                : undefined
-            }
+            placeName={name}
+            placeKind="conversation"
+            disabled={false}
             sending={send.isPending}
             onSend={(body) => send.mutate(body)}
             onTyping={realtime.noteTyping}
@@ -460,13 +433,9 @@ export function ChannelChatPage() {
         </div>
       </div>
 
-      {/* One of the two, never both: rendering the column hidden on a phone
-          left a second copy of every member and every heading in the DOM. */}
       {isDesktop ? (
         <ChannelPanelColumn open={panelOpen}>{panel}</ChannelPanelColumn>
       ) : (
-        /* A phone has no room for a permanent second column, so the same panel
-           arrives as a sheet from the same control. */
         <DialogPrimitive.Root open={sheetOpen} onOpenChange={setSheetOpen}>
           <DialogPrimitive.Portal>
             <DialogPrimitive.Overlay className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 fixed inset-0 z-50 bg-black/70 md:hidden" />
@@ -479,7 +448,7 @@ export function ChannelChatPage() {
               )}
             >
               <VisuallyHidden>
-                <DialogPrimitive.Title>Channel details</DialogPrimitive.Title>
+                <DialogPrimitive.Title>Conversation details</DialogPrimitive.Title>
               </VisuallyHidden>
               <DialogPrimitive.Close asChild>
                 <Button
@@ -499,3 +468,5 @@ export function ChannelChatPage() {
     </div>
   )
 }
+
+export type { Message }

@@ -441,10 +441,12 @@ export interface Database {
           message_id: string
           user_id: string
           emoji: string
-          channel_id: string
+          /** Whichever the message has; the other is null. */
+          channel_id: string | null
+          conversation_id: string | null
           created_at: string
         }
-        /** channel_id is stamped by a trigger; a client never supplies it. */
+        /** Both context columns are stamped by a trigger; a client supplies neither. */
         Insert: {
           message_id: string
           user_id: string
@@ -476,6 +478,62 @@ export interface Database {
             columns: ['message_id']
             isOneToOne: false
             referencedRelation: 'messages'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          id: string
+          organization_id: string
+          kind: string
+          /** The sorted pair, and the reason a duplicate 1-to-1 cannot exist. */
+          member_key: string | null
+          created_by: string | null
+          created_at: string
+        }
+        /** No INSERT policy: start_direct_message is the only way one appears. */
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      conversation_members: {
+        Row: {
+          conversation_id: string
+          user_id: string
+          joined_at: string
+        }
+        /** No INSERT policy: membership is written only by SECURITY DEFINER code. */
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'conversation_members_conversation_id_fkey'
+            columns: ['conversation_id']
+            isOneToOne: false
+            referencedRelation: 'conversations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      conversation_reads: {
+        Row: {
+          conversation_id: string
+          user_id: string
+          last_read_at: string
+        }
+        /** last_read_at is stamped by a trigger and only moves forward. */
+        Insert: {
+          conversation_id: string
+          user_id: string
+        }
+        Update: { conversation_id?: string; user_id?: string }
+        Relationships: [
+          {
+            foreignKeyName: 'conversation_reads_conversation_id_fkey'
+            columns: ['conversation_id']
+            isOneToOne: false
+            referencedRelation: 'conversations'
             referencedColumns: ['id']
           },
         ]
@@ -533,7 +591,9 @@ export interface Database {
       messages: {
         Row: {
           id: string
-          channel_id: string
+          /** Exactly one of channel_id and conversation_id is populated. */
+          channel_id: string | null
+          conversation_id: string | null
           author_id: string | null
           body: string
           pinned_at: string | null
@@ -552,7 +612,9 @@ export interface Database {
          * author is refused by the database rather than by this type.
          */
         Insert: {
-          channel_id: string
+          /** Exactly one of these two. A CHECK constraint refuses both or neither. */
+          channel_id?: string | null
+          conversation_id?: string | null
           author_id: string
           body: string
           /** A reply. One level only; a trigger refuses a reply to a reply. */
@@ -677,10 +739,12 @@ export interface Database {
           p_channel_id?: string | null
           p_limit?: number
           p_before?: string | null
+          p_conversation_id?: string | null
         }
         Returns: {
           id: string
-          channel_id: string
+          channel_id: string | null
+          conversation_id: string | null
           author_id: string | null
           body: string
           created_at: string
@@ -691,6 +755,20 @@ export interface Database {
       channel_member_ids: {
         Args: { p_channel_id: string }
         Returns: string[]
+      }
+      can_in_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
+      start_direct_message: {
+        Args: { p_organization_id: string; p_user_id: string }
+        Returns: string
+      }
+      conversation_unread_counts: {
+        Args: Record<string, never>
+        Returns: {
+          conversation_id: string
+          unread: number
+          last_read_at: string | null
+          last_message_at: string | null
+        }[]
       }
       mark_notifications_read: {
         Args: { p_ids?: number[] | null }

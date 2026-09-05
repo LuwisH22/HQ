@@ -4,6 +4,7 @@ import { ArrowLeft } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { CardSkeleton, ErrorState } from '@/components/common/states'
 import { channelService } from '@/services/channel.service'
+import { conversationService } from '@/services/conversation.service'
 import { messageService } from '@/services/message.service'
 import type { Message } from '@/services/message.service'
 import { queryKeys } from '@/lib/query-keys'
@@ -22,20 +23,34 @@ import { Composer } from './Composer'
  */
 export function ThreadPanel({
   root,
-  channelName,
-  channelArchived,
+  placeName,
+  placeArchived,
   onClose,
 }: {
   root: Message
-  channelName: string
-  channelArchived: boolean
+  /** The channel's name, or the other person's in a direct message. */
+  placeName: string
+  placeArchived: boolean
   onClose: () => void
 }) {
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const canSend = usePermission('messages.send')
-  const canModerate = usePermission('messages.moderate')
-  const canPin = usePermission('messages.pin')
+  const canSendInChannel = usePermission('messages.send')
+  const canModerateChannel = usePermission('messages.moderate')
+  const canPinInChannel = usePermission('messages.pin')
+
+  // A thread lives exactly where its root lives, so this is the one place the
+  // panel has to ask which kind of place that is. Ids are uuids from disjoint
+  // tables, so one query namespace serves both.
+  const inConversation = root.conversationId !== null
+  const placeId = root.channelId ?? root.conversationId ?? 'none'
+
+  // In a conversation there are no permissions to hold: being in it is the
+  // whole of it, and moderation is a channel power that does not reach inside
+  // somebody else's correspondence.
+  const canSend = inConversation ? true : canSendInChannel
+  const canModerate = inConversation ? false : canModerateChannel
+  const canPin = inConversation ? true : canPinInChannel
 
   const repliesQuery = useQuery({
     queryKey: queryKeys.messages.replies(root.id),
@@ -46,33 +61,40 @@ export function ThreadPanel({
   const ids = [root.id, ...replies.map((r) => r.id)]
 
   const mentionsQuery = useQuery({
-    queryKey: [...queryKeys.messages.mentions(root.channelId), 'thread', root.id, ids.length],
+    queryKey: [...queryKeys.messages.mentions(placeId), 'thread', root.id, ids.length],
     queryFn: () => messageService.listMentions(ids),
   })
 
   const mentionCandidatesQuery = useQuery({
-    queryKey: queryKeys.channelMembers.mentionable(root.channelId),
-    queryFn: () => channelService.listMentionCandidates(root.channelId),
+    queryKey: queryKeys.channelMembers.mentionable(placeId),
+    // A conversation's roster is the people in it, never channel_member_ids.
+    queryFn: () =>
+      inConversation
+        ? conversationService.listMentionCandidates(placeId)
+        : channelService.listMentionCandidates(placeId),
     staleTime: 5 * 60_000,
   })
 
   const reactionsQuery = useQuery({
-    queryKey: [...queryKeys.messages.reactions(root.channelId), 'thread', root.id, ids.length],
+    queryKey: [...queryKeys.messages.reactions(placeId), 'thread', root.id, ids.length],
     queryFn: () => messageService.listReactions(ids),
   })
 
   async function refresh(): Promise<void> {
     await queryClient.invalidateQueries({ queryKey: queryKeys.messages.replies(root.id) })
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.messages.mentions(root.channelId),
+      queryKey: queryKeys.messages.mentions(placeId),
     })
     // The root's reply count lives on the message itself, so the timeline is
     // stale as soon as a reply lands.
-    await queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(root.channelId) })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(placeId) })
   }
 
   const reply = useMutation({
-    mutationFn: (body: string) => messageService.send(root.channelId, body, root.id),
+    mutationFn: (body: string) =>
+      inConversation
+        ? messageService.sendToConversation(placeId, body, root.id)
+        : messageService.send(placeId, body, root.id),
     onSuccess: refresh,
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
@@ -112,14 +134,14 @@ export function ThreadPanel({
 
   // A thread whose root is gone keeps its replies but takes no new ones.
   const rootAlive = root.deletedAt === null
-  const canReply = canSend && !channelArchived && rootAlive
+  const canReply = canSend && !placeArchived && rootAlive
 
   function actionsFor(message: Message) {
     return {
       canEdit: message.authorId === user?.id,
       canPin,
       canDelete: message.authorId === user?.id || canModerate,
-      canReact: canSend && !channelArchived,
+      canReact: canSend && !placeArchived,
     }
   }
 
@@ -150,7 +172,9 @@ export function ThreadPanel({
           <h2 className="text-3xs text-foreground/42 font-semibold tracking-[0.1em] uppercase">
             Thread
           </h2>
-          <p className="text-2xs text-muted-foreground truncate">#{channelName}</p>
+          <p className="text-2xs text-muted-foreground truncate">
+            {inConversation ? placeName : `#${placeName}`}
+          </p>
         </div>
       </header>
 
@@ -211,7 +235,8 @@ export function ThreadPanel({
       <div className="shrink-0">
         {canReply ? (
           <Composer
-            channelName={`thread in ${channelName}`}
+            placeName={`thread in ${placeName}`}
+            placeKind={inConversation ? 'conversation' : 'channel'}
             disabled={false}
             sending={reply.isPending}
             onSend={(body) => reply.mutate(body)}
@@ -223,7 +248,7 @@ export function ThreadPanel({
             <p className="border-border text-muted-foreground text-2xs rounded-md border border-dashed px-3 py-2.5 text-center">
               {!rootAlive
                 ? 'This message was deleted. The thread stays, but it takes no new replies.'
-                : channelArchived
+                : placeArchived
                   ? 'This channel is archived.'
                   : 'You do not have permission to reply here.'}
             </p>

@@ -113,6 +113,22 @@ export default async function globalTeardown(): Promise<void> {
     else removed += 1
   }
 
+  // Direct messages cannot be swept away with their conversation the way a
+  // channel test's messages go with the channel: a 1-to-1 is unique per pair
+  // and stays. So they carry a marker, and every one of them is removed —
+  // delete_message hard-deletes a direct message with no replies under it.
+  const { data: dmRows } = await supabase
+    .from('messages')
+    .select('id, body, conversation_id')
+    .not('conversation_id', 'is', null)
+
+  for (const message of (dmRows ?? []) as { id: string; body: string }[]) {
+    if (!message.body.includes('e2e-dm')) continue
+    const { error } = await supabase.rpc('delete_message', { p_message_id: message.id })
+    if (error) console.warn(`teardown: could not delete a direct message: ${error.message}`)
+    else removed += 1
+  }
+
   const { data: categoryRows } = await supabase.from('channel_categories').select('id, name')
   for (const category of (categoryRows ?? []) as NamedRow[]) {
     if (!isTestLitter(category.name)) continue

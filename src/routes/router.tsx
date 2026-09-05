@@ -52,6 +52,11 @@ const ChannelsPage = lazy(() =>
 const ChannelChatPage = lazy(() =>
   import('@/features/channels/ChannelChatPage').then((m) => ({ default: m.ChannelChatPage })),
 )
+const ConversationChatPage = lazy(() =>
+  import('@/features/channels/ConversationChatPage').then((m) => ({
+    default: m.ConversationChatPage,
+  })),
+)
 const ProjectsPage = lazy(() =>
   import('@/features/placeholder/pages').then((m) => ({ default: m.ProjectsPage })),
 )
@@ -103,6 +108,9 @@ export const router = createHashRouter([
           { path: 'messages', element: <MessagesPage /> },
           { path: 'channels', element: <ChannelsPage /> },
           { path: 'channels/:channelKey', element: <ChannelChatPage /> },
+          // Its own route, beside the channels rather than under them: a
+          // conversation is not a channel and its id is not a channel key.
+          { path: 'dm/:conversationId', element: <ConversationChatPage /> },
           { path: 'projects', element: <ProjectsPage /> },
           { path: 'calendar', element: <CalendarPage /> },
           { path: 'teams', element: <TeamsPage /> },

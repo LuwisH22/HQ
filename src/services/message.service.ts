@@ -32,13 +32,14 @@ export type {
  * routine, because those carry an audit trail.
  */
 
-const COLUMNS = `id, channel_id, author_id, body, pinned_at, edited_at, deleted_at, created_at,
+const COLUMNS = `id, channel_id, conversation_id, author_id, body, pinned_at, edited_at, deleted_at, created_at,
    parent_message_id, reply_count, last_reply_at,
    author:profiles!messages_author_id_fkey ( id, display_name, full_name, email, avatar_url )`
 
 interface MessageRow {
   id: string
-  channel_id: string
+  channel_id: string | null
+  conversation_id: string | null
   author_id: string | null
   body: string
   pinned_at: string | null
@@ -63,6 +64,7 @@ function toMessage(row: MessageRow): Message {
   return {
     id: row.id,
     channelId: row.channel_id,
+    conversationId: row.conversation_id,
     authorId: row.author_id,
     // A deleted message keeps its row so replies survive; the body is gone.
     body: row.deleted_at === null ? row.body : '',
@@ -113,6 +115,36 @@ export const supabaseMessageService: MessageService = {
     return { messages: page.map(toMessage).reverse(), hasMore }
   },
 
+  /**
+   * The same page, in a conversation.
+   *
+   * Deliberately a second method rather than a second implementation: what
+   * differs between a channel and a conversation is one column in the filter,
+   * and everything that addresses a message by id — editing, deleting,
+   * pinning, reacting, replying — is shared unchanged.
+   */
+  async listConversation(conversationId: string, before?: string): Promise<MessagePage> {
+    let query = getSupabase()
+      .from('messages')
+      .select(COLUMNS)
+      .eq('conversation_id', conversationId)
+      .is('parent_message_id', null)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(PAGE_SIZE + 1)
+
+    if (before) query = query.lt('created_at', before)
+
+    const { data, error } = await query
+    if (error) throw toAppError(error)
+
+    const rows = (data ?? []) as unknown as MessageRow[]
+    const hasMore = rows.length > PAGE_SIZE
+    const page = hasMore ? rows.slice(0, PAGE_SIZE) : rows
+
+    return { messages: page.map(toMessage).reverse(), hasMore }
+  },
+
   async getById(messageId: string): Promise<Message | null> {
     const { data, error } = await getSupabase()
       .from('messages')
@@ -141,6 +173,34 @@ export const supabaseMessageService: MessageService = {
       .from('messages')
       .insert({
         channel_id: channelId,
+        author_id: userId,
+        body: body.trim(),
+        parent_message_id: parentMessageId,
+      })
+      .select(COLUMNS)
+      .single()
+
+    if (error) throw toAppError(error)
+    return toMessage(data)
+  },
+
+  async sendToConversation(
+    conversationId: string,
+    body: string,
+    parentMessageId: string | null = null,
+  ): Promise<Message> {
+    const supabase = getSupabase()
+
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+    if (!userId) throw new AppError('auth', 'Your session has expired. Please sign in again.')
+
+    // No channel_id at all: the CHECK constraint refuses a message that claims
+    // to be in two places, and the INSERT policy asks can_in_conversation.
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
         author_id: userId,
         body: body.trim(),
         parent_message_id: parentMessageId,
@@ -203,6 +263,20 @@ export const supabaseMessageService: MessageService = {
       .from('messages')
       .select(COLUMNS)
       .eq('channel_id', channelId)
+      .not('pinned_at', 'is', null)
+      .is('deleted_at', null)
+      .order('pinned_at', { ascending: false })
+      .limit(25)
+
+    if (error) throw toAppError(error)
+    return ((data ?? []) as unknown as MessageRow[]).map(toMessage)
+  },
+
+  async listConversationPinned(conversationId: string): Promise<Message[]> {
+    const { data, error } = await getSupabase()
+      .from('messages')
+      .select(COLUMNS)
+      .eq('conversation_id', conversationId)
       .not('pinned_at', 'is', null)
       .is('deleted_at', null)
       .order('pinned_at', { ascending: false })
@@ -311,6 +385,7 @@ export const supabaseMessageService: MessageService = {
     const { data, error } = await supabase.rpc('search_messages', {
       p_query: input.query,
       p_channel_id: input.channelId,
+      p_conversation_id: input.conversationId ?? null,
       p_before: input.before ?? null,
     })
     if (error) throw toAppError(error)
@@ -332,12 +407,15 @@ export const supabaseMessageService: MessageService = {
     const profileById = new Map((profiles ?? []).map((p) => [p.id, p]))
 
     return rows.map((row) => {
-      const channel = channelById.get(row.channel_id)
+      const channel = row.channel_id ? channelById.get(row.channel_id) : undefined
       const author = row.author_id ? profileById.get(row.author_id) : undefined
       return {
         id: row.id,
         channelId: row.channel_id,
-        channelName: channel?.name ?? 'Unknown channel',
+        conversationId: row.conversation_id,
+        // A direct message has no channel to name; the conversation it came
+        // from is the one the caller asked about.
+        channelName: row.conversation_id ? '' : (channel?.name ?? 'Unknown channel'),
         channelKey: channel?.key ?? '',
         authorName: author?.display_name ?? author?.full_name ?? author?.email ?? 'Removed member',
         body: row.body,
@@ -360,6 +438,10 @@ export const messageService: MessageService = {
   edit: (messageId, body) => impl().edit(messageId, body),
   remove: (messageId, reason) => impl().remove(messageId, reason),
   setPinned: (messageId, pinned) => impl().setPinned(messageId, pinned),
+  listConversation: (conversationId, before) => impl().listConversation(conversationId, before),
+  sendToConversation: (conversationId, body, parentMessageId) =>
+    impl().sendToConversation(conversationId, body, parentMessageId),
+  listConversationPinned: (conversationId) => impl().listConversationPinned(conversationId),
   listPinned: (channelId) => impl().listPinned(channelId),
   listReactions: (messageIds) => impl().listReactions(messageIds),
   listMentions: (messageIds) => impl().listMentions(messageIds),

@@ -355,7 +355,12 @@ export interface ChannelService {
 
 export interface Message {
   id: string
-  channelId: string
+  /**
+   * Where it lives. Exactly one of the two is set, which is the same rule the
+   * database states as a CHECK constraint.
+   */
+  channelId: string | null
+  conversationId: string | null
   /** null once the author has been removed from the organization. */
   authorId: string | null
   /** Empty for a deleted message: the row survives, the words do not. */
@@ -398,6 +403,21 @@ export interface MessageService {
   /** Soft delete: the author's own, or anyone's with `messages.moderate`. */
   remove(messageId: string, reason?: string): Promise<void>
   setPinned(messageId: string, pinned: boolean): Promise<void>
+
+  // --- C3 · direct messages ---
+  //
+  // A direct message is a message: editing, deleting, pinning, reacting,
+  // replying, mentions and search are the operations above, unchanged,
+  // because they address a message by id and never care where it lives. Only
+  // the three calls that name a *place* need a second form.
+  /** One page of a conversation's history, oldest first. */
+  listConversation(conversationId: string, before?: string): Promise<MessagePage>
+  sendToConversation(
+    conversationId: string,
+    body: string,
+    parentMessageId?: string | null,
+  ): Promise<Message>
+  listConversationPinned(conversationId: string): Promise<Message[]>
 
   // --- C2 ---
   /** Pinned messages in a channel, newest pin first. */
@@ -447,12 +467,21 @@ export interface MessageReaction {
 export interface MessageSearchInput {
   query: string
   channelId: string | null
+  /**
+   * Naming a conversation searches that conversation. Naming neither it nor a
+   * channel searches channels only — a search box that quietly started
+   * returning private correspondence because the schema grew a column would
+   * be the wrong kind of surprise.
+   */
+  conversationId?: string | null
   before?: string
 }
 
 export interface MessageSearchResult {
   id: string
-  channelId: string
+  channelId: string | null
+  conversationId: string | null
+  /** Empty for a direct message, which is named by who is in it. */
   channelName: string
   channelKey: string
   authorName: string
@@ -478,6 +507,44 @@ export interface ChannelUnread {
   channelId: string
   unread: number
   lastReadAt: string | null
+}
+
+// --- Conversations (Phase 2 · C3) ------------------------------------------
+
+/**
+ * A direct conversation, as the sidebar needs it.
+ *
+ * `otherUserId` is the person on the other side of a 1-to-1. It is derived
+ * from the membership rows rather than stored, so a group conversation later
+ * simply has more members and no "other" at all.
+ */
+export interface Conversation {
+  id: string
+  kind: string
+  memberIds: string[]
+  otherUserId: string | null
+  otherName: string
+  otherAvatarUrl: string | null
+  unread: number
+  lastMessageAt: string | null
+  lastReadAt: string | null
+}
+
+export interface ConversationService {
+  /** Every conversation the caller is in, most recently active first. */
+  list(organizationId: string): Promise<Conversation[]>
+  getById(conversationId: string): Promise<Conversation | null>
+  /**
+   * Opens the 1-to-1 with another member, creating it the first time.
+   *
+   * Idempotent: a unique index on the sorted pair is what makes a duplicate
+   * impossible, so pressing the button twice returns the same conversation.
+   */
+  startDirect(organizationId: string, userId: string): Promise<string>
+  /** Records that the caller has read up to now. Never moves backwards. */
+  markRead(conversationId: string): Promise<void>
+  /** Who may be mentioned here: the people in the conversation. */
+  listMentionCandidates(conversationId: string): Promise<MentionCandidate[]>
 }
 
 // --- Notifications (Phase 2 · C2) ------------------------------------------

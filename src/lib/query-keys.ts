@@ -46,19 +46,27 @@ export const queryKeys = {
     overrides: (channelId: string) => ['channel-overrides', channelId] as const,
   },
 
+  // Keyed by the place a message lives, which is a channel id or a
+  // conversation id. They are uuids from different tables, so one namespace
+  // serves both and the thread panel does not have to know which it has.
   messages: {
-    list: (channelId: string) => ['messages', channelId] as const,
-    pinned: (channelId: string) => ['messages', channelId, 'pinned'] as const,
+    list: (placeId: string) => ['messages', placeId] as const,
+    pinned: (placeId: string) => ['messages', placeId, 'pinned'] as const,
     replies: (rootMessageId: string) => ['messages', 'thread', rootMessageId] as const,
-    mentions: (channelId: string) => ['messages', channelId, 'mentions'] as const,
-    reactions: (channelId: string) => ['messages', channelId, 'reactions'] as const,
-    search: (channelId: string | null, query: string) =>
-      ['messages', 'search', channelId ?? 'all', query] as const,
+    mentions: (placeId: string) => ['messages', placeId, 'mentions'] as const,
+    reactions: (placeId: string) => ['messages', placeId, 'reactions'] as const,
+    search: (placeId: string | null, query: string) =>
+      ['messages', 'search', placeId ?? 'all', query] as const,
   },
 
   channelMembers: {
     forChannel: (channelId: string) => ['channel-members', channelId] as const,
-    mentionable: (channelId: string) => ['mention-candidates', channelId] as const,
+    mentionable: (placeId: string) => ['mention-candidates', placeId] as const,
+  },
+
+  conversations: {
+    all: (organizationId: string) => ['conversations', organizationId] as const,
+    detail: (conversationId: string) => ['conversations', 'detail', conversationId] as const,
   },
 
   reads: {

@@ -87,11 +87,19 @@ async function signIn() {
   return attached
 }
 
-/** Resolves with the first matching event, or null once the window closes. */
-function waitFor(predicate, ms = 12_000) {
+/**
+ * Resolves with the first matching event, or null once the window closes.
+ *
+ * `matches` exists because several things arrive on one subscription: an
+ * UPDATE carries a pin, and it also carries a thread counter, and a gate that
+ * takes whichever lands first reports on the wrong one — intermittently,
+ * which is worse than reporting nothing.
+ */
+function waitFor(predicate, ms = 12_000, matches = () => true) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(null), ms)
     predicate.resolve = (value) => {
+      if (!matches(value)) return
       clearTimeout(timer)
       resolve(value)
     }
@@ -256,11 +264,11 @@ const { error: reactError } = await author
 check('reaction added', !reactError, reactError?.message ?? '')
 
 const reactionEvent = await reactionGate
-check('the listener was told about the reaction', reactionEvent !== 'TIMED_OUT',
-  reactionEvent === 'TIMED_OUT' ? 'no event arrived' : `emoji ${String(reactionEvent.emoji)}`)
+check('the listener was told about the reaction', reactionEvent !== null,
+  reactionEvent ? `emoji ${String(reactionEvent.emoji)}` : 'nothing arrived in 12s')
 check('the payload carries the channel the filter needs',
-  reactionEvent !== 'TIMED_OUT' && reactionEvent.channel_id === channelId,
-  reactionEvent === 'TIMED_OUT' ? '-' : String(reactionEvent.channel_id))
+  reactionEvent !== null && reactionEvent.channel_id === channelId,
+  reactionEvent ? String(reactionEvent.channel_id) : '-')
 
 // The point of REPLICA IDENTITY FULL: without it a DELETE payload carries the
 // primary key alone, and a subscription filtering on channel_id never sees it.
@@ -273,17 +281,17 @@ await author
   .eq('emoji', '\ud83d\udc4d')
 
 const unreactionEvent = await unreactionGate
-check('the listener was told about the removal', unreactionEvent !== 'TIMED_OUT',
-  unreactionEvent === 'TIMED_OUT' ? 'no event arrived' : 'received')
+check('the listener was told about the removal', unreactionEvent !== null,
+  unreactionEvent ? 'received' : 'nothing arrived in 12s')
 // Supabase projects a DELETE payload down to the replica identity, which is
 // the primary key — channel_id is not in it, whatever REPLICA IDENTITY FULL
 // says. So the client subscribes to reactions unfiltered and lets RLS scope
 // delivery, rather than filtering on a column that removals do not carry.
 check('the removal payload identifies which reaction went',
-  unreactionEvent !== 'TIMED_OUT' &&
+  unreactionEvent !== null &&
     unreactionEvent.emoji === '\ud83d\udc4d' &&
     unreactionEvent.message_id === reactionTarget.id,
-  unreactionEvent === 'TIMED_OUT' ? '-' : Object.keys(unreactionEvent).join(', '))
+  unreactionEvent ? Object.keys(unreactionEvent).join(', ') : '-')
 
 console.log('\n6 · thread replies ride the existing channel subscription')
 {
@@ -306,33 +314,35 @@ console.log('\n6 · thread replies ride the existing channel subscription')
   check('reply sent', !error, error?.message ?? '')
 
   const replyEvent = await replyGate
-  check('the listener was told about the reply', replyEvent !== 'TIMED_OUT',
-    replyEvent === 'TIMED_OUT' ? 'no event arrived' : 'received')
+  check('the listener was told about the reply', replyEvent !== null,
+    replyEvent ? 'received' : 'nothing arrived in 12s')
   check('and the payload says which thread it belongs to',
-    replyEvent !== 'TIMED_OUT' && replyEvent.parent_message_id === root.id,
-    replyEvent === 'TIMED_OUT' ? '-' : String(replyEvent.parent_message_id))
+    replyEvent !== null && replyEvent.parent_message_id === root.id,
+    replyEvent ? String(replyEvent.parent_message_id) : '-')
 
   // The root's counter is an UPDATE, which the same subscription carries.
-  const countGate = waitFor(gates.update)
+  // The counter for this root, not whatever else is updating.
+  const countGate = waitFor(gates.update, 12_000, (m) => m.id === root.id && m.reply_count === 2)
   await author.from('messages').insert({
     channel_id: channelId, author_id: authorId,
     body: 'second realtime reply', parent_message_id: root.id,
   })
   const countEvent = await countGate
   check('the root count reaches the listener too',
-    countEvent !== 'TIMED_OUT' && countEvent.id === root.id && countEvent.reply_count === 2,
-    countEvent === 'TIMED_OUT' ? 'no event arrived' : `count ${String(countEvent.reply_count)}`)
+    countEvent !== null && countEvent.id === root.id && countEvent.reply_count === 2,
+    countEvent ? `count ${String(countEvent.reply_count)}` : 'nothing arrived in 12s')
 }
 
 console.log('\n6 · pin events ride the existing message subscription')
-const pinGate = waitFor(gates.update)
+// The pin, not a thread counter still in flight from the section above.
+const pinGate = waitFor(gates.update, 12_000, (m) => m.id === reactionTarget.id && m.pinned_at !== null)
 const { error: pinError } = await author.rpc('pin_message', {
   p_message_id: reactionTarget.id, p_pinned: true,
 })
 check('pin succeeded', !pinError, pinError?.message ?? '')
 const pinEvent = await pinGate
-check('the listener saw the pin', pinEvent !== 'TIMED_OUT' && pinEvent.pinned_at !== null,
-  pinEvent === 'TIMED_OUT' ? 'no event arrived' : 'pinned_at set')
+check('the listener saw the pin', pinEvent !== null && pinEvent.pinned_at !== null,
+  pinEvent ? 'pinned_at set' : 'nothing arrived in 12s')
 
 console.log('\n7 · the organization topic')
 const orgTopic = `org:${orgId}`
@@ -362,10 +372,143 @@ await author
   .from('messages')
   .insert({ channel_id: channelId, author_id: authorId, body: 'unread badge trigger' })
 const orgEvent = await orgGate
-check('a message in any channel reaches the organization topic', orgEvent !== 'TIMED_OUT',
-  orgEvent === 'TIMED_OUT' ? 'no event arrived' : 'received')
+check('a message in any channel reaches the organization topic', orgEvent !== null,
+  orgEvent ? 'received' : 'nothing arrived in 12s')
 
 await listener.removeChannel(orgChannel)
+
+console.log('\n8 · the direct message topic')
+{
+  const { data: roster } = await author
+    .from('organization_members')
+    .select('user_id')
+    .neq('user_id', authorId)
+  const partner = (roster ?? [])[0]?.user_id
+
+  check('there is somebody to open a conversation with', Boolean(partner),
+    partner ? '' : 'ADD A SECOND MEMBER')
+
+  if (partner) {
+    const { data: conversationId, error: convError } = await author.rpc('start_direct_message', {
+      p_organization_id: orgId, p_user_id: partner,
+    })
+    check('conversation opened', !convError && Boolean(conversationId), convError?.message ?? '')
+
+    const dmInbox = { insert: [], typing: [] }
+    const dmGates = { insert: {}, typing: {} }
+
+    // Its own socket, deliberately. The listener above has been open since
+    // the start of this run with several private topics and a few hundred
+    // postgres_changes on it, and in that state Realtime refuses it a NEW
+    // private topic with "Unauthorized" while returning true for the very
+    // same authorization function over REST, and while a socket opened a
+    // second earlier joins the identical topic without complaint. That is a
+    // property of a worn-out connection, not of the policy — see the closing
+    // note — and measuring the policy through it would measure the wrong
+    // thing.
+    const dmListener = await signIn()
+
+    // The private topic the C3 Step 1 probe established, in production: the
+    // policy calls can_join_conversation_topic, which defers to
+    // can_in_conversation.
+    const dm = dmListener
+      .channel(`dm:${conversationId}`, { config: { private: true, broadcast: { self: false } } })
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          dmInbox.insert.push(payload.new)
+          dmGates.insert.resolve?.(payload.new)
+        },
+      )
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        dmInbox.typing.push(payload.payload)
+        dmGates.typing.resolve?.(payload.payload)
+      })
+
+    const dmJoined = await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve('TIMED_OUT'), 15_000)
+      dm.subscribe((status, err) => {
+        if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          clearTimeout(timer)
+          resolve(err ? `${status}: ${String(err.message ?? err)}` : status)
+        }
+      })
+    })
+    check('a member joins the private dm topic', dmJoined === 'SUBSCRIBED', String(dmJoined))
+
+    await new Promise((resolve) => setTimeout(resolve, 2500))
+
+    const dmGate = waitFor(dmGates.insert)
+    const { data: dmMessage } = await author
+      .from('messages')
+      .insert({
+        conversation_id: conversationId, author_id: authorId,
+        body: 'verify-realtime direct probe',
+      })
+      .select('id')
+      .single()
+
+    const dmEvent = await dmGate
+    check('a direct message arrives on it', dmEvent !== null,
+      dmEvent ? 'received' : 'nothing arrived in 12s')
+    check('and it is the one that was sent', dmEvent?.id === dmMessage?.id)
+    check('carrying no channel', dmEvent !== null && dmEvent.channel_id === null,
+      String(dmEvent?.channel_id))
+
+    const typingGate = waitFor(dmGates.typing)
+    const dmEmitter = author.channel(`dm:${conversationId}`, {
+      config: { private: true, broadcast: { self: false } },
+    })
+    await new Promise((resolve) => {
+      dmEmitter.subscribe((status) => {
+        if (status === 'SUBSCRIBED') resolve()
+      })
+      setTimeout(resolve, 8000)
+    })
+    await dmEmitter.send({
+      type: 'broadcast', event: 'typing', payload: { userId: authorId, typing: true },
+    })
+    const typed = await typingGate
+    check('typing rides the same topic', typed !== null,
+      typed ? 'received' : 'nothing arrived in 12s')
+
+    await author.removeChannel(dmEmitter)
+    await dmListener.removeChannel(dm)
+
+    // --- a conversation nobody is in ---------------------------------------
+    const stranger = await signIn()
+    const bogus = stranger.channel('dm:00000000-0000-4000-8000-000000000000', {
+      config: { private: true },
+    })
+    const refused = await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve('TIMED_OUT'), 12_000)
+      bogus.subscribe((status) => {
+        if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          clearTimeout(timer)
+          resolve(status)
+        }
+      })
+    })
+    // Membership is the whole rule, so a conversation that does not exist has
+    // nobody in it and is not joinable by anyone.
+    check('an unknown dm topic is not joinable', refused !== 'SUBSCRIBED', String(refused))
+    await stranger.removeChannel(bogus)
+
+    if (dmMessage?.id) {
+      await author.rpc('delete_message', { p_message_id: dmMessage.id })
+    }
+    const { data: left } = await author
+      .from('messages').select('id').eq('conversation_id', conversationId)
+    check('the probe leaves no direct messages behind', (left ?? []).length === 0,
+      `${String((left ?? []).length)} left`)
+  }
+}
 
 console.log('\n5 · cleanup')
 await listener.removeChannel(channel)
@@ -391,6 +534,28 @@ observed end to end against the live project.
 To complete it by hand: sign in as a second member without access to a
 private channel, open it in one tab and the private channel's topic in
 another, and confirm nothing arrives.
+
+OBSERVED, and worth knowing
+---------------------------
+A socket that has been open for a while with several private topics and a
+few hundred postgres_changes on it can be refused a NEW private topic with
+"Unauthorized: You do not have permissions to read from this Channel topic",
+while can_join_conversation_topic returns true for that exact topic over
+REST for the same session, and while a socket opened one second later joins
+it without complaint. It reproduces only through this script's long-lived
+listener; a fresh socket, a socket that opened before the conversation
+existed, one that had already joined and left other topics, and the
+sequence the application itself performs (organization topic held open, a
+channel topic opened and closed, then a dm topic) were each tried and all
+joined. Section 8 therefore uses its own connection.
+
+This is the same shape as the failure C2 saw on its org: topic and that the
+C3 Step 1 probe recorded as transient. It is not transient: it is a
+property of the connection, and the probe missed it because it opened a
+fresh socket. Nothing here depends on it — a direct message also reaches
+the client on the organization topic, which is RLS-filtered per subscriber
+— but a dm: topic that will not join means no typing indicator, and that is
+the symptom to expect if it is ever seen in the wild.
 `)
 
 console.log(failures === 0 ? 'All measurable realtime checks passed.\n' : `${String(failures)} FAILED.\n`)

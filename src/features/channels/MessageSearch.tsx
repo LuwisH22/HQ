@@ -11,31 +11,39 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { cn } from '@/lib/utils'
 
 /**
- * Searching a channel, or every channel you can see.
+ * Searching one place, or every channel you can see.
  *
  * The routine behind this is SECURITY INVOKER, so the messages policy has
  * already decided what may come back before this component sees anything.
  * There is no filtering here — which is the point: a result set that arrives
  * pre-scoped cannot be widened by a mistake in the interface.
+ *
+ * Widening to "everywhere" means every channel, and deliberately not every
+ * conversation: a search box that quietly started returning private
+ * correspondence would be the wrong kind of surprise, so a direct message is
+ * searched by naming it and only by naming it.
  */
-export function ChannelSearch({
-  channelId,
-  channelName,
-  onClose,
-}: {
-  channelId: string
-  channelName: string
-  onClose: () => void
-}) {
+export type SearchPlace =
+  { kind: 'channel'; id: string; name: string } | { kind: 'conversation'; id: string; name: string }
+
+export function MessageSearch({ place, onClose }: { place: SearchPlace; onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [everywhere, setEverywhere] = useState(false)
   const debounced = useDebouncedValue(query.trim(), 250)
 
-  const scope = everywhere ? null : channelId
+  const inChannel = place.kind === 'channel'
+  // Widening is only offered inside a channel, so `everywhere` can never mean
+  // "and the conversations too".
+  const scope = everywhere && inChannel ? null : place.id
 
   const results = useQuery({
     queryKey: queryKeys.messages.search(scope, debounced),
-    queryFn: () => messageService.search({ query: debounced, channelId: scope }),
+    queryFn: () =>
+      messageService.search({
+        query: debounced,
+        channelId: inChannel ? scope : null,
+        conversationId: inChannel ? null : place.id,
+      }),
     enabled: debounced.length > 1,
   })
 
@@ -50,22 +58,30 @@ export function ChannelSearch({
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={everywhere ? 'Search every channel' : `Search #${channelName}`}
+            placeholder={
+              everywhere
+                ? 'Search every channel'
+                : inChannel
+                  ? `Search #${place.name}`
+                  : `Search your messages with ${place.name}`
+            }
             aria-label="Search messages"
             className="pl-8"
             autoFocus
           />
         </div>
 
-        <Button
-          type="button"
-          size="sm"
-          variant={everywhere ? 'default' : 'outline'}
-          aria-pressed={everywhere}
-          onClick={() => setEverywhere((value) => !value)}
-        >
-          All channels
-        </Button>
+        {inChannel ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={everywhere ? 'default' : 'outline'}
+            aria-pressed={everywhere}
+            onClick={() => setEverywhere((value) => !value)}
+          >
+            All channels
+          </Button>
+        ) : null}
 
         <Button size="icon-sm" variant="ghost" aria-label="Close search" onClick={onClose}>
           <X className="size-4" aria-hidden="true" />
@@ -75,7 +91,10 @@ export function ChannelSearch({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6">
         {debounced.length <= 1 ? (
           <p className="text-muted-foreground text-2xs px-1 py-2 leading-relaxed">
-            Type at least two characters. Only channels you can see are searched.
+            Type at least two characters.{' '}
+            {inChannel
+              ? 'Only channels you can see are searched.'
+              : 'Only this conversation is searched.'}
           </p>
         ) : results.isPending ? (
           <CardSkeleton lines={4} />
@@ -85,7 +104,9 @@ export function ChannelSearch({
           <EmptyState
             icon={MagnifyingGlass}
             title="Nothing matches that"
-            description="Try a different word, or search every channel."
+            description={
+              inChannel ? 'Try a different word, or search every channel.' : 'Try a different word.'
+            }
             className="border-0"
           />
         ) : (
@@ -93,7 +114,11 @@ export function ChannelSearch({
             {(results.data ?? []).map((result) => (
               <li key={result.id}>
                 <Link
-                  to={`/channels/${result.channelKey}`}
+                  to={
+                    result.conversationId
+                      ? `/dm/${result.conversationId}`
+                      : `/channels/${result.channelKey}`
+                  }
                   onClick={onClose}
                   className={cn(
                     'hover:bg-elevated block rounded-md px-2 py-2 transition-colors duration-[140ms]',
@@ -101,7 +126,9 @@ export function ChannelSearch({
                   )}
                 >
                   <p className="text-3xs text-muted-foreground flex items-center gap-1.5">
-                    <span className="font-medium">#{result.channelName}</span>
+                    <span className="font-medium">
+                      {result.conversationId ? place.name : `#${result.channelName}`}
+                    </span>
                     {result.parentMessageId ? (
                       <>
                         <span aria-hidden="true">·</span>

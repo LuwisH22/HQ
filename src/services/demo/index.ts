@@ -16,6 +16,9 @@ import type {
   AuthService,
   Channel,
   ChannelService,
+  Conversation,
+  ConversationService,
+  MentionCandidate,
   Message,
   MessageMention,
   MessageReaction,
@@ -41,6 +44,7 @@ import {
   resetDemoDatabase,
   DEMO_OWNER_PROFILE_ID,
   type DemoChannel,
+  type DemoConversation,
   type DemoMember,
   type DemoMessage,
   type DemoRole,
@@ -917,8 +921,15 @@ function canInChannel(channel: DemoChannel, member: DemoMember, permission: Perm
  */
 function recordMentions(message: DemoMessage): void {
   const store = db()
-  const channel = store.channels.find((c) => c.id === message.channelId)
-  if (!channel || message.deletedAt !== null || message.body === '') return
+  if (message.deletedAt !== null || message.body === '') return
+
+  const channel = message.channelId
+    ? store.channels.find((c) => c.id === message.channelId)
+    : undefined
+  const conversation = message.conversationId
+    ? store.conversations.find((c) => c.id === message.conversationId)
+    : undefined
+  if (!channel && !conversation) return
 
   const handles = new Set(
     [...message.body.matchAll(/@([A-Za-z0-9._-]{2,40})/g)].map((m) => m[1]?.toLowerCase() ?? ''),
@@ -933,8 +944,15 @@ function recordMentions(message: DemoMessage): void {
     if (!profile || profile.id === message.authorId) continue
 
     const member = store.members.find((m) => m.userId === profile.id)
-    // Never tell somebody about a message in a channel they cannot see.
-    if (!member || !canInChannel(channel, member, 'channels.view')) continue
+    if (!member) continue
+
+    // Never tell somebody about a message in a place they are not in. In a
+    // channel that is the channel resolver; in a conversation it is simply
+    // whether they are in it, so naming a colleague in a DM reaches nobody.
+    const eligible = channel
+      ? canInChannel(channel, member, 'channels.view')
+      : canInConversation(conversation!.id, profile.id)
+    if (!eligible) continue
 
     // Two handles can name the same person — a display name and an email
     // local part — so the guard is the resolved id, not the text. Already
@@ -953,13 +971,22 @@ function recordMentions(message: DemoMessage): void {
       entityType: 'message',
       entityId: message.id,
       actorId: message.authorId,
-      summary: `${message.authorId ? displayName(message.authorId) : 'Someone'} mentioned you in #${channel.name}`,
-      metadata: {
-        channel_id: channel.id,
-        channel_key: channel.key,
-        channel_name: channel.name,
-        excerpt: message.body.slice(0, 160),
-      },
+      summary: `${message.authorId ? displayName(message.authorId) : 'Someone'} mentioned you in ${
+        channel ? `#${channel.name}` : 'a direct message'
+      }`,
+      metadata: channel
+        ? {
+            channel_id: channel.id,
+            channel_key: channel.key,
+            channel_name: channel.name,
+            excerpt: message.body.slice(0, 160),
+          }
+        : {
+            // No name to carry: a conversation is identified by who is in it,
+            // and the recipient is one of them.
+            conversation_id: conversation!.id,
+            excerpt: message.body.slice(0, 160),
+          },
       readAt: null,
       createdAt: message.createdAt,
     })
@@ -977,6 +1004,49 @@ function clearAfterSoftDelete(message: DemoMessage): void {
   store.reactions = store.reactions.filter((r) => r.messageId !== message.id)
   store.mentions = store.mentions.filter((m) => m.messageId !== message.id)
   message.pinnedAt = null
+}
+
+/**
+ * Whether somebody may take part in a conversation.
+ *
+ * The port of can_in_conversation_for, and deliberately as short as it is in
+ * SQL: membership, plus an effectively active membership of the organization.
+ * No owner short-circuit, no role, no override — there is nothing here that a
+ * permission edit could change.
+ */
+function canInConversation(conversationId: string, userId?: string | null): boolean {
+  const who = userId ?? db().currentUserId
+  if (!who) return false
+
+  const inIt = db().conversationMembers.some(
+    (m) => m.conversationId === conversationId && m.userId === who,
+  )
+  if (!inIt) return false
+
+  const member = memberOf(who)
+  return Boolean(member && effectivelyActive(member))
+}
+
+/** Conversations the signed-in demo user is in. */
+function visibleConversations(): DemoConversation[] {
+  return db().conversations.filter((c) => canInConversation(c.id))
+}
+
+function assertCanReadConversation(conversationId: string): DemoConversation {
+  const conversation = db().conversations.find((c) => c.id === conversationId)
+  // Absent and forbidden are the same answer: a guessed id must tell you
+  // nothing about whether the conversation exists.
+  if (!conversation || !canInConversation(conversationId)) {
+    throw new AppError('forbidden', 'You do not have access to that conversation')
+  }
+  return conversation
+}
+
+/** Whether the caller may read the place a message lives in, either kind. */
+function canReadMessage(message: DemoMessage): boolean {
+  return message.channelId !== null
+    ? canReadChannel(message.channelId)
+    : canInConversation(message.conversationId!)
 }
 
 /** Whether the signed-in demo user may read a channel. */
@@ -1403,11 +1473,18 @@ function assertCanReadChannel(channelId: string): DemoChannel {
   return channel
 }
 
+/** The port of the routines' first branch: which place is this message in. */
+function assertCanReachMessage(message: DemoMessage): void {
+  if (message.channelId !== null) assertCanReadChannel(message.channelId)
+  else assertCanReadConversation(message.conversationId!)
+}
+
 function toMessage(m: DemoMessage): Message {
   const profile = db().profiles.find((p) => p.id === m.authorId)
   return {
     id: m.id,
     channelId: m.channelId,
+    conversationId: m.conversationId,
     authorId: m.authorId,
     // A deleted message keeps its row so replies survive; the body is gone.
     body: m.deletedAt === null ? m.body : '',
@@ -1420,6 +1497,37 @@ function toMessage(m: DemoMessage): Message {
     parentMessageId: m.parentMessageId,
     replyCount: m.replyCount,
     lastReplyAt: m.lastReplyAt,
+  }
+}
+
+/**
+ * The port of tg_message_thread_guard.
+ *
+ * One level, a living root, and the same place — both context columns, not
+ * just the channel: with channel_id nullable, two direct messages in different
+ * conversations would otherwise compare equal on null and a reply could be
+ * attached across conversations.
+ */
+function assertThreadShape(
+  parentMessageId: string | null,
+  channelId: string | null,
+  conversationId: string | null,
+): void {
+  if (parentMessageId === null) return
+
+  const parent = db().messages.find((m) => m.id === parentMessageId)
+  if (!parent) throw new AppError('not_found', 'That message no longer exists')
+  if (parent.parentMessageId !== null) {
+    throw new AppError('validation', 'A reply cannot itself be replied to')
+  }
+  if (parent.channelId !== channelId || parent.conversationId !== conversationId) {
+    throw new AppError(
+      'validation',
+      'A reply must be in the same place as the message it replies to',
+    )
+  }
+  if (parent.deletedAt !== null) {
+    throw new AppError('validation', 'That message has been deleted')
   }
 }
 
@@ -1460,8 +1568,71 @@ export const demoMessageService: MessageService = {
     await latency()
     const message = db().messages.find((m) => m.id === messageId)
     if (!message) return null
-    assertCanReadChannel(message.channelId)
+    assertCanReachMessage(message)
     return toMessage(message)
+  },
+
+  /** The same page, in a conversation. */
+  async listConversation(conversationId, before) {
+    await latency()
+    assertCanReadConversation(conversationId)
+
+    const all = db()
+      .messages.filter((m) => m.conversationId === conversationId)
+      .filter((m) => m.parentMessageId === null)
+      .filter((m) => (before ? m.createdAt < before : true))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+
+    const page = all.slice(0, MESSAGE_PAGE)
+    return { messages: page.map(toMessage).reverse(), hasMore: all.length > MESSAGE_PAGE }
+  },
+
+  async sendToConversation(conversationId, body, parentMessageId = null) {
+    await latency()
+    // Being in it is the whole permission. Suspension and bans are inside
+    // canInConversation, so there is no second gate to keep in step.
+    assertCanReadConversation(conversationId)
+    const me = requireCurrentUserId()
+
+    const trimmed = body.trim()
+    if (trimmed === '') throw new AppError('validation', 'A message cannot be empty')
+    if (trimmed.length > 4000) {
+      throw new AppError('validation', 'A message cannot be longer than 4000 characters')
+    }
+
+    assertThreadShape(parentMessageId, null, conversationId)
+
+    const message: DemoMessage = {
+      id: crypto.randomUUID(),
+      channelId: null,
+      conversationId,
+      authorId: me,
+      body: trimmed,
+      pinnedAt: null,
+      editedAt: null,
+      deletedAt: null,
+      createdAt: new Date().toISOString(),
+      parentMessageId,
+      replyCount: 0,
+      lastReplyAt: null,
+    }
+    db().messages.push(message)
+    if (parentMessageId !== null) recountThread(parentMessageId)
+    recordMentions(message)
+    persist()
+    return toMessage(message)
+  },
+
+  async listConversationPinned(conversationId) {
+    await latency()
+    assertCanReadConversation(conversationId)
+
+    return db()
+      .messages.filter(
+        (m) => m.conversationId === conversationId && m.pinnedAt !== null && m.deletedAt === null,
+      )
+      .sort((a, b) => (b.pinnedAt ?? '').localeCompare(a.pinnedAt ?? ''))
+      .map(toMessage)
   },
 
   async send(channelId, body, parentMessageId = null) {
@@ -1477,27 +1648,12 @@ export const demoMessageService: MessageService = {
     if (trimmed === '') throw new AppError('validation', 'A message cannot be empty')
     if (trimmed.length > 4000) throw new AppError('validation', 'That message is too long')
 
-    // The port of tg_message_thread_guard. Shape is the database's to enforce.
-    if (parentMessageId !== null) {
-      const parent = db().messages.find((m) => m.id === parentMessageId)
-      if (!parent) throw new AppError('not_found', 'That message no longer exists')
-      if (parent.parentMessageId !== null) {
-        throw new AppError('validation', 'A reply cannot itself be replied to')
-      }
-      if (parent.channelId !== channelId) {
-        throw new AppError(
-          'validation',
-          'A reply must be in the same channel as the message it replies to',
-        )
-      }
-      if (parent.deletedAt !== null) {
-        throw new AppError('validation', 'That message has been deleted')
-      }
-    }
+    assertThreadShape(parentMessageId, channelId, null)
 
     const message: DemoMessage = {
       id: crypto.randomUUID(),
       channelId,
+      conversationId: null,
       // Taken from the session, never from the caller.
       authorId: member.userId,
       body: trimmed,
@@ -1521,7 +1677,7 @@ export const demoMessageService: MessageService = {
     const root = db().messages.find((m) => m.id === rootMessageId)
     if (!root) return []
     // A reply is visible exactly where its root is.
-    assertCanReadChannel(root.channelId)
+    assertCanReachMessage(root)
 
     return db()
       .messages.filter((m) => m.parentMessageId === rootMessageId)
@@ -1562,23 +1718,62 @@ export const demoMessageService: MessageService = {
       throw new AppError('validation', 'That message has already been deleted')
     }
 
-    const channel = assertCanReadChannel(message.channelId)
-    const member = memberOf(requireCurrentUserId())
     const isAuthor = message.authorId === requireCurrentUserId()
-    const canModerate = Boolean(member && canInChannel(channel, member, 'messages.moderate'))
+    const member = memberOf(requireCurrentUserId())
+
+    let channel: DemoChannel | null = null
+    let canModerate = false
+
+    if (message.channelId !== null) {
+      channel = assertCanReadChannel(message.channelId)
+      canModerate = Boolean(member && canInChannel(channel, member, 'messages.moderate'))
+    } else {
+      // No moderation inside a conversation: messages.moderate is a channel
+      // permission and holding it must not confer the power to edit the record
+      // of other people's private correspondence.
+      assertCanReadConversation(message.conversationId!)
+    }
 
     if (!isAuthor && !canModerate) {
       throw new AppError('forbidden', 'You can only delete your own messages')
     }
 
-    message.body = ''
-    message.deletedAt = new Date().toISOString()
-    clearAfterSoftDelete(message)
+    // Existence, not the counter: reply_count only counts replies that are
+    // themselves alive, and a root whose replies were all deleted still has
+    // rows that need it to stay.
+    const hasReplies = db().messages.some((m) => m.parentMessageId === message.id)
+
+    if (message.conversationId !== null && !hasReplies) {
+      // A tombstone in a private conversation is not a record of anything: it
+      // is not evidence of a moderation decision, because there is none, and
+      // there are no replies to keep reachable.
+      db().messages = db().messages.filter((m) => m.id !== message.id)
+      clearAfterSoftDelete(message)
+
+      // And if it was the last reply under a placeholder, the placeholder is
+      // the opening of a thread that no longer exists.
+      const root = message.parentMessageId
+        ? db().messages.find((m) => m.id === message.parentMessageId)
+        : undefined
+      if (
+        root &&
+        root.conversationId !== null &&
+        root.deletedAt !== null &&
+        !db().messages.some((m) => m.parentMessageId === root.id)
+      ) {
+        db().messages = db().messages.filter((m) => m.id !== root.id)
+      }
+    } else {
+      message.body = ''
+      message.deletedAt = new Date().toISOString()
+      clearAfterSoftDelete(message)
+    }
+
     if (message.parentMessageId !== null) recountThread(message.parentMessageId)
 
-    // Only moderation is worth a permanent record; auditing every author
-    // tidying up their own typo would bury the entries that matter.
-    if (!isAuthor) {
+    // Only moderation is worth a permanent record, and moderation only happens
+    // in a channel — so a direct message never writes one.
+    if (!isAuthor && channel) {
       recordAudit(
         'message.deleted',
         'message',
@@ -1597,19 +1792,32 @@ export const demoMessageService: MessageService = {
       throw new AppError('validation', 'A deleted message cannot be pinned')
     }
 
-    const channel = channelById(message.channelId)
-    const member = memberOf(requireCurrentUserId())
-    if (!member || !canInChannel(channel, member, 'messages.pin')) {
-      throw new AppError('forbidden', 'You do not have permission to pin messages here')
+    let channel: DemoChannel | null = null
+
+    if (message.channelId !== null) {
+      channel = channelById(message.channelId)
+      const member = memberOf(requireCurrentUserId())
+      if (!member || !canInChannel(channel, member, 'messages.pin')) {
+        throw new AppError('forbidden', 'You do not have permission to pin messages here')
+      }
+    } else {
+      // Pinning is not a permission in a conversation: the people in it are
+      // the only people there, and either may keep something at the top.
+      assertCanReadConversation(message.conversationId!)
     }
 
     message.pinnedAt = pinned ? new Date().toISOString() : null
-    recordAudit(
-      pinned ? 'message.pinned' : 'message.unpinned',
-      'message',
-      messageId,
-      `${pinned ? 'Pinned' : 'Unpinned'} a message in ${channel.name}`,
-    )
+
+    // A conversation writes no audit row, for the same reason a deletion in
+    // one does not: the entry would announce that it exists.
+    if (channel) {
+      recordAudit(
+        pinned ? 'message.pinned' : 'message.unpinned',
+        'message',
+        messageId,
+        `${pinned ? 'Pinned' : 'Unpinned'} a message in ${channel.name}`,
+      )
+    }
     persist()
   },
 
@@ -1636,7 +1844,7 @@ export const demoMessageService: MessageService = {
 
       // A reaction is only visible where its message is.
       const message = db().messages.find((m) => m.id === reaction.messageId)
-      if (!message || !canReadChannel(message.channelId)) continue
+      if (!message || !canReadMessage(message)) continue
 
       const list = byMessage.get(reaction.messageId) ?? []
       const existing = list.find((r) => r.emoji === reaction.emoji)
@@ -1662,7 +1870,7 @@ export const demoMessageService: MessageService = {
 
       // A mention is only visible where its message is.
       const message = db().messages.find((m) => m.id === mention.messageId)
-      if (!message || !canReadChannel(message.channelId)) continue
+      if (!message || !canReadMessage(message)) continue
 
       const list = byMessage.get(mention.messageId) ?? []
       list.push({ userId: mention.userId, handle: mention.handle })
@@ -1683,12 +1891,16 @@ export const demoMessageService: MessageService = {
       throw new AppError('validation', 'A deleted message cannot be reacted to.')
     }
 
-    // Reacting is speaking in the channel: a deny on messages.send silences
-    // this too, or the deny is circumventable as a signalling channel.
-    const channel = channelById(message.channelId)
-    const member = memberOf(me)
-    if (!member || !canInChannel(channel, member, 'messages.send')) {
-      throw new AppError('forbidden', 'You cannot react in that channel')
+    if (message.channelId !== null) {
+      // Reacting is speaking in the channel: a deny on messages.send silences
+      // this too, or the deny is circumventable as a signalling channel.
+      const channel = channelById(message.channelId)
+      const member = memberOf(me)
+      if (!member || !canInChannel(channel, member, 'messages.send')) {
+        throw new AppError('forbidden', 'You cannot react in that channel')
+      }
+    } else {
+      assertCanReadConversation(message.conversationId!)
     }
 
     const already = store.reactions.some(
@@ -1698,7 +1910,15 @@ export const demoMessageService: MessageService = {
     // error to report.
     if (already) return
 
-    store.reactions.push({ messageId, userId: me, emoji, channelId: message.channelId })
+    store.reactions.push({
+      messageId,
+      userId: me,
+      emoji,
+      // Whichever the message has, stamped here rather than accepted from a
+      // caller — the port of tg_reaction_channel.
+      channelId: message.channelId,
+      conversationId: message.conversationId,
+    })
     persist()
   },
 
@@ -1719,17 +1939,23 @@ export const demoMessageService: MessageService = {
     if (needle === '') return []
 
     const visible = new Set(visibleChannels().map((c) => c.id))
+    const mine = new Set(visibleConversations().map((c) => c.id))
 
     return db()
-      .messages.filter(
-        (m) =>
-          m.deletedAt === null &&
-          // The whole isolation story: a channel the caller cannot see cannot
-          // contribute a result.
-          visible.has(m.channelId) &&
-          (input.channelId === null || m.channelId === input.channelId) &&
-          m.body.toLowerCase().includes(needle),
-      )
+      .messages.filter((m) => {
+        if (m.deletedAt !== null || !m.body.toLowerCase().includes(needle)) return false
+
+        // Naming a conversation searches that conversation, and only if the
+        // caller is in it. Naming neither it nor a channel searches channels
+        // only — the same scope the search box had before conversations
+        // existed.
+        if (input.conversationId) {
+          return m.conversationId === input.conversationId && mine.has(input.conversationId)
+        }
+        if (m.conversationId !== null) return false
+        if (!m.channelId || !visible.has(m.channelId)) return false
+        return input.channelId === null || m.channelId === input.channelId
+      })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, 30)
       .map((m) => {
@@ -1737,7 +1963,10 @@ export const demoMessageService: MessageService = {
         return {
           id: m.id,
           channelId: m.channelId,
-          channelName: channel?.name ?? 'Unknown channel',
+          conversationId: m.conversationId,
+          // A direct message has no channel to name; it is named by who is
+          // in it, and the caller is one of them.
+          channelName: m.conversationId ? '' : (channel?.name ?? 'Unknown channel'),
           channelKey: channel?.key ?? '',
           authorName: m.authorId ? displayName(m.authorId) : 'Removed member',
           body: m.body,
@@ -1755,6 +1984,177 @@ export const demoMessageService: MessageService = {
  * is written only for somebody who could have read the message anyway, which
  * is what stops a mention leaking a private channel's name.
  */
+/**
+ * Direct conversations.
+ *
+ * The port of the conversations schema and start_direct_message. The whole
+ * authorization model is canInConversation, which asks two questions and no
+ * others: are you in it, and is your membership of the organization still
+ * effective. There is no owner short-circuit here to mirror, because there is
+ * none in the SQL either.
+ */
+export const demoConversationService: ConversationService = {
+  async list() {
+    await latency()
+    const me = db().currentUserId
+    const store = db()
+
+    return (
+      visibleConversations()
+        .map((conversation) => toConversation(conversation, me))
+        .sort(byRecency)
+        // Referenced so the store read above is not mistaken for a stray.
+        .slice(0, store.conversations.length)
+    )
+  },
+
+  async getById(conversationId) {
+    await latency()
+    // Absent rather than forbidden: a guessed id must tell you nothing about
+    // whether the conversation exists.
+    if (!canInConversation(conversationId)) return null
+    const conversation = db().conversations.find((c) => c.id === conversationId)
+    return conversation ? toConversation(conversation, db().currentUserId) : null
+  },
+
+  async startDirect(_organizationId, userId) {
+    await latency()
+    const me = requireCurrentUserId()
+    const store = db()
+
+    // A conversation with yourself is not a conversation.
+    if (userId === me) {
+      throw new AppError('validation', 'You cannot start a direct message with yourself')
+    }
+
+    const mine = memberOf(me)
+    if (!mine || !effectivelyActive(mine)) {
+      throw new AppError('forbidden', 'You do not have access to that organization')
+    }
+
+    const theirs = store.members.find((m) => m.userId === userId)
+    // Not found and not active are the same answer on purpose: neither tells
+    // the caller anything about somebody they cannot message.
+    if (!theirs || !effectivelyActive(theirs)) {
+      throw new AppError('not_found', 'That member is not available')
+    }
+
+    const memberKey = [me, userId].sort().join(':')
+    const existing = store.conversations.find(
+      (c) => c.kind === 'direct' && c.memberKey === memberKey,
+    )
+    // The port of the unique index: the pair has one conversation, and asking
+    // for it twice is not an error to report.
+    if (existing) return existing.id
+
+    const conversation: DemoConversation = {
+      id: crypto.randomUUID(),
+      organizationId: store.organization.id,
+      kind: 'direct',
+      memberKey,
+      createdBy: me,
+      createdAt: new Date().toISOString(),
+    }
+    store.conversations.push(conversation)
+    store.conversationMembers.push(
+      { conversationId: conversation.id, userId: me, joinedAt: conversation.createdAt },
+      { conversationId: conversation.id, userId, joinedAt: conversation.createdAt },
+    )
+    persist()
+    return conversation.id
+  },
+
+  async markRead(conversationId) {
+    await latency()
+    const me = requireCurrentUserId()
+    // Recording a read in a conversation you are not in would be a way to
+    // learn whether it exists.
+    assertCanReadConversation(conversationId)
+
+    const store = db()
+    const now = new Date().toISOString()
+    const existing = store.conversationReads.find(
+      (r) => r.conversationId === conversationId && r.userId === me,
+    )
+
+    if (existing) {
+      // Never backwards: a stale second device must not undo a newer read.
+      existing.lastReadAt = existing.lastReadAt > now ? existing.lastReadAt : now
+    } else {
+      store.conversationReads.push({ conversationId, userId: me, lastReadAt: now })
+    }
+    persist()
+  },
+
+  async listMentionCandidates(conversationId) {
+    await latency()
+    // Empty rather than an error, matching the live read: a guessed id must
+    // look the same as a conversation with nobody in it.
+    if (!canInConversation(conversationId)) return []
+
+    return db()
+      .conversationMembers.filter((m) => m.conversationId === conversationId)
+      .map((m): MentionCandidate | null => {
+        const profile = db().profiles.find((p) => p.id === m.userId)
+        const member = db().members.find((om) => om.userId === m.userId)
+        if (!profile) return null
+
+        // The same rule the mention pass resolves by.
+        const handle = profile.displayName ?? profile.email.split('@')[0] ?? ''
+        return {
+          userId: m.userId,
+          handle,
+          displayName: profile.displayName ?? profile.fullName ?? profile.email,
+          avatarUrl: profile.avatarUrl,
+          roleName: member ? roleById(member.roleId).name : 'Member',
+        }
+      })
+      .filter((c): c is MentionCandidate => c !== null)
+  },
+}
+
+/** The sidebar's shape for one conversation, assembled from the rows. */
+function toConversation(conversation: DemoConversation, me: string | null): Conversation {
+  const store = db()
+  const memberIds = store.conversationMembers
+    .filter((m) => m.conversationId === conversation.id)
+    .map((m) => m.userId)
+
+  const otherUserId = memberIds.find((id) => id !== me) ?? null
+  const profile = otherUserId ? store.profiles.find((p) => p.id === otherUserId) : undefined
+
+  const read = store.conversationReads.find(
+    (r) => r.conversationId === conversation.id && r.userId === me,
+  )
+  const messages = store.messages.filter(
+    (m) => m.conversationId === conversation.id && m.deletedAt === null,
+  )
+
+  return {
+    id: conversation.id,
+    kind: conversation.kind,
+    memberIds,
+    otherUserId,
+    otherName: profile?.displayName ?? profile?.fullName ?? profile?.email ?? 'Removed member',
+    otherAvatarUrl: profile?.avatarUrl ?? null,
+    unread: messages.filter(
+      (m) =>
+        // Your own words are not news, and a read marker moves forward.
+        m.authorId !== me && (!read || m.createdAt > read.lastReadAt),
+    ).length,
+    lastMessageAt: messages.map((m) => m.createdAt).sort((a, b) => b.localeCompare(a))[0] ?? null,
+    lastReadAt: read?.lastReadAt ?? null,
+  }
+}
+
+/** Most recently spoken in first; one with nothing said in it last. */
+function byRecency(a: Conversation, b: Conversation): number {
+  if (a.lastMessageAt && b.lastMessageAt) return b.lastMessageAt.localeCompare(a.lastMessageAt)
+  if (a.lastMessageAt) return -1
+  if (b.lastMessageAt) return 1
+  return a.otherName.localeCompare(b.otherName)
+}
+
 export const demoNotificationService: NotificationService = {
   async list(_organizationId, limit = 30) {
     await latency()

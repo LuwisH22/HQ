@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { CaretRight, Hash, LockSimple, ChatTeardropText } from '@phosphor-icons/react'
+import { CaretRight, Hash, LockSimple } from '@phosphor-icons/react'
 import { useUiStore } from '@/stores/ui.store'
 import { usePermission } from '@/hooks/use-permission'
 import { cn } from '@/lib/utils'
 import { ChannelCreateMenu } from './ChannelCreateMenu'
+import { DirectMessageNav } from './DirectMessageNav'
 import { useUnreadCounts } from './use-unread'
 import { useChannelDirectory, type ChannelGroup } from './use-channels'
 
@@ -197,14 +198,9 @@ export function ChannelNav({ onNavigate }: { onNavigate?: () => void }) {
         </NavLink>
       </div>
 
-      {/* Direct messages have no backend yet (C3). The section exists so the
-          shape of the sidebar does not change when they arrive, and says so
-          rather than showing an empty list that looks broken. */}
-      <SectionHeading label="Direct messages" />
-      <p className="text-muted-foreground/70 text-2xs flex items-center gap-2 px-1 leading-relaxed">
-        <ChatTeardropText className="size-3.5 shrink-0" aria-hidden="true" />
-        Arrives with direct messaging.
-      </p>
+      {/* Its own section, beside the channels rather than inside one: a
+          conversation is not a room the organization owns. */}
+      <DirectMessageNav onNavigate={onNavigate} />
     </>
   )
 }

@@ -2,6 +2,7 @@ import type {
   AuditService,
   AuthService,
   ChannelService,
+  ConversationService,
   MessageService,
   InvitationService,
   NotificationService,
@@ -85,6 +86,9 @@ export const demoMessageService: MessageService = {
   list: unreachable,
   getById: unreachable,
   send: unreachable,
+  listConversation: unreachable,
+  sendToConversation: unreachable,
+  listConversationPinned: unreachable,
   listReplies: unreachable,
   edit: unreachable,
   remove: unreachable,
@@ -95,6 +99,14 @@ export const demoMessageService: MessageService = {
   addReaction: unreachable,
   removeReaction: unreachable,
   search: unreachable,
+}
+
+export const demoConversationService: ConversationService = {
+  list: unreachable,
+  getById: unreachable,
+  startDirect: unreachable,
+  markRead: unreachable,
+  listMentionCandidates: unreachable,
 }
 
 export const demoNotificationService: NotificationService = {

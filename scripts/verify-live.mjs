@@ -1436,6 +1436,234 @@ console.log('\nC3 · mentions are recorded, and only for people who could read t
   }
 }
 
+console.log('\nC3 · a direct message is not a channel')
+{
+  const { data: roster } = await supabase
+    .from('organization_members')
+    .select('user_id')
+    .neq('user_id', userId)
+
+  const others = (roster ?? []).map((r) => r.user_id)
+  const partner = others[0]
+  const stranger = others[1]
+
+  check('there is somebody to message', Boolean(partner),
+    partner ? '' : 'ADD A SECOND MEMBER — this section proves nothing alone')
+
+  if (partner) {
+    const { data: first, error: startError } = await supabase.rpc('start_direct_message', {
+      p_organization_id: org?.id, p_user_id: partner,
+    })
+    check('a conversation opens', !startError && Boolean(first), startError?.message ?? '')
+
+    const { data: again } = await supabase.rpc('start_direct_message', {
+      p_organization_id: org?.id, p_user_id: partner,
+    })
+    // The unique index on the sorted pair is the arbiter, not the client.
+    check('asking again returns the same one', again === first, String(again))
+
+    const { error: selfError } = await supabase.rpc('start_direct_message', {
+      p_organization_id: org?.id, p_user_id: userId,
+    })
+    check('a conversation with yourself is refused', Boolean(selfError),
+      selfError ? 'refused' : 'ACCEPTED')
+
+    const { error: crossError } = await supabase.rpc('start_direct_message', {
+      p_organization_id: '00000000-0000-4000-8000-000000000000', p_user_id: partner,
+    })
+    check('another organization is refused', Boolean(crossError),
+      crossError ? 'refused' : 'ACCEPTED')
+
+    // --- membership is the authority, and cannot be written -----------------
+    const { data: members } = await supabase
+      .from('conversation_members').select('user_id').eq('conversation_id', first)
+    check('both members are recorded', (members ?? []).length === 2,
+      `${String((members ?? []).length)} rows`)
+
+    const { error: forgeError } = await supabase
+      .from('conversation_members')
+      .insert({ conversation_id: first, user_id: userId })
+    check('membership cannot be forged', Boolean(forgeError),
+      forgeError ? `blocked (${forgeError.code ?? ''})` : 'ACCEPTED — FORGERY POSSIBLE')
+
+    const { error: convError } = await supabase
+      .from('conversations')
+      .insert({ organization_id: org?.id, kind: 'direct', member_key: 'forged' })
+    check('a conversation cannot be written directly', Boolean(convError),
+      convError ? `blocked (${convError.code ?? ''})` : 'ACCEPTED')
+
+    await supabase.from('conversation_members').delete().eq('conversation_id', first)
+    const { data: stillThere } = await supabase
+      .from('conversation_members').select('user_id').eq('conversation_id', first)
+    check('nor removed', (stillThere ?? []).length === 2,
+      `${String((stillThere ?? []).length)} rows`)
+
+    // --- exactly one context ------------------------------------------------
+    const { data: sent, error: sendError } = await supabase
+      .from('messages')
+      .insert({ conversation_id: first, author_id: userId, body: 'verify-live direct probe' })
+      .select('id, channel_id, conversation_id')
+      .single()
+    check('a direct message can be sent', !sendError, sendError?.message ?? '')
+    check('and carries no channel', sent?.channel_id === null, String(sent?.channel_id))
+
+    const { error: bothError } = await supabase.from('messages').insert({
+      conversation_id: first, channel_id: probePublic, author_id: userId, body: 'two places',
+    })
+    check('a message in two places is refused', Boolean(bothError),
+      bothError ? `refused (${bothError.code ?? ''})` : 'ACCEPTED')
+
+    const { error: neitherError } = await supabase
+      .from('messages').insert({ author_id: userId, body: 'nowhere' })
+    check('a message in no place is refused', Boolean(neitherError),
+      neitherError ? `refused (${neitherError.code ?? ''})` : 'ACCEPTED')
+
+    const { error: moveError } = await supabase
+      .from('messages').update({ conversation_id: null }).eq('id', sent?.id)
+    check('a message cannot be moved out of its context', Boolean(moveError),
+      moveError ? 'refused' : 'ACCEPTED')
+
+    // --- reactions carry the conversation, not a channel --------------------
+    await supabase
+      .from('message_reactions')
+      .insert({ message_id: sent?.id, user_id: userId, emoji: '\ud83d\udc4d' })
+    const { data: reaction } = await supabase
+      .from('message_reactions')
+      .select('channel_id, conversation_id').eq('message_id', sent?.id).maybeSingle()
+    check('a reaction is stamped with the conversation',
+      reaction?.conversation_id === first && reaction?.channel_id === null,
+      `channel ${String(reaction?.channel_id)}`)
+
+    // --- pinning, and the audit trail it must not write ---------------------
+    const { count: auditBefore } = await supabase
+      .from('audit_logs').select('id', { count: 'exact', head: true })
+
+    const { error: pinError } = await supabase.rpc('pin_message', {
+      p_message_id: sent?.id, p_pinned: true,
+    })
+    check('either person may pin', !pinError, pinError?.message ?? '')
+
+    const { count: auditAfter } = await supabase
+      .from('audit_logs').select('id', { count: 'exact', head: true })
+    // An entry would tell every holder of the audit permission that the
+    // conversation exists and when it was used.
+    check('and it writes no audit entry', auditBefore === auditAfter,
+      `${String(auditBefore)} -> ${String(auditAfter)}`)
+
+    await supabase.rpc('pin_message', { p_message_id: sent?.id, p_pinned: false })
+
+    // --- read state ---------------------------------------------------------
+    const { error: readError } = await supabase
+      .from('conversation_reads').upsert({ conversation_id: first, user_id: userId })
+    check('a read can be recorded', !readError, readError?.message ?? '')
+
+    const { data: counts } = await supabase.rpc('conversation_unread_counts')
+    const mine = (counts ?? []).find((c) => c.conversation_id === first)
+    check('the conversation reports its own unread count', Boolean(mine),
+      mine ? `${String(mine.unread)} unread` : 'no row')
+    check('your own words are not unread', mine?.unread === 0, String(mine?.unread))
+
+    // --- search -------------------------------------------------------------
+    const { data: named } = await supabase.rpc('search_messages', {
+      p_query: 'probe', p_conversation_id: first,
+    })
+    check('search finds it when the conversation is named',
+      (named ?? []).some((r) => r.id === sent?.id))
+
+    const { data: unscoped } = await supabase.rpc('search_messages', { p_query: 'probe' })
+    // Unchanged from before conversations existed: channels only.
+    check('and an unscoped search still returns channels only',
+      !(unscoped ?? []).some((r) => r.conversation_id !== null),
+      `${String((unscoped ?? []).length)} hits`)
+
+    // --- the check the owner cannot short-circuit ---------------------------
+    //
+    // Everything above is about the caller, who is in the conversation. This
+    // is about somebody else, and it is the whole authorization model: a
+    // third member of the same organization is simply not in it.
+    if (stranger) {
+      const { data: allowed } = await supabase.rpc('can_in_conversation_for', {
+        p_user_id: stranger, p_conversation_id: first,
+      })
+      check('a third member is not in the conversation', allowed === false, String(allowed))
+
+      const { data: partnerAllowed } = await supabase.rpc('can_in_conversation_for', {
+        p_user_id: partner, p_conversation_id: first,
+      })
+      check('and the person you are talking to is', partnerAllowed === true,
+        String(partnerAllowed))
+
+      const { data: strangerProfile } = await supabase
+        .from('profiles').select('display_name, email').eq('id', stranger).maybeSingle()
+      const handle =
+        strangerProfile?.display_name ?? (strangerProfile?.email ?? '').split('@')[0]
+
+      const { data: named2 } = await supabase
+        .from('messages')
+        .insert({ conversation_id: first, author_id: userId, body: `@${handle} probe` })
+        .select('id')
+        .single()
+
+      const { data: mentions } = await supabase
+        .from('message_mentions').select('user_id').eq('message_id', named2?.id)
+      // Naming a colleague in a direct message reaches nobody: they are not
+      // in it, so there is no row and no notification.
+      check('naming somebody outside it records nothing', (mentions ?? []).length === 0,
+        `${String((mentions ?? []).length)} rows`)
+
+      await supabase.rpc('delete_message', { p_message_id: named2?.id })
+    }
+
+    const { data: topicOk } = await supabase.rpc('can_in_conversation', {
+      p_conversation_id: '00000000-0000-4000-8000-000000000000',
+    })
+    check('an unknown conversation is refused', topicOk === false, String(topicOk))
+
+    // --- deleting -----------------------------------------------------------
+    const { data: root } = await supabase
+      .from('messages')
+      .insert({ conversation_id: first, author_id: userId, body: 'verify-live root' })
+      .select('id')
+      .single()
+    await supabase.from('messages').insert({
+      conversation_id: first, author_id: userId,
+      body: 'verify-live reply', parent_message_id: root?.id,
+    })
+
+    await supabase.rpc('delete_message', { p_message_id: root?.id })
+    const { data: keptRoot } = await supabase
+      .from('messages').select('deleted_at, body').eq('id', root?.id).maybeSingle()
+    // A root with replies keeps its row so the thread stays reachable.
+    check('a root with replies survives as a placeholder',
+      keptRoot?.deleted_at !== null && keptRoot?.body === '')
+
+    const { data: replies } = await supabase
+      .from('messages').select('id').eq('parent_message_id', root?.id)
+    for (const reply of replies ?? []) {
+      await supabase.rpc('delete_message', { p_message_id: reply.id })
+    }
+
+    await supabase.rpc('delete_message', { p_message_id: sent?.id })
+    const { data: goneCheck } = await supabase
+      .from('messages').select('id').eq('id', sent?.id).maybeSingle()
+    // With nothing pointing at it, a direct message is removed rather than
+    // tombstoned: there is no moderation decision for a tombstone to record.
+    check('a direct message with no replies is removed outright', goneCheck === null,
+      goneCheck ? 'a placeholder was left behind' : '')
+
+    // --- cleanup ------------------------------------------------------------
+    const { data: leftovers } = await supabase
+      .from('messages').select('id').eq('conversation_id', first)
+    for (const row of leftovers ?? []) {
+      await supabase.rpc('delete_message', { p_message_id: row.id })
+    }
+    const { data: after } = await supabase
+      .from('messages').select('id').eq('conversation_id', first)
+    check('the probe leaves no messages behind', (after ?? []).length === 0,
+      `${String((after ?? []).length)} left`)
+  }
+}
+
 console.log('\nB3 · a channel and its category in one call')
 
 const comboName = `probe-combo-${String(Date.now() % 100000)}`

@@ -11,7 +11,7 @@ import {
  * Phase 2 · C3 — threads.
  *
  * A reply is a message, so most of what governs it was already proved by the
- * C1 and C2 suites. What is new is shape — one level, same channel, a living
+ * C1 and C2 suites. What is new is shape — one level, same place, a living
  * root — and the counters that describe it. Everything of the form "somebody
  * who cannot see the channel gets nothing" lives here rather than in the live
  * checks, because those run as the owner, who short-circuits every check.
@@ -111,7 +111,9 @@ describe('replying', () => {
     const root = await demoMessageService.send(channel.id, 'root')
 
     await expect(demoMessageService.send(elsewhere.id, 'wrong channel', root.id)).rejects.toThrow(
-      /same channel/i,
+      // A reply may now be in a conversation too, so the rule is stated as a
+      // place rather than as a channel.
+      /same place/i,
     )
   })
 
