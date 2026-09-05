@@ -14,7 +14,7 @@ test.use({ storageState: '.auth/owner.json' })
 async function send(page: Page, channel: string, body: string): Promise<void> {
   const composer = page.getByRole('textbox', { name: `Message ${channel}` })
   await composer.fill(body)
-  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByText(body)).toBeVisible({ timeout: 15_000 })
 }
 

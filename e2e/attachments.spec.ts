@@ -34,7 +34,7 @@ async function attach(
 
 async function send(page: Page, channel: string, body: string): Promise<void> {
   if (body !== '') await page.getByRole('textbox', { name: `Message ${channel}` }).fill(body)
-  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Send message' }).click()
 }
 
 /** Remove a message through its own menu, which also discards its objects. */
@@ -53,7 +53,7 @@ test('offers an attachment control that takes the allowed kinds of file', async 
   await page.goto('/#/')
   await createChannel(page, name)
 
-  await expect(page.getByRole('button', { name: 'Attach a file' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Attach file', exact: true })).toBeVisible()
 
   // The picker offers the four categories and nothing that could be executed.
   const accept = await picker(page).getAttribute('accept')
@@ -175,7 +175,7 @@ test('takes a pending attachment back before it is sent', async ({ page }, testI
   await expect(pendingList(page)).toHaveCount(0)
 
   // And with nothing to send, the button says so.
-  await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled()
 
   await deleteChannel(page, name)
 })
@@ -191,10 +191,10 @@ test('will not send a file with nothing said about it', async ({ page }, testInf
   // A message is words, and has been since C1 — the database says so with a
   // length check. An attachment accompanies a message rather than being one,
   // so the composer waits for something to be said.
-  await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled()
 
   await page.getByRole('textbox', { name: `Message ${name}` }).fill('look at this')
-  await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled()
 
   await page.getByRole('button', { name: 'Remove alone.png' }).click()
   await deleteChannel(page, name)
@@ -246,7 +246,7 @@ test('attaches to a thread reply', async ({ page }, testInfo) => {
   await expect(thread.getByText('Uploading…')).toHaveCount(0, { timeout: 20_000 })
 
   await thread.getByRole('textbox').fill('with a file')
-  await thread.getByRole('button', { name: 'Send' }).click()
+  await thread.getByRole('button', { name: 'Send message' }).click()
 
   const replies = page.getByRole('list', { name: 'Thread replies' })
   await expect(replies.getByRole('img', { name: 'reply.png' })).toBeVisible({ timeout: 20_000 })

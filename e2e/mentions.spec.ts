@@ -29,7 +29,7 @@ async function type(page: Page, channel: string, text: string): Promise<void> {
 }
 
 async function send(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Send message' }).click()
 }
 
 /** The handles the channel actually offers, in the order the menu lists them. */

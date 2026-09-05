@@ -9,6 +9,7 @@ import type { UploadedAttachment } from '@/services/attachment.service'
 import { errorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { MentionAutocomplete } from './MentionAutocomplete'
+import { ReactionPicker } from './MessageReactions'
 import { applyMention, mentionQueryAt, useMentionMenu } from './mentions'
 import { ATTACHMENT_ACCEPT, formatBytes, rejectAttachment } from './attachments'
 
@@ -37,6 +38,14 @@ interface Pending {
   status: 'uploading' | 'ready' | 'failed'
   upload?: UploadedAttachment
 }
+
+/**
+ * The three actions are one size: 36px, a step above the system's 32px button
+ * so a thumb can find them, and short of the 40px that would make a compact
+ * composer look like a toolbar. The icon is sized on the button because the
+ * variant's own `[&_svg]` rule outranks a class on the icon itself.
+ */
+const ACTION_BUTTON = 'size-9 [&_svg]:size-[18px]'
 
 const MAX_LENGTH = 4000
 /** Roughly seven lines. Past that the field scrolls instead of growing. */
@@ -73,6 +82,8 @@ export function Composer({
   const [pending, setPending] = useState<Pending[]>([])
   const ref = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  /** Where the caret goes once the emoji menu has finished closing. */
+  const afterEmoji = useRef<number | null>(null)
 
   const uploading = pending.some((file) => file.status === 'uploading')
   const ready = pending.filter((file) => file.status === 'ready')
@@ -143,6 +154,32 @@ export function Composer({
     })
   }
 
+  function insertEmoji(emoji: string): void {
+    // Opening the menu takes the focus, so the caret is already forgotten by
+    // the time a glyph is picked; the end of the draft is where it belongs.
+    const at = caret >= 0 && caret <= draft.length ? caret : draft.length
+    const next = `${draft.slice(0, at)}${emoji} ${draft.slice(at)}`
+    if (next.length > MAX_LENGTH) return
+
+    setDraft(next)
+    const to = at + emoji.length + 1
+    setCaret(to)
+    afterEmoji.current = to
+  }
+
+  /** True once the caret is back in the field, which the menu needs to know. */
+  function claimCaret(): boolean {
+    const el = ref.current
+    const to = afterEmoji.current
+    afterEmoji.current = null
+    // Dismissed without picking anything: the button should keep the focus.
+    if (!el || to === null) return false
+
+    el.focus()
+    el.setSelectionRange(to, to)
+    return true
+  }
+
   // Re-measure from scratch each time: shrinking back after a deletion needs
   // the height reset before scrollHeight means anything.
   useEffect(() => {
@@ -196,7 +233,7 @@ export function Composer({
       ) : null}
       <div
         className={cn(
-          'border-input bg-background rounded-md border transition-[border-color] duration-[140ms]',
+          'border-input bg-background @container rounded-md border transition-[border-color] duration-[140ms]',
           'focus-within:border-primary',
         )}
       >
@@ -302,52 +339,73 @@ export function Composer({
         />
 
         <div className="flex items-center gap-2 px-2 pb-2">
-          {attachmentsEnabled ? (
-            <>
-              <input
-                ref={fileRef}
-                type="file"
-                multiple
-                accept={ATTACHMENT_ACCEPT}
-                className="sr-only"
-                aria-label="Attach files"
-                onChange={(event) => {
-                  void pickFiles(event.target.files)
-                  // Cleared so choosing the same file twice in a row still
-                  // fires a change.
-                  event.target.value = ''
-                }}
-              />
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                className="text-muted-foreground hover:text-foreground size-7 shrink-0"
-                aria-label="Attach a file"
-                onClick={() => fileRef.current?.click()}
-              >
-                <Paperclip className="size-4" aria-hidden="true" />
-              </Button>
-            </>
-          ) : null}
-          <p className="text-3xs text-muted-foreground/60 flex-1 pl-1">
+          {/* The hint is a courtesy, and it stops being one the moment it
+              wraps: the thread panel is 320px and cannot hold both it and the
+              actions on one line. Measured against the composer itself rather
+              than the window, because the same composer is wide in the channel
+              and narrow in the panel beside it. */}
+          <p className="text-3xs text-muted-foreground/60 min-w-0 flex-1 pl-1 @max-[320px]:hidden">
             <kbd className="font-sans font-medium">Enter</kbd> to send ·{' '}
             <kbd className="font-sans font-medium">Shift + Enter</kbd> for a new line
           </p>
           {draft.length > MAX_LENGTH - 200 ? (
-            <span className="text-3xs text-muted-foreground tabular-nums">
+            <span className="text-3xs text-muted-foreground shrink-0 tabular-nums">
               {String(MAX_LENGTH - draft.length)}
             </span>
           ) : null}
-          <Button
-            size="sm"
-            loading={sending}
-            // Nothing said, or a file still on its way up.
-            disabled={draft.trim().length === 0 || uploading}
-            onClick={submit}
-          >
-            <PaperPlaneTilt className="size-3.5" aria-hidden="true" />
-            Send
-          </Button>
+
+          {/* Emoji, then the paperclip, then send — the order a hand moves in,
+              and the only place in the composer that holds an action. */}
+          <div className="flex shrink-0 items-center gap-1">
+            <ReactionPicker
+              label="Add emoji"
+              onPick={insertEmoji}
+              className={ACTION_BUTTON}
+              onClose={claimCaret}
+              itemLabel={(emoji) => `Add ${emoji}`}
+            />
+
+            {attachmentsEnabled ? (
+              <>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  accept={ATTACHMENT_ACCEPT}
+                  className="sr-only"
+                  aria-label="Attach files"
+                  onChange={(event) => {
+                    void pickFiles(event.target.files)
+                    // Cleared so choosing the same file twice in a row still
+                    // fires a change.
+                    event.target.value = ''
+                  }}
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className={cn(ACTION_BUTTON, 'text-muted-foreground hover:text-foreground')}
+                  aria-label="Attach file"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <Paperclip aria-hidden="true" />
+                </Button>
+              </>
+            ) : null}
+
+            <Button
+              loading={sending}
+              // Nothing said, or a file still on its way up.
+              disabled={draft.trim().length === 0 || uploading}
+              aria-label="Send message"
+              className={cn(ACTION_BUTTON, 'px-0')}
+              onClick={submit}
+            >
+              {/* The spinner takes the icon's place rather than sitting beside
+                  it: there is no label here for the pair to sit against. */}
+              {sending ? null : <PaperPlaneTilt aria-hidden="true" />}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

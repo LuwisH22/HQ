@@ -18,7 +18,9 @@ import { cn } from '@/lib/utils'
  */
 
 /**
- * A small fixed set rather than a full emoji keyboard.
+ * A small fixed set rather than a full emoji keyboard. The composer's emoji
+ * button opens this same menu, so there is one set of glyphs in the product
+ * rather than two that could drift apart.
  *
  * Six people reacting to scrim calls do not need two thousand glyphs, and a
  * picker that fits in a dropdown is one less dependency and one less thing to
@@ -30,10 +32,24 @@ export function ReactionPicker({
   onPick,
   label,
   className,
+  onClose,
+  itemLabel = (emoji) => `React with ${emoji}`,
 }: {
   onPick: (emoji: string) => void
   label: string
   className?: string
+  /**
+   * What each glyph is called. The composer inserts rather than reacts, and a
+   * screen reader should be told the difference.
+   */
+  itemLabel?: (emoji: string) => string
+  /**
+   * Called as the menu closes, before the focus goes back to the button.
+   * Return true to say the focus has been put somewhere better — the composer
+   * puts it back in the field, where the caret was. Under a message there is
+   * nowhere better, so this is left off and the button keeps it.
+   */
+  onClose?: () => boolean
 }) {
   const [open, setOpen] = useState(false)
 
@@ -49,13 +65,25 @@ export function ReactionPicker({
           <Smiley className="size-3.5" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto p-1">
+      <DropdownMenuContent
+        align="end"
+        className="w-auto p-1"
+        onCloseAutoFocus={
+          onClose
+            ? (event) => {
+                // The menu traps the focus until it is gone, so this is the
+                // first moment anything else can have it.
+                if (onClose()) event.preventDefault()
+              }
+            : undefined
+        }
+      >
         <div className="flex gap-0.5">
           {QUICK.map((emoji) => (
             <button
               key={emoji}
               type="button"
-              aria-label={`React with ${emoji}`}
+              aria-label={itemLabel(emoji)}
               onClick={() => {
                 onPick(emoji)
                 setOpen(false)

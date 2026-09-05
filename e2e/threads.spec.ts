@@ -13,7 +13,7 @@ test.use({ storageState: '.auth/owner.json' })
 
 async function send(page: Page, channel: string, body: string): Promise<void> {
   await page.getByRole('textbox', { name: `Message ${channel}` }).fill(body)
-  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByText(body)).toBeVisible({ timeout: 15_000 })
 }
 
@@ -48,7 +48,7 @@ async function replyInThread(page: Page, channel: string, body: string): Promise
   // open, and "the last Send button" is not a thing to rely on.
   const composer = page.getByRole('group', { name: `Composer for thread in ${channel}` })
   await composer.getByRole('textbox').fill(body)
-  await composer.getByRole('button', { name: 'Send' }).click()
+  await composer.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByRole('list', { name: 'Thread replies' }).getByText(body)).toBeVisible({
     timeout: 15_000,
   })

@@ -55,6 +55,8 @@ const PREFIXES = [
   'attachdoc-',
   'attachno-',
   'attach-',
+  'composeract-',
+  'composer-',
 ]
 
 function readEnvFile(path: string): Record<string, string> {

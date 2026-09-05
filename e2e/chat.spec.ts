@@ -196,7 +196,7 @@ test('sends, edits and deletes a message', async ({ page }, testInfo) => {
   await expect(page.getByText('No messages yet')).toBeVisible()
 
   await composer.fill('first message from the suite')
-  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByText('first message from the suite')).toBeVisible({ timeout: 15_000 })
 
   // The composer clears itself, so a second send is not a duplicate.
@@ -231,7 +231,7 @@ test('pins and unpins a message', async ({ page }, testInfo) => {
   await openChannel(page, name)
 
   await page.getByRole('textbox', { name: `Message ${name}` }).fill('worth pinning')
-  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByText('worth pinning')).toBeVisible({ timeout: 15_000 })
 
   const row = page.getByRole('listitem').filter({ hasText: 'worth pinning' })
@@ -272,7 +272,7 @@ test('keeps a run of messages compact and a long one intact', async ({ page }, t
   await openChannel(page, name)
 
   const composer = page.getByRole('textbox', { name: `Message ${name}` })
-  const send = page.getByRole('button', { name: 'Send' })
+  const send = page.getByRole('button', { name: 'Send message' })
 
   // One author, one minute: the first message opens the group and the rest
   // continue it, which is how a burst is meant to read as one person talking.
@@ -364,7 +364,7 @@ test('keeps the hover timestamp in the gutter, clear of the words', async ({ pag
   await openChannel(page, name)
 
   const composer = page.getByRole('textbox', { name: `Message ${name}` })
-  const send = page.getByRole('button', { name: 'Send' })
+  const send = page.getByRole('button', { name: 'Send message' })
 
   await composer.fill('opening line')
   await send.click()
@@ -439,7 +439,7 @@ test('gives the conversation the whole width of the column it is in', async ({
   await openChannel(page, name)
 
   await page.getByRole('textbox', { name: `Message ${name}` }).fill('a line to measure')
-  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByText('a line to measure', { exact: true })).toBeVisible({
     timeout: 15_000,
   })

@@ -59,7 +59,7 @@ async function openDirectMessage(page: Page, project: string): Promise<string> {
 
 async function send(page: Page, name: string, body: string): Promise<void> {
   await page.getByRole('textbox', { name: `Message ${name}` }).fill(body)
-  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByText(body, { exact: true })).toBeVisible({ timeout: 20_000 })
 }
 
@@ -195,7 +195,7 @@ test('opens a thread on a direct message', async ({ page }, testInfo) => {
   const thread = page.getByRole('group', { name: `Composer for thread in ${name}` })
   const reply = say('balasan')
   await thread.getByRole('textbox').fill(reply)
-  await thread.getByRole('button', { name: 'Send' }).click()
+  await thread.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByRole('list', { name: 'Thread replies' }).getByText(reply)).toBeVisible({
     timeout: 20_000,
   })
