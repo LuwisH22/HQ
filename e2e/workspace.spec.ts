@@ -202,6 +202,18 @@ test.describe('settings', () => {
     await expect(tabs.getByRole('link', { name: 'Channels' })).toBeVisible()
   })
 
+  test('sends the retired profile link back to Settings', async ({ page }) => {
+    await page.goto('/#/settings/profile')
+
+    // Through the index, which picks the first section this member may open —
+    // so an old bookmark lands somewhere real instead of on a not-found page.
+    await expect(page).toHaveURL(/#\/settings\/organization$/, { timeout: 15_000 })
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+
+    // And it is a redirect, not a second profile form kept alive in a corner.
+    await expect(page.getByLabel('Display name')).toHaveCount(0)
+  })
+
   test('shows the permission matrix', async ({ page }) => {
     await page.goto('/#/settings/roles')
     await expect(page.getByRole('heading', { name: 'Permission matrix' })).toBeVisible()

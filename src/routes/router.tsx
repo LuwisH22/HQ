@@ -114,6 +114,11 @@ export const router = createHashRouter([
             element: <SettingsPage />,
             children: [
               { index: true, element: <SettingsIndex /> },
+              // The profile lived here until it moved to the sidebar. Kept as
+              // a redirect so an old link lands on Settings rather than on a
+              // not-found page; the index below then picks the first section
+              // this member may actually open.
+              { path: 'profile', element: <Navigate to="/settings" replace /> },
               { path: 'organization', element: <OrganizationSettings /> },
               { path: 'roles', element: <RolesSettings /> },
               { path: 'channels', element: <ChannelsSettings /> },
