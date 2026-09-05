@@ -37,13 +37,22 @@ async function send(page: Page, channel: string, body: string): Promise<void> {
   await page.getByRole('button', { name: 'Send message' }).click()
 }
 
+/** The row whose own words are this text, as against one quoting them. */
+const rowFor = (page: Page, body: string) =>
+  timeline(page)
+    .getByRole('listitem')
+    .filter({ has: page.locator('[data-message-body]', { hasText: body }) })
+
 /** Remove a message through its own menu, which also discards its objects. */
 async function remove(page: Page, hasText: string): Promise<void> {
-  const row = timeline(page).getByRole('listitem').filter({ hasText })
+  const row = rowFor(page, hasText)
   await row.getByRole('button', { name: /Actions for message/ }).click()
   page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('menuitem', { name: 'Delete message' }).click()
-  await expect(page.getByText('This message was deleted.')).toBeVisible({ timeout: 20_000 })
+  // First: a reply deleted earlier leaves its own placeholder in the flow.
+  await expect(page.getByText('This message was deleted.').first()).toBeVisible({
+    timeout: 20_000,
+  })
 }
 
 test('offers an attachment control that takes the allowed kinds of file', async ({
@@ -226,10 +235,19 @@ test('attaches to a thread reply', async ({ page }, testInfo) => {
   await send(page, name, 'the opening')
   await expect(page.getByText('the opening', { exact: true })).toBeVisible({ timeout: 20_000 })
 
-  await timeline(page)
-    .getByRole('listitem')
-    .filter({ hasText: 'the opening' })
-    .getByRole('button', { name: 'Reply in thread' })
+  // The panel opens from a reply count, so there has to be one first.
+  await rowFor(page, 'the opening')
+    .getByRole('button', { name: /^Reply to / })
+    .click()
+  await page.getByRole('textbox', { name: `Message ${name}` }).fill('opening the thread')
+  await page.getByRole('button', { name: 'Send message' }).click()
+  await expect(page.getByText('opening the thread', { exact: true })).toBeVisible({
+    timeout: 20_000,
+  })
+
+  await rowFor(page, 'the opening')
+    .getByRole('button', { name: /repl(y|ies)/ })
+    .first()
     .click()
   await expect(page.getByRole('heading', { name: 'Thread', exact: true })).toBeVisible({
     timeout: 20_000,

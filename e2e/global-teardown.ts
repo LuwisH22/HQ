@@ -56,6 +56,11 @@ const PREFIXES = [
   'attachno-',
   'attach-',
   'composeract-',
+  'inlinedraft-',
+  'inlinejump-',
+  'inlinegone-',
+  'inlinenarrow-',
+  'inline-',
   'composer-',
 ]
 

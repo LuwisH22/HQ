@@ -23,6 +23,9 @@ export function continuesRun(previous: Message | undefined, message: Message): b
   // A pinned message is being singled out; folding it into the run above
   // would hide the very thing that was pinned.
   if (message.pinnedAt !== null) return false
+  // A reply carries a line saying what it answers, and that line needs the
+  // name above it to make sense of who is answering whom.
+  if (message.parentMessageId !== null) return false
   if (!sameDay(previous.createdAt, message.createdAt)) return false
   return (
     new Date(message.createdAt).getTime() - new Date(previous.createdAt).getTime() <

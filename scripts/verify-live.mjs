@@ -1783,6 +1783,65 @@ console.log('\nC3 · attachments')
     await supabase.storage.from(BUCKET).remove([secondPath])
   }
 
+  // --- what a reply says about what it answers ----------------------------
+  //
+  // The projection the timeline asks for, run against the real database: the
+  // demo layer proves the rules, this proves the query exists and returns what
+  // the line above a reply draws.
+  {
+    const { data: answer } = await supabase
+      .from('messages')
+      .insert({
+        channel_id: probePublic,
+        author_id: userId,
+        body: 'verify-live reply probe',
+        parent_message_id: carrier?.id,
+      })
+      .select('id, parent_message_id')
+      .single()
+    check('a reply is recorded against its parent', answer?.parent_message_id === carrier?.id,
+      String(answer?.parent_message_id))
+
+    // Replies read in the room now, not only inside a thread.
+    const { data: timeline } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('channel_id', probePublic)
+      .is('deleted_at', null)
+    check('and reads in the timeline alongside its parent',
+      (timeline ?? []).some((m) => m.id === answer?.id) &&
+        (timeline ?? []).some((m) => m.id === carrier?.id),
+      `${String((timeline ?? []).length)} rows`)
+
+    const { data: contexts, error: contextError } = await supabase
+      .from('messages')
+      .select(
+        `id, body, deleted_at,
+         author:profiles!messages_author_id_fkey ( display_name, full_name, email ),
+         attachments:message_attachments ( id )`,
+      )
+      .in('id', [carrier?.id])
+    check('the quote projection resolves', !contextError, contextError?.message ?? '')
+
+    const quoted = (contexts ?? [])[0]
+    check('it carries the words being answered',
+      quoted?.body === 'verify-live attachment probe', String(quoted?.body))
+    check('and a count of the files that rode with them',
+      (quoted?.attachments ?? []).length === 1,
+      `${String((quoted?.attachments ?? []).length)} files`)
+    // A count, never the object: a quote has no way to say where a file is
+    // kept, so a timeline cannot carry a storage path it should not.
+    check('and no path to any of them', !JSON.stringify(quoted ?? {}).includes(objectPath))
+
+    await supabase.rpc('delete_message', { p_message_id: answer?.id })
+    const { data: afterDelete } = await supabase
+      .from('messages')
+      .select('deleted_at, body')
+      .eq('id', carrier?.id)
+      .maybeSingle()
+    check('a live parent still has its words', afterDelete?.deleted_at === null)
+  }
+
   // --- signed urls --------------------------------------------------------
   const { data: signed, error: signError } = await supabase.storage
     .from(BUCKET).createSignedUrl(objectPath, 60)

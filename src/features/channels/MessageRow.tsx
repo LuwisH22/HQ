@@ -10,12 +10,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { initialsFor } from '@/services/profile.service'
-import type { Message, MessageMention, MessageReaction } from '@/services/message.service'
+import type {
+  Message,
+  MessageMention,
+  MessageReaction,
+  ReplyContext,
+} from '@/services/message.service'
 import type { MessageAttachment } from '@/services/attachment.service'
 import { MessageReactions, ReactionPicker } from './MessageReactions'
 import { MessageAttachments } from './MessageAttachments'
 import { MessageBody } from './MessageBody'
 import { ThreadSummary } from './ThreadPanel'
+import { ReplyContextLine } from './ReplyContext'
 import { cn } from '@/lib/utils'
 
 /**
@@ -50,6 +56,8 @@ export function MessageRow({
   reactions,
   mentions,
   attachments = [],
+  replyContext,
+  highlighted = false,
   currentUserId,
   onEdit,
   onTogglePin,
@@ -57,6 +65,8 @@ export function MessageRow({
   onReact,
   onUnreact,
   onReply,
+  onOpenThread,
+  onJumpToParent,
 }: {
   message: Message
   /** Continues the message above it: no avatar, no name. */
@@ -66,6 +76,13 @@ export function MessageRow({
   mentions: readonly MessageMention[]
   /** Files on this message. Gone with its words when it is deleted. */
   attachments?: readonly MessageAttachment[]
+  /**
+   * What this message is answering, when it answers something. Undefined on a
+   * message that replies to nothing; null when the parent is out of reach.
+   */
+  replyContext?: ReplyContext | null
+  /** Briefly, after somebody followed a reply back to it. */
+  highlighted?: boolean
   /** Who is reading, so a mention of them can look different. */
   currentUserId: string | null
   onEdit: (body: string) => void
@@ -73,8 +90,16 @@ export function MessageRow({
   onDelete: () => void
   onReact: (emoji: string) => void
   onUnreact: (emoji: string) => void
-  /** Omitted inside a thread, where there is nothing further to reply to. */
+  /**
+   * Start a reply to this message in the room's own composer. Omitted where
+   * there is nothing further to reply to — inside a thread, and on a reply,
+   * which the database will not let anybody reply to either.
+   */
   onReply?: () => void
+  /** Open the thread panel. Drives the reply count, and nothing else does. */
+  onOpenThread?: () => void
+  /** Follow the quote back to the message it came from. */
+  onJumpToParent?: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.body)
@@ -87,11 +112,16 @@ export function MessageRow({
 
   return (
     <li
+      data-message-id={message.id}
+      data-highlighted={highlighted || undefined}
       className={cn(
         'group relative flex gap-3 px-4 transition-colors duration-[120ms]',
         'hover:bg-foreground/4',
         grouped ? 'py-0.5' : 'mt-3 py-1 first:mt-0',
         message.pinnedAt ? 'bg-primary/6 hover:bg-primary/9' : null,
+        // Where a jump landed. It fades on its own; nothing has to be pressed
+        // to dismiss it.
+        highlighted ? 'bg-primary/12 hover:bg-primary/12' : null,
       )}
     >
       <div className="relative w-8 shrink-0">
@@ -133,12 +163,33 @@ export function MessageRow({
           </p>
         )}
 
+        {/* Above the words and below the name: the reply is the message, and
+            this is only what it answers. */}
+        {replyContext !== undefined && !removed ? (
+          onJumpToParent ? (
+            <button
+              type="button"
+              onClick={onJumpToParent}
+              className="hover:bg-foreground/7 focus-visible:ring-ring -mx-1 mb-0.5 flex w-full min-w-0 rounded-sm px-1 py-px text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              aria-label={
+                replyContext === null
+                  ? 'Go to the message this replies to'
+                  : `Go to the message from ${replyContext.authorName} this replies to`
+              }
+            >
+              <ReplyContextLine context={replyContext} />
+            </button>
+          ) : (
+            <ReplyContextLine context={replyContext} className="mb-0.5" />
+          )
+        ) : null}
+
         {removed ? (
           <>
             <p className="text-muted-foreground/60 text-sm leading-relaxed italic">
               This message was deleted.
             </p>
-            {onReply ? <ThreadSummary message={message} onOpen={onReply} /> : null}
+            {onOpenThread ? <ThreadSummary message={message} onOpen={onOpenThread} /> : null}
           </>
         ) : editing ? (
           <form
@@ -183,7 +234,7 @@ export function MessageRow({
               onPick={onReact}
               onToggle={(emoji, mine) => (mine ? onUnreact(emoji) : onReact(emoji))}
             />
-            {onReply ? <ThreadSummary message={message} onOpen={onReply} /> : null}
+            {onOpenThread ? <ThreadSummary message={message} onOpen={onOpenThread} /> : null}
           </>
         )}
       </div>
@@ -203,7 +254,7 @@ export function MessageRow({
               size="icon-sm"
               variant="ghost"
               className="text-muted-foreground hover:text-foreground size-6"
-              aria-label="Reply in thread"
+              aria-label={`Reply to ${message.authorName}`}
               onClick={onReply}
             >
               <ArrowBendUpLeft className="size-3.5" aria-hidden="true" />

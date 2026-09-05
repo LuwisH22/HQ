@@ -4,12 +4,14 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import type { MentionCandidate } from '@/services/channel.service'
+import type { ReplyContext } from '@/services/message.service'
 import { attachmentService } from '@/services/attachment.service'
 import type { UploadedAttachment } from '@/services/attachment.service'
 import { errorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { MentionAutocomplete } from './MentionAutocomplete'
 import { ReactionPicker } from './MessageReactions'
+import { ReplyContextLine } from './ReplyContext'
 import { applyMention, mentionQueryAt, useMentionMenu } from './mentions'
 import { ATTACHMENT_ACCEPT, formatBytes, rejectAttachment } from './attachments'
 
@@ -61,6 +63,8 @@ export function Composer({
   onTyping,
   mentionCandidates = [],
   attachmentsEnabled = true,
+  replyingTo,
+  onCancelReply,
 }: {
   /** The channel's name, or the other person's in a direct message. */
   placeName: string
@@ -76,6 +80,13 @@ export function Composer({
   /** Who may be mentioned here. Empty disables the menu entirely. */
   mentionCandidates?: readonly MentionCandidate[]
   attachmentsEnabled?: boolean
+  /**
+   * What is being replied to, if anything. The state belongs to the room
+   * rather than to this component, which is what lets a reply be started,
+   * cancelled and started again without the draft ever being touched.
+   */
+  replyingTo?: ReplyContext | null
+  onCancelReply?: () => void
 }) {
   const [draft, setDraft] = useState('')
   const [caret, setCaret] = useState(0)
@@ -180,6 +191,14 @@ export function Composer({
     return true
   }
 
+  // Starting a reply puts the caret in the field: the whole point is that the
+  // answer is typed where everything else is typed. Keyed on the id rather
+  // than the object, which is rebuilt on every render of the room.
+  const replyingToId = replyingTo?.id ?? null
+  useEffect(() => {
+    if (replyingToId !== null) ref.current?.focus()
+  }, [replyingToId])
+
   // Re-measure from scratch each time: shrinking back after a deletion needs
   // the height reset before scrollHeight means anything.
   useEffect(() => {
@@ -237,6 +256,24 @@ export function Composer({
           'focus-within:border-primary',
         )}
       >
+        {replyingTo && onCancelReply ? (
+          <div
+            className="border-border flex items-center gap-2 border-b px-2.5 py-1.5"
+            aria-label="Replying to"
+          >
+            <ReplyContextLine context={replyingTo} className="min-w-0 flex-1" />
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground size-5 shrink-0"
+              aria-label="Cancel reply"
+              onClick={onCancelReply}
+            >
+              <X className="size-3" aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
+
         {pending.length > 0 ? (
           <ul
             className="border-border flex flex-wrap gap-1.5 border-b px-2 py-2"

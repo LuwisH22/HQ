@@ -72,6 +72,13 @@ export function ConversationChatPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [threadRootId, setThreadRootId] = useState<string | null>(null)
+  // Which message the composer is answering. Kept here rather than inside the
+  // composer so that starting, cancelling and restarting a reply never goes
+  // near the draft.
+  const [replyToId, setReplyToId] = useState<string | null>(null)
+  // Where a jump landed, for as long as it takes to notice it.
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const timelineRef = useRef<HTMLDivElement | null>(null)
 
   const detailsOpen = isDesktop ? panelOpen : sheetOpen
   const toggleDetails = () => (isDesktop ? setPanelOpen(!panelOpen) : setSheetOpen((open) => !open))
@@ -209,18 +216,88 @@ export function ConversationChatPage() {
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [messages.length, conversationId])
 
+  // The parents of every reply on screen, in one call. Narrow rows by design:
+  // a name, the words and how many files rode with them, so a quote cannot
+  // carry anything else into the timeline.
+  const parentIds = useMemo(
+    () => [
+      ...new Set(messages.map((m) => m.parentMessageId).filter((id): id is string => id !== null)),
+    ],
+    [messages],
+  )
+
+  const replyContextsQuery = useQuery({
+    queryKey: queryKeys.messages.replyContexts(conversationId ?? 'none', parentIds),
+    queryFn: () => messageService.listReplyContexts(parentIds),
+    enabled: parentIds.length > 0,
+  })
+
+  /**
+   * Follow a quote back to the message it came from.
+   *
+   * Only within the page that is loaded: history arrives a page at a time, and
+   * hunting backwards through it for one row would be a scroll nobody asked
+   * for.
+   */
+  function jumpToMessage(id: string): void {
+    const row = timelineRef.current?.querySelector(`[data-message-id="${id}"]`)
+    if (!row) {
+      toast.info('That message is further back in the conversation.')
+      return
+    }
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    setHighlightedId(id)
+  }
+
+  /**
+   * What the composer is answering, built from the row already on screen —
+   * you cannot start a reply to something you cannot see, so there is nothing
+   * here to fetch.
+   */
+  const replyTo = useMemo(() => {
+    if (replyToId === null) return null
+    const target = messages.find((m) => m.id === replyToId)
+    if (!target) return null
+    return {
+      id: target.id,
+      authorName: target.authorName,
+      body: target.body,
+      deleted: target.deletedAt !== null,
+      attachmentCount: (attachmentsQuery.data?.get(target.id) ?? []).length,
+    }
+  }, [replyToId, messages, attachmentsQuery.data])
+
+  // Long enough to find the row with your eye, short enough not to become a
+  // second kind of pinned message.
+  useEffect(() => {
+    if (highlightedId === null) return
+    const timer = window.setTimeout(() => setHighlightedId(null), 1600)
+    return () => window.clearTimeout(timer)
+  }, [highlightedId])
+
   const send = useMutation({
     // Two steps, in this order: the message first, then the files against it.
     // The attachment policy asks whether the caller authored a live message
     // they may still send to, so there has to be one before there can be any.
-    mutationFn: async (input: { body: string; attachments: readonly UploadedAttachment[] }) => {
-      const message = await messageService.sendToConversation(conversationId as string, input.body)
+    mutationFn: async (input: {
+      body: string
+      attachments: readonly UploadedAttachment[]
+      parentMessageId: string | null
+    }) => {
+      const message = await messageService.sendToConversation(
+        conversationId as string,
+        input.body,
+        input.parentMessageId,
+      )
       if (input.attachments.length > 0) {
         await attachmentService.attach(message.id, input.attachments)
       }
     },
     onSuccess: async () => {
       realtime.clearTyping()
+      // Only once it landed: a failed send keeps the reply, so the words can
+      // be sent again without pointing them at their message a second time.
+      setReplyToId(null)
       await invalidateMessages()
       await queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.all(organizationId ?? 'none'),
@@ -370,7 +447,10 @@ export function ConversationChatPage() {
           </div>
         ) : null}
 
-        <div className={cn('min-h-0 flex-1 overflow-y-auto', searchOpen && 'hidden')}>
+        <div
+          ref={timelineRef}
+          className={cn('min-h-0 flex-1 overflow-y-auto', searchOpen && 'hidden')}
+        >
           {/* The full width of the column; the gutter is the message row's
               own padding. See ChannelChatPage. */}
           <div className="flex min-h-full w-full flex-col justify-end py-4">
@@ -421,7 +501,25 @@ export function ConversationChatPage() {
                           canDelete: isMine,
                           canReact: true,
                         }}
-                        onReply={() => openThread(message.id)}
+                        replyContext={
+                          message.parentMessageId === null
+                            ? undefined
+                            : (replyContextsQuery.data?.get(message.parentMessageId) ?? null)
+                        }
+                        highlighted={highlightedId === message.id}
+                        // One level, which is what the database allows: a
+                        // reply is not something anybody can reply to.
+                        onReply={
+                          message.parentMessageId === null
+                            ? () => setReplyToId(message.id)
+                            : undefined
+                        }
+                        onOpenThread={() => openThread(message.id)}
+                        onJumpToParent={
+                          message.parentMessageId === null
+                            ? undefined
+                            : () => jumpToMessage(message.parentMessageId as string)
+                        }
                         onReact={(emoji) => react.mutate({ id: message.id, emoji })}
                         onUnreact={(emoji) => unreact.mutate({ id: message.id, emoji })}
                         onEdit={(body) => saveEdit.mutate({ id: message.id, body })}
@@ -448,9 +546,13 @@ export function ConversationChatPage() {
             placeKind="conversation"
             disabled={false}
             sending={send.isPending}
-            onSend={(body, attachments) => send.mutate({ body, attachments })}
+            onSend={(body, attachments) =>
+              send.mutate({ body, attachments, parentMessageId: replyToId })
+            }
             onTyping={realtime.noteTyping}
             mentionCandidates={mentionCandidatesQuery.data ?? []}
+            replyingTo={replyTo}
+            onCancelReply={() => setReplyToId(null)}
           />
         </div>
       </div>

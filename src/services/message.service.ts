@@ -12,6 +12,7 @@ import type {
   MessageSearchInput,
   MessageSearchResult,
   MessageService,
+  ReplyContext,
 } from './service-contracts'
 
 export type {
@@ -21,6 +22,7 @@ export type {
   MessageReaction,
   MessageSearchInput,
   MessageSearchResult,
+  ReplyContext,
 } from './service-contracts'
 
 /**
@@ -97,8 +99,9 @@ export const supabaseMessageService: MessageService = {
       .from('messages')
       .select(COLUMNS)
       .eq('channel_id', channelId)
-      // Roots only: a reply belongs to its thread, not to the timeline.
-      .is('parent_message_id', null)
+      // Replies included: a reply is a message in the room, carrying a line
+      // that says what it answers. The thread panel is the same rows read a
+      // second way, not a place they are hidden in.
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(PAGE_SIZE + 1)
@@ -129,7 +132,6 @@ export const supabaseMessageService: MessageService = {
       .from('messages')
       .select(COLUMNS)
       .eq('conversation_id', conversationId)
-      .is('parent_message_id', null)
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(PAGE_SIZE + 1)
@@ -268,6 +270,53 @@ export const supabaseMessageService: MessageService = {
 
     if (error) throw toAppError(error)
     return ((data ?? []) as unknown as MessageRow[]).map(toMessage)
+  },
+
+  /**
+   * The parents of a page of replies, in one call.
+   *
+   * A narrow projection on purpose. The line above a reply needs a name, the
+   * words and a count of files; asking for exactly that means the row cannot
+   * carry a storage path or an address into the timeline even by mistake.
+   */
+  async listReplyContexts(messageIds: readonly string[]): Promise<Map<string, ReplyContext>> {
+    const out = new Map<string, ReplyContext>()
+    if (messageIds.length === 0) return out
+
+    const { data, error } = await getSupabase()
+      .from('messages')
+      .select(
+        `id, body, deleted_at,
+         author:profiles!messages_author_id_fkey ( display_name, full_name, email ),
+         attachments:message_attachments ( id )`,
+      )
+      .in('id', [...new Set(messageIds)])
+
+    if (error) throw toAppError(error)
+
+    for (const row of (data ?? []) as unknown as {
+      id: string
+      body: string
+      deleted_at: string | null
+      author: unknown
+      attachments: unknown
+    }[]) {
+      const author = firstOf(row.author) as {
+        display_name: string | null
+        full_name: string | null
+        email: string
+      } | null
+
+      out.set(row.id, {
+        id: row.id,
+        authorName: author?.display_name ?? author?.full_name ?? author?.email ?? 'Removed member',
+        body: row.deleted_at === null ? row.body : '',
+        deleted: row.deleted_at !== null,
+        attachmentCount: Array.isArray(row.attachments) ? row.attachments.length : 0,
+      })
+    }
+
+    return out
   },
 
   /** Newest pin first, and never a deleted message: a trigger unpins those. */
@@ -448,6 +497,7 @@ export const messageService: MessageService = {
   getById: (messageId) => impl().getById(messageId),
   send: (channelId, body, parentMessageId) => impl().send(channelId, body, parentMessageId),
   listReplies: (rootMessageId) => impl().listReplies(rootMessageId),
+  listReplyContexts: (messageIds) => impl().listReplyContexts(messageIds),
   edit: (messageId, body) => impl().edit(messageId, body),
   remove: (messageId, reason) => impl().remove(messageId, reason),
   setPinned: (messageId, pinned) => impl().setPinned(messageId, pinned),

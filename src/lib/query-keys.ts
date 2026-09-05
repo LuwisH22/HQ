@@ -53,6 +53,10 @@ export const queryKeys = {
     list: (placeId: string) => ['messages', placeId] as const,
     pinned: (placeId: string) => ['messages', placeId, 'pinned'] as const,
     replies: (rootMessageId: string) => ['messages', 'thread', rootMessageId] as const,
+    // Keyed by the parents themselves: what a quote says belongs to the
+    // message being quoted, not to the page that happens to quote it.
+    replyContexts: (placeId: string, parentIds: readonly string[]) =>
+      ['messages', placeId, 'reply-contexts', [...parentIds].sort().join('|')] as const,
     mentions: (placeId: string) => ['messages', placeId, 'mentions'] as const,
     reactions: (placeId: string) => ['messages', placeId, 'reactions'] as const,
     search: (placeId: string | null, query: string) =>

@@ -36,6 +36,7 @@ import type {
   PermissionMatrixRow,
   Profile,
   ProfileService,
+  ReplyContext,
 } from '../service-contracts'
 import {
   db,
@@ -1562,8 +1563,8 @@ export const demoMessageService: MessageService = {
 
     const all = db()
       .messages.filter((m) => m.channelId === channelId)
-      // Roots only: a reply belongs to its thread, not to the timeline.
-      .filter((m) => m.parentMessageId === null)
+      // Replies included: a reply is a message in the room, carrying a line
+      // that says what it answers.
       .filter((m) => (before ? m.createdAt < before : true))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
@@ -1586,7 +1587,6 @@ export const demoMessageService: MessageService = {
 
     const all = db()
       .messages.filter((m) => m.conversationId === conversationId)
-      .filter((m) => m.parentMessageId === null)
       .filter((m) => (before ? m.createdAt < before : true))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
@@ -1690,6 +1690,33 @@ export const demoMessageService: MessageService = {
       .messages.filter((m) => m.parentMessageId === rootMessageId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map(toMessage)
+  },
+
+  async listReplyContexts(messageIds) {
+    await latency()
+
+    const out = new Map<string, ReplyContext>()
+    for (const id of new Set(messageIds)) {
+      const message = db().messages.find((m) => m.id === id)
+      if (!message) continue
+      // The same visibility as any other read: a parent in a place the reader
+      // cannot reach is simply absent, and the line above the reply says so.
+      try {
+        assertCanReachMessage(message)
+      } catch {
+        continue
+      }
+
+      const profile = db().profiles.find((p) => p.id === message.authorId)
+      out.set(id, {
+        id,
+        authorName: profile?.displayName ?? profile?.fullName ?? profile?.email ?? 'Removed member',
+        body: message.deletedAt === null ? message.body : '',
+        deleted: message.deletedAt !== null,
+        attachmentCount: db().attachments.filter((a) => a.messageId === id).length,
+      })
+    }
+    return out
   },
 
   async edit(messageId, body) {

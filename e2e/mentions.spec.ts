@@ -206,11 +206,21 @@ test('mentions somebody from inside a thread', async ({ page }, testInfo) => {
   await send(page)
   await expect(page.getByText('root message')).toBeVisible({ timeout: 15_000 })
 
-  await page
+  // The panel opens from a reply count, so there has to be one first.
+  const root = page
     .getByRole('list', { name: 'Messages' })
     .getByRole('listitem')
     .filter({ hasText: 'root message' })
-    .getByRole('button', { name: 'Reply in thread' })
+  await root.getByRole('button', { name: /^Reply to / }).click()
+  await composer(page, name).fill('opening the thread')
+  await send(page)
+  await expect(page.getByText('opening the thread', { exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
+
+  await root
+    .getByRole('button', { name: /repl(y|ies)/ })
+    .first()
     .click()
   await expect(page.getByRole('heading', { name: 'Thread', exact: true })).toBeVisible({
     timeout: 15_000,

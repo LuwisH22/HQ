@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { clearDemoCache, db, resetDemoDatabase } from './demo-database'
+import { clearDemoCache, db, DEMO_OWNER_PROFILE_ID, resetDemoDatabase } from './demo-database'
 import {
+  demoAttachmentService,
   demoChannelService,
+  demoConversationService,
   demoMessageService,
   demoOrganizationService,
   signInAsDemoAdmin,
@@ -60,15 +62,106 @@ const privateChannel = () => db().channels.find((c) => c.isPrivate)!
 const otherPublicChannel = (not: string) => db().channels.find((c) => !c.isPrivate && c.id !== not)!
 
 describe('replying', () => {
-  it('keeps replies out of the channel timeline', async () => {
+  it('puts a reply in the timeline, pointed at what it answers', async () => {
     const channel = publicChannel()
     const root = await demoMessageService.send(channel.id, 'Scrim besok jam 8.')
     await demoMessageService.send(channel.id, 'Against RRQ?', root.id)
 
     const page = await demoMessageService.list(channel.id)
+    // A reply is a message in the room: it reads in the flow, carrying a line
+    // that says what it answers. The thread is the same rows read a second
+    // way, not a place they are hidden in.
     expect(page.messages.map((m) => m.body)).toContain('Scrim besok jam 8.')
-    // A reply belongs to its thread, not to the timeline.
-    expect(page.messages.map((m) => m.body)).not.toContain('Against RRQ?')
+    expect(page.messages.map((m) => m.body)).toContain('Against RRQ?')
+
+    const reply = page.messages.find((m) => m.body === 'Against RRQ?')
+    expect(reply?.parentMessageId).toBe(root.id)
+    expect(page.messages.find((m) => m.body === 'Scrim besok jam 8.')?.parentMessageId).toBeNull()
+
+    // And the thread still holds it, unchanged.
+    expect((await demoMessageService.listReplies(root.id)).map((m) => m.body)).toEqual([
+      'Against RRQ?',
+    ])
+  })
+
+  it('does the same in a conversation', async () => {
+    const others = db()
+      .members.map((m) => m.userId)
+      .filter((id) => id !== DEMO_OWNER_PROFILE_ID)
+    const [a, b] = others
+
+    db().currentUserId = a!
+    const conversation = await demoConversationService.startDirect('any', b!)
+    const root = await demoMessageService.sendToConversation(conversation, 'you around?')
+    await demoMessageService.sendToConversation(conversation, 'yeah', root.id)
+
+    const page = await demoMessageService.listConversation(conversation)
+    expect(page.messages.map((m) => m.body)).toEqual(['you around?', 'yeah'])
+    expect(page.messages[1]?.parentMessageId).toBe(root.id)
+  })
+
+  it('says what a reply is answering, and nothing more', async () => {
+    const channel = publicChannel()
+    const root = await demoMessageService.send(channel.id, 'Scrim besok jam 8.')
+    const reply = await demoMessageService.send(channel.id, 'Against RRQ?', root.id)
+
+    const contexts = await demoMessageService.listReplyContexts([root.id])
+    const context = contexts.get(root.id)
+
+    expect(context?.authorName).toBeTruthy()
+    expect(context?.body).toBe('Scrim besok jam 8.')
+    expect(context?.deleted).toBe(false)
+    expect(context?.attachmentCount).toBe(0)
+    // A quote is a name, some words and a count of files. There is no field
+    // here that could carry a storage path or an address into the timeline.
+    expect(Object.keys(context ?? {}).sort()).toEqual([
+      'attachmentCount',
+      'authorName',
+      'body',
+      'deleted',
+      'id',
+    ])
+
+    // Asked about a message that is not a parent, it answers all the same:
+    // the call is about messages, not about threads.
+    expect((await demoMessageService.listReplyContexts([reply.id])).size).toBe(1)
+  })
+
+  it('counts the files on the message being answered', async () => {
+    const channel = publicChannel()
+    const root = await demoMessageService.send(channel.id, 'here it is')
+    const upload = await demoAttachmentService.upload({
+      name: 'vod.png',
+      type: 'image/png',
+      size: 64,
+    } as File)
+    await demoAttachmentService.attach(root.id, [upload])
+
+    const context = (await demoMessageService.listReplyContexts([root.id])).get(root.id)
+    expect(context?.attachmentCount).toBe(1)
+    // The count, never the object: the line says a file rode along and has no
+    // way to say where it is kept.
+    expect(JSON.stringify(context)).not.toContain(upload.storagePath)
+  })
+
+  it('gives a deleted parent no words, and says it is gone', async () => {
+    const channel = publicChannel()
+    const root = await demoMessageService.send(channel.id, 'about to go')
+    await demoMessageService.send(channel.id, 'noted', root.id)
+    await demoMessageService.remove(root.id)
+
+    const context = (await demoMessageService.listReplyContexts([root.id])).get(root.id)
+    expect(context?.deleted).toBe(true)
+    expect(context?.body).toBe('')
+  })
+
+  it('tells somebody who cannot see the parent nothing about it', async () => {
+    const secret = privateChannel()
+    const root = await demoMessageService.send(secret.id, 'classified')
+
+    await actAsNonOwner()
+    // Absent rather than redacted: the same visibility as any other read.
+    expect((await demoMessageService.listReplyContexts([root.id])).size).toBe(0)
   })
 
   it('lists a thread oldest first', async () => {

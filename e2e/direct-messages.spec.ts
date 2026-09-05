@@ -63,9 +63,15 @@ async function send(page: Page, name: string, body: string): Promise<void> {
   await expect(page.getByText(body, { exact: true })).toBeVisible({ timeout: 20_000 })
 }
 
+/** The row whose own words are this text, as against one quoting them. */
+const rowFor = (page: Page, body: string) =>
+  timeline(page)
+    .getByRole('listitem')
+    .filter({ has: page.locator('[data-message-body]', { hasText: body }) })
+
 /** Remove a message through the row's own menu, the way a person would. */
 async function remove(page: Page, body: string): Promise<void> {
-  const row = timeline(page).getByRole('listitem').filter({ hasText: body })
+  const row = rowFor(page, body)
   await row.getByRole('button', { name: /Actions for message/ }).click()
   page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('menuitem', { name: 'Delete message' }).click()
@@ -186,8 +192,18 @@ test('opens a thread on a direct message', async ({ page }, testInfo) => {
   const body = say('ada thread')
   await send(page, name, body)
 
-  const row = timeline(page).getByRole('listitem').filter({ hasText: body })
-  await row.getByRole('button', { name: 'Reply in thread' }).click()
+  // The panel opens from a reply count, so there has to be one first.
+  const row = rowFor(page, body)
+  await row.getByRole('button', { name: /^Reply to / }).click()
+  const opener = say('mulai thread')
+  await page.getByRole('textbox', { name: `Message ${name}` }).fill(opener)
+  await page.getByRole('button', { name: 'Send message' }).click()
+  await expect(page.getByText(opener, { exact: true })).toBeVisible({ timeout: 20_000 })
+
+  await row
+    .getByRole('button', { name: /repl(y|ies)/ })
+    .first()
+    .click()
   await expect(page.getByRole('heading', { name: 'Thread', exact: true })).toBeVisible({
     timeout: 20_000,
   })

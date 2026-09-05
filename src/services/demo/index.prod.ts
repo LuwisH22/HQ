@@ -91,6 +91,7 @@ export const demoMessageService: MessageService = {
   sendToConversation: unreachable,
   listConversationPinned: unreachable,
   listReplies: unreachable,
+  listReplyContexts: unreachable,
   edit: unreachable,
   remove: unreachable,
   setPinned: unreachable,

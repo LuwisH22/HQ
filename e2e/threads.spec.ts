@@ -4,6 +4,11 @@ import { createChannel, deleteChannel, uniqueName } from './channel-helpers'
 /**
  * Phase 2 · C3 — threads through the real UI.
  *
+ * A thread is reached from a reply count, which is the one action that opens
+ * the panel now that Reply answers in the room instead. So every test here
+ * makes a reply before it has a thread to open — which is also the honest
+ * order: there is nothing to look at until somebody has answered.
+ *
  * Everything of the form "somebody who cannot see the channel gets nothing"
  * lives in the unit suite: this session is the organization owner, who
  * short-circuits every check by design.
@@ -17,13 +22,44 @@ async function send(page: Page, channel: string, body: string): Promise<void> {
   await expect(page.getByText(body)).toBeVisible({ timeout: 15_000 })
 }
 
-/** The panel is a column on desktop and a sheet on a phone; both open here. */
-async function openThreadOn(page: Page, body: string): Promise<void> {
-  const row = page
+/**
+ * The row whose own words are this text.
+ *
+ * Matched on the body rather than on the row: a reply also carries a line
+ * quoting what it answers, and a match on the row cannot tell the two apart.
+ */
+const rowFor = (page: Page, body: string) =>
+  page
     .getByRole('list', { name: 'Messages' })
     .getByRole('listitem')
-    .filter({ hasText: body })
-  await row.getByRole('button', { name: 'Reply in thread' }).click()
+    .filter({ has: page.locator('[data-message-body]', { hasText: body }) })
+
+/** Answer a message in the room's own composer, which is what Reply does. */
+async function replyInline(
+  page: Page,
+  channel: string,
+  target: string,
+  body: string,
+): Promise<void> {
+  await rowFor(page, target)
+    .getByRole('button', { name: /^Reply to / })
+    .click()
+  await expect(page.getByLabel('Replying to')).toBeVisible({ timeout: 10_000 })
+  await page.getByRole('textbox', { name: `Message ${channel}` }).fill(body)
+  await page.getByRole('button', { name: 'Send message' }).click()
+  await expect(page.getByText(body, { exact: true })).toBeVisible({ timeout: 20_000 })
+}
+
+/**
+ * Open the thread hanging off a message.
+ *
+ * The panel is a column on desktop and a sheet on a phone; both open here.
+ * The reply count is the way in, so the message needs one already.
+ */
+async function openThreadOn(page: Page, body: string): Promise<void> {
+  await rowFor(page, body)
+    .getByRole('button', { name: /repl(y|ies)/ })
+    .click()
   await expect(page.getByRole('heading', { name: 'Thread', exact: true })).toBeVisible({
     timeout: 15_000,
   })
@@ -60,17 +96,20 @@ test('replies to a message and counts the thread', async ({ page }, testInfo) =>
   await createChannel(page, name)
   await send(page, name, 'Scrim besok jam 8.')
 
+  // One answer from the room, one from inside the panel: the same rows,
+  // written two ways, counted once.
+  await replyInline(page, name, 'Scrim besok jam 8.', 'Against RRQ?')
   await openThreadOn(page, 'Scrim besok jam 8.')
-  await replyInThread(page, name, 'Against RRQ?')
   await replyInThread(page, name, 'Iya.')
   await leaveThread(page, testInfo.project.name)
 
   // The count lands on the message in the timeline, not only in the panel.
   await expect(page.getByRole('button', { name: /2 replies/ })).toBeVisible({ timeout: 15_000 })
 
-  // A reply belongs to its thread; the timeline stays a list of openings.
+  // And both replies read in the flow, whichever composer wrote them.
   const timeline = page.getByRole('list', { name: 'Messages' })
-  await expect(timeline.getByText('Against RRQ?')).toHaveCount(0)
+  await expect(timeline.getByText('Against RRQ?')).toBeVisible()
+  await expect(timeline.getByText('Iya.')).toBeVisible({ timeout: 15_000 })
 
   await deleteChannel(page, name)
 })
@@ -80,6 +119,7 @@ test('returns from a thread to the channel details', async ({ page }, testInfo) 
   await page.goto('/#/')
   await createChannel(page, name)
   await send(page, name, 'root message')
+  await replyInline(page, name, 'root message', 'so there is a thread')
 
   await openThreadOn(page, 'root message')
   await page.getByRole('button', { name: 'Back to channel details' }).click()
@@ -96,10 +136,7 @@ test('reopens a thread from its reply count', async ({ page }, testInfo) => {
   await page.goto('/#/')
   await createChannel(page, name)
   await send(page, name, 'countable root')
-
-  await openThreadOn(page, 'countable root')
-  await replyInThread(page, name, 'first reply')
-  await leaveThread(page, testInfo.project.name)
+  await replyInline(page, name, 'countable root', 'first reply')
 
   await page.getByRole('button', { name: /1 reply/ }).click()
   await expect(page.getByRole('heading', { name: 'Thread', exact: true })).toBeVisible({
@@ -119,19 +156,16 @@ test('keeps the thread when the root is deleted, and takes no new replies', asyn
   await page.goto('/#/')
   await createChannel(page, name)
   await send(page, name, 'about to go')
+  await replyInline(page, name, 'about to go', 'reply survives')
 
-  await openThreadOn(page, 'about to go')
-  await replyInThread(page, name, 'reply survives')
-  await leaveThread(page, testInfo.project.name)
-
-  const row = page
-    .getByRole('list', { name: 'Messages' })
-    .getByRole('listitem')
-    .filter({ hasText: 'about to go' })
-  await row.getByRole('button', { name: /Actions for message/ }).click()
+  await rowFor(page, 'about to go')
+    .getByRole('button', { name: /Actions for message/ })
+    .click()
   page.once('dialog', (dialog) => void dialog.accept())
   await page.getByRole('menuitem', { name: 'Delete message' }).click()
-  await expect(page.getByText('This message was deleted.')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('This message was deleted.').first()).toBeVisible({
+    timeout: 15_000,
+  })
 
   // The thread is still reachable from its count, and the composer is gone.
   await page.getByRole('button', { name: /1 reply/ }).click()
@@ -149,10 +183,7 @@ test('finds a reply in search', async ({ page }, testInfo) => {
   await page.goto('/#/')
   await createChannel(page, name)
   await send(page, name, 'search root')
-
-  await openThreadOn(page, 'search root')
-  await replyInThread(page, name, `the needle is ${marker}`)
-  await leaveThread(page, testInfo.project.name)
+  await replyInline(page, name, 'search root', `the needle is ${marker}`)
 
   await page.getByRole('button', { name: 'Search this channel' }).click()
   await page.getByRole('textbox', { name: 'Search messages' }).fill(marker)
@@ -172,9 +203,8 @@ test('reacts to a reply inside the thread', async ({ page }, testInfo) => {
   await page.goto('/#/')
   await createChannel(page, name)
   await send(page, name, 'react root')
-
+  await replyInline(page, name, 'react root', 'good call')
   await openThreadOn(page, 'react root')
-  await replyInThread(page, name, 'good call')
 
   const reply = page
     .getByRole('list', { name: 'Thread replies' })
@@ -183,7 +213,15 @@ test('reacts to a reply inside the thread', async ({ page }, testInfo) => {
   await reply.getByRole('button', { name: 'Add a reaction' }).first().click()
   await page.getByRole('button', { name: 'React with 👍' }).click()
 
-  await expect(page.getByRole('button', { name: /👍 1/ })).toBeVisible({ timeout: 15_000 })
+  await expect(reply.getByRole('button', { name: /👍 1/ })).toBeVisible({ timeout: 15_000 })
+
+  // And on the same reply in the room, once the panel is out of the way — one
+  // row, read in two places. On a phone the panel is a sheet over the
+  // messages, so this has to come after leaving it.
+  await leaveThread(page, testInfo.project.name)
+  await expect(rowFor(page, 'good call').getByRole('button', { name: /👍 1/ })).toBeVisible({
+    timeout: 15_000,
+  })
 
   await deleteChannel(page, name)
 })

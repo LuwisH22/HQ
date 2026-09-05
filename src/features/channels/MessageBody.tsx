@@ -77,7 +77,12 @@ export function MessageBody({
   )
 
   return (
-    <p className="text-foreground/92 text-sm leading-relaxed break-words whitespace-pre-wrap">
+    <p
+      // The words themselves, as against the line above them quoting somebody
+      // else: a row can hold both, and they are not the same text.
+      data-message-body=""
+      className="text-foreground/92 text-sm leading-relaxed break-words whitespace-pre-wrap"
+    >
       {segments.map((part, index) =>
         part.mentioned ? (
           <span

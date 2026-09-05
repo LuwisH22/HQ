@@ -378,6 +378,23 @@ export interface Message {
   lastReplyAt: string | null
 }
 
+/**
+ * Just enough of a message to say what a reply is answering.
+ *
+ * Deliberately not a `Message`: the line above a reply needs a name, a few
+ * words and whether there were files — and giving it nothing else means a
+ * storage path or an author's email cannot reach that row by accident.
+ */
+export interface ReplyContext {
+  id: string
+  authorName: string
+  /** Empty when the message was deleted; the row survives, the words do not. */
+  body: string
+  deleted: boolean
+  /** How many files rode with it, so the line can say so without naming them. */
+  attachmentCount: number
+}
+
 export interface MessagePage {
   /** Oldest first, the way a transcript reads. */
   messages: Message[]
@@ -398,6 +415,13 @@ export interface MessageService {
   send(channelId: string, body: string, parentMessageId?: string | null): Promise<Message>
   /** A thread's replies, oldest first. */
   listReplies(rootMessageId: string): Promise<Message[]>
+  /**
+   * What the given messages are, as far as a reply needs to say it.
+   *
+   * Same visibility as any other read: a parent the caller cannot see is
+   * absent from the map, and the line above the reply says so.
+   */
+  listReplyContexts(messageIds: readonly string[]): Promise<Map<string, ReplyContext>>
   /** Authors only. `messages.moderate` confers removal, never rewriting. */
   edit(messageId: string, body: string): Promise<void>
   /** Soft delete: the author's own, or anyone's with `messages.moderate`. */
