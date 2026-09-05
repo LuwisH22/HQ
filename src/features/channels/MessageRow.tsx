@@ -3,7 +3,6 @@ import { DotsThree, PushPin, ArrowBendUpLeft, PencilSimple } from '@phosphor-ico
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +12,7 @@ import {
 import { initialsFor } from '@/services/profile.service'
 import type { Message, MessageReaction } from '@/services/message.service'
 import { MessageReactions, ReactionPicker } from './MessageReactions'
+import { ThreadSummary } from './ThreadPanel'
 import { cn } from '@/lib/utils'
 
 /**
@@ -40,38 +40,6 @@ function shortTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-/** A disabled control that says which phase brings it, rather than lying. */
-function UpcomingAction({
-  label,
-  hint,
-  icon: Icon,
-}: {
-  label: string
-  hint: string
-  icon: typeof ArrowBendUpLeft
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {/* Wrapped: a disabled button fires no pointer events, so the tooltip
-            would never open on the control it describes. */}
-        <span className="inline-flex">
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            disabled
-            aria-label={label}
-            className="text-muted-foreground size-6"
-          >
-            <Icon className="size-3.5" aria-hidden="true" />
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{hint}</TooltipContent>
-    </Tooltip>
-  )
-}
-
 export function MessageRow({
   message,
   grouped,
@@ -82,6 +50,7 @@ export function MessageRow({
   onDelete,
   onReact,
   onUnreact,
+  onReply,
 }: {
   message: Message
   /** Continues the message above it: no avatar, no name. */
@@ -93,13 +62,17 @@ export function MessageRow({
   onDelete: () => void
   onReact: (emoji: string) => void
   onUnreact: (emoji: string) => void
+  /** Omitted inside a thread, where there is nothing further to reply to. */
+  onReply?: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.body)
 
   const removed = message.deletedAt !== null
+  const canReply = onReply !== undefined && !removed
   const showActions =
-    !removed && (actions.canEdit || actions.canPin || actions.canDelete || actions.canReact)
+    !removed &&
+    (actions.canEdit || actions.canPin || actions.canDelete || actions.canReact || canReply)
 
   return (
     <li
@@ -139,9 +112,12 @@ export function MessageRow({
         )}
 
         {removed ? (
-          <p className="text-muted-foreground/60 text-sm leading-relaxed italic">
-            This message was deleted.
-          </p>
+          <>
+            <p className="text-muted-foreground/60 text-sm leading-relaxed italic">
+              This message was deleted.
+            </p>
+            {onReply ? <ThreadSummary message={message} onOpen={onReply} /> : null}
+          </>
         ) : editing ? (
           <form
             className="mt-1 flex flex-wrap items-center gap-2"
@@ -184,6 +160,7 @@ export function MessageRow({
               onPick={onReact}
               onToggle={(emoji, mine) => (mine ? onUnreact(emoji) : onReact(emoji))}
             />
+            {onReply ? <ThreadSummary message={message} onOpen={onReply} /> : null}
           </>
         )}
       </div>
@@ -198,14 +175,17 @@ export function MessageRow({
         >
           {actions.canReact ? <ReactionPicker onPick={onReact} label="Add a reaction" /> : null}
 
-          {/* Threads are still a later phase. The control is here so the
-              toolbar does not change shape when they land, and it says so
-              rather than pretending to work. */}
-          <UpcomingAction
-            label="Reply in thread"
-            hint="Threads arrive with C3"
-            icon={ArrowBendUpLeft}
-          />
+          {canReply ? (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground size-6"
+              aria-label="Reply in thread"
+              onClick={onReply}
+            >
+              <ArrowBendUpLeft className="size-3.5" aria-hidden="true" />
+            </Button>
+          ) : null}
 
           {actions.canPin ? (
             <Button

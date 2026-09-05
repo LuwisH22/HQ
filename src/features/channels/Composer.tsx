@@ -56,7 +56,7 @@ export function Composer({
 
   if (disabled) {
     return (
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-4" role="group" aria-label={`Composer for ${channelName}`}>
         <p className="border-border text-muted-foreground text-2xs rounded-md border border-dashed px-3 py-2.5 text-center">
           {disabledReason ?? 'You do not have permission to send messages here.'}
         </p>
@@ -65,7 +65,7 @@ export function Composer({
   }
 
   return (
-    <div className="px-4 pb-3">
+    <div className="px-4 pb-3" role="group" aria-label={`Composer for ${channelName}`}>
       <div
         className={cn(
           'border-input bg-background rounded-md border transition-[border-color] duration-[140ms]',

@@ -16,7 +16,7 @@ import type { InvitationStatus, MemberStatus } from '@/types/database.types'
 const STORAGE_KEY = 'lfg-hq-demo-db'
 // Bumped when the seed shape changes, so a stale store is discarded rather
 // than half-migrated.
-const SCHEMA_VERSION = 6
+const SCHEMA_VERSION = 7
 
 // --- Row shapes (camelCase; the demo layer sits above the SQL naming) -------
 
@@ -145,6 +145,10 @@ export interface DemoMessage {
   editedAt: string | null
   deletedAt: string | null
   createdAt: string
+  /** Set when this message is a reply. One level only. */
+  parentMessageId: string | null
+  replyCount: number
+  lastReplyAt: string | null
 }
 
 /** One emoji, one person, one message. The triple is the identity. */
@@ -670,6 +674,9 @@ function buildSeed(): DemoDatabase {
         pinnedAt: null,
         editedAt: null,
         deletedAt: null,
+        parentMessageId: null,
+        replyCount: 0,
+        lastReplyAt: null,
         createdAt: new Date(Date.now() - 45 * 60_000).toISOString(),
       },
       {
@@ -680,6 +687,9 @@ function buildSeed(): DemoDatabase {
         pinnedAt: null,
         editedAt: null,
         deletedAt: null,
+        parentMessageId: null,
+        replyCount: 0,
+        lastReplyAt: null,
         createdAt: new Date(Date.now() - 40 * 60_000).toISOString(),
       },
     ],

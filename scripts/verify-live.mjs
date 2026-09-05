@@ -1163,6 +1163,171 @@ console.log('\nC2 · channel membership resolves through the same rules')
     (unknown ?? []).length === 0, `${String((unknown ?? []).length)}`)
 }
 
+console.log('\nC3 · threads')
+let threadRoot = null
+let threadReply = null
+{
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ channel_id: probePublic, author_id: userId, body: 'verify-live thread root' })
+    .select('id, reply_count, last_reply_at, parent_message_id')
+    .single()
+  threadRoot = data?.id ?? null
+  check('a root message can be sent', !error && Boolean(threadRoot), error?.message ?? '')
+  check('it starts with no replies',
+    data?.reply_count === 0 && data?.last_reply_at === null && data?.parent_message_id === null)
+}
+{
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      channel_id: probePublic, author_id: userId,
+      body: 'verify-live thread reply', parent_message_id: threadRoot,
+    })
+    .select('id, parent_message_id')
+    .single()
+  threadReply = data?.id ?? null
+  check('a reply can be sent', !error && Boolean(threadReply), error?.message ?? '')
+  check('it points at its root', data?.parent_message_id === threadRoot)
+
+  const { data: root } = await supabase
+    .from('messages')
+    .select('reply_count, last_reply_at')
+    .eq('id', threadRoot)
+    .maybeSingle()
+  check('the root counts it', root?.reply_count === 1 && root?.last_reply_at !== null,
+    `count ${String(root?.reply_count)}`)
+}
+
+console.log('\nC3 · the shape of a thread is the database\u2019s to enforce')
+{
+  const { error } = await supabase.from('messages').insert({
+    channel_id: probePublic, author_id: userId,
+    body: 'nested', parent_message_id: threadReply,
+  })
+  check('a reply to a reply is refused', Boolean(error),
+    error ? `refused (${error.code ?? ''})` : 'ACCEPTED — THREADS ARE A TREE')
+}
+{
+  const { error } = await supabase.from('messages').insert({
+    channel_id: probePrivate, author_id: userId,
+    body: 'wrong channel', parent_message_id: threadRoot,
+  })
+  check('a reply in another channel is refused', Boolean(error),
+    error ? `refused (${error.code ?? ''})` : 'ACCEPTED — CROSS-CHANNEL REPLY')
+}
+{
+  const { error } = await supabase.from('messages').insert({
+    channel_id: probePublic, author_id: userId,
+    body: 'into the void',
+    parent_message_id: '00000000-0000-4000-8000-000000000000',
+  })
+  check('a reply to nothing is refused', Boolean(error),
+    error ? `refused (${error.code ?? ''})` : 'ACCEPTED')
+}
+{
+  const { error } = await supabase.from('messages').insert({
+    channel_id: probePublic, author_id: userId, body: 'seeded',
+    parent_message_id: threadRoot, reply_count: 99,
+  })
+  const { data: seeded } = await supabase
+    .from('messages').select('reply_count').eq('body', 'seeded').maybeSingle()
+  check('a client cannot seed a reply count', !error && seeded?.reply_count === 0,
+    seeded ? `count ${String(seeded.reply_count)}` : (error?.message ?? ''))
+}
+// Detaching the reply is a real change; nulling an already-null column on the
+// root would be a no-op the trigger has nothing to object to.
+{
+  const { error } = await supabase
+    .from('messages').update({ parent_message_id: null }).eq('id', threadReply)
+  check('parent_message_id cannot be written by a client', Boolean(error),
+    error ? 'refused' : 'ACCEPTED — A REPLY CAN BE DETACHED')
+}
+for (const [label, patch] of [
+  ['reply_count', { reply_count: 99 }],
+  ['last_reply_at', { last_reply_at: new Date().toISOString() }],
+]) {
+  const { error } = await supabase.from('messages').update(patch).eq('id', threadRoot)
+  check(`${label} cannot be written by a client`, Boolean(error),
+    error ? 'refused' : 'ACCEPTED — COLUMN IS WRITABLE')
+}
+
+console.log('\nC3 · replies are ordinary messages')
+{
+  const { error } = await supabase
+    .from('message_reactions')
+    .insert({ message_id: threadReply, user_id: userId, emoji: '\ud83d\udc4d' })
+  check('a reply can be reacted to', !error, error?.message ?? '')
+
+  const marker = 'verify-live thread reply'
+  const { data: found } = await supabase.rpc('search_messages', { p_query: 'thread' })
+  const hit = (found ?? []).find((r) => r.id === threadReply)
+  check('search finds a reply', Boolean(hit), hit ? '' : 'not found')
+  check('and says it is one', hit?.parent_message_id === threadRoot,
+    String(hit?.parent_message_id ?? 'null'))
+  void marker
+
+  const { error: pinError } = await supabase.rpc('pin_message', {
+    p_message_id: threadReply, p_pinned: true,
+  })
+  check('a reply can be pinned', !pinError, pinError?.message ?? '')
+  await supabase.rpc('pin_message', { p_message_id: threadReply, p_pinned: false })
+}
+
+console.log('\nC3 · a deleted root keeps its thread')
+{
+  await supabase.rpc('delete_message', { p_message_id: threadRoot })
+
+  const { data: root } = await supabase
+    .from('messages').select('deleted_at, body').eq('id', threadRoot).maybeSingle()
+  check('the root survives as a placeholder',
+    root?.deleted_at !== null && root?.body === '', `body length ${String((root?.body ?? '').length)}`)
+
+  const { data: replies } = await supabase
+    .from('messages').select('id').eq('parent_message_id', threadRoot)
+  check('its replies are still there', (replies ?? []).length > 0,
+    `${String((replies ?? []).length)} replies`)
+
+  const { error } = await supabase.from('messages').insert({
+    channel_id: probePublic, author_id: userId,
+    body: 'too late', parent_message_id: threadRoot,
+  })
+  check('but it takes no new replies', Boolean(error),
+    error ? `refused (${error.code ?? ''})` : 'ACCEPTED')
+}
+
+console.log('\nC3 · a deleted reply stops counting')
+{
+  const { data: fresh } = await supabase
+    .from('messages')
+    .insert({ channel_id: probePublic, author_id: userId, body: 'countable root' })
+    .select('id')
+    .single()
+
+  const { data: one } = await supabase
+    .from('messages')
+    .insert({
+      channel_id: probePublic, author_id: userId,
+      body: 'one', parent_message_id: fresh?.id,
+    })
+    .select('id')
+    .single()
+  await supabase.from('messages').insert({
+    channel_id: probePublic, author_id: userId,
+    body: 'two', parent_message_id: fresh?.id,
+  })
+
+  const { data: before } = await supabase
+    .from('messages').select('reply_count').eq('id', fresh?.id).maybeSingle()
+  check('two replies counted', before?.reply_count === 2, String(before?.reply_count))
+
+  await supabase.rpc('delete_message', { p_message_id: one?.id })
+
+  const { data: after } = await supabase
+    .from('messages').select('reply_count').eq('id', fresh?.id).maybeSingle()
+  check('one deleted, one counted', after?.reply_count === 1, String(after?.reply_count))
+}
+
 console.log('\nB3 · a channel and its category in one call')
 
 const comboName = `probe-combo-${String(Date.now() % 100000)}`

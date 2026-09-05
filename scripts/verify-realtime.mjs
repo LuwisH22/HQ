@@ -285,6 +285,45 @@ check('the removal payload identifies which reaction went',
     unreactionEvent.message_id === reactionTarget.id,
   unreactionEvent === 'TIMED_OUT' ? '-' : Object.keys(unreactionEvent).join(', '))
 
+console.log('\n6 · thread replies ride the existing channel subscription')
+{
+  // A reply is a message with the same channel_id, so it should need no new
+  // realtime at all. That is a claim worth watching arrive rather than
+  // reasoning about.
+  const { data: root } = await author
+    .from('messages')
+    .insert({ channel_id: channelId, author_id: authorId, body: 'realtime thread root' })
+    .select('id')
+    .single()
+
+  await new Promise((resolve) => setTimeout(resolve, 1200))
+
+  const replyGate = waitFor(gates.insert)
+  const { error } = await author.from('messages').insert({
+    channel_id: channelId, author_id: authorId,
+    body: 'realtime thread reply', parent_message_id: root.id,
+  })
+  check('reply sent', !error, error?.message ?? '')
+
+  const replyEvent = await replyGate
+  check('the listener was told about the reply', replyEvent !== 'TIMED_OUT',
+    replyEvent === 'TIMED_OUT' ? 'no event arrived' : 'received')
+  check('and the payload says which thread it belongs to',
+    replyEvent !== 'TIMED_OUT' && replyEvent.parent_message_id === root.id,
+    replyEvent === 'TIMED_OUT' ? '-' : String(replyEvent.parent_message_id))
+
+  // The root's counter is an UPDATE, which the same subscription carries.
+  const countGate = waitFor(gates.update)
+  await author.from('messages').insert({
+    channel_id: channelId, author_id: authorId,
+    body: 'second realtime reply', parent_message_id: root.id,
+  })
+  const countEvent = await countGate
+  check('the root count reaches the listener too',
+    countEvent !== 'TIMED_OUT' && countEvent.id === root.id && countEvent.reply_count === 2,
+    countEvent === 'TIMED_OUT' ? 'no event arrived' : `count ${String(countEvent.reply_count)}`)
+}
+
 console.log('\n6 · pin events ride the existing message subscription')
 const pinGate = waitFor(gates.update)
 const { error: pinError } = await author.rpc('pin_message', {

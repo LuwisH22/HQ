@@ -31,6 +31,7 @@ export type {
  */
 
 const COLUMNS = `id, channel_id, author_id, body, pinned_at, edited_at, deleted_at, created_at,
+   parent_message_id, reply_count, last_reply_at,
    author:profiles!messages_author_id_fkey ( id, display_name, full_name, email, avatar_url )`
 
 interface MessageRow {
@@ -42,6 +43,9 @@ interface MessageRow {
   edited_at: string | null
   deleted_at: string | null
   created_at: string
+  parent_message_id: string | null
+  reply_count: number
+  last_reply_at: string | null
   author: unknown
 }
 
@@ -66,6 +70,9 @@ function toMessage(row: MessageRow): Message {
     editedAt: row.edited_at,
     deletedAt: row.deleted_at,
     createdAt: row.created_at,
+    parentMessageId: row.parent_message_id,
+    replyCount: row.reply_count,
+    lastReplyAt: row.last_reply_at,
   }
 }
 
@@ -85,6 +92,8 @@ export const supabaseMessageService: MessageService = {
       .from('messages')
       .select(COLUMNS)
       .eq('channel_id', channelId)
+      // Roots only: a reply belongs to its thread, not to the timeline.
+      .is('parent_message_id', null)
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(PAGE_SIZE + 1)
@@ -113,7 +122,11 @@ export const supabaseMessageService: MessageService = {
     return data ? toMessage(data) : null
   },
 
-  async send(channelId: string, body: string): Promise<Message> {
+  async send(
+    channelId: string,
+    body: string,
+    parentMessageId: string | null = null,
+  ): Promise<Message> {
     const supabase = getSupabase()
 
     const { data: userData } = await supabase.auth.getUser()
@@ -124,7 +137,12 @@ export const supabaseMessageService: MessageService = {
     // against auth.uid() — posting under another name is refused twice.
     const { data, error } = await supabase
       .from('messages')
-      .insert({ channel_id: channelId, author_id: userId, body: body.trim() })
+      .insert({
+        channel_id: channelId,
+        author_id: userId,
+        body: body.trim(),
+        parent_message_id: parentMessageId,
+      })
       .select(COLUMNS)
       .single()
 
@@ -158,6 +176,23 @@ export const supabaseMessageService: MessageService = {
       p_pinned: pinned,
     })
     if (error) throw toAppError(error)
+  },
+
+  /**
+   * A thread's replies, oldest first.
+   *
+   * Visibility needs no extra rule: a reply is a message in the same channel,
+   * so the policy that decided the root already decided these.
+   */
+  async listReplies(rootMessageId: string): Promise<Message[]> {
+    const { data, error } = await getSupabase()
+      .from('messages')
+      .select(COLUMNS)
+      .eq('parent_message_id', rootMessageId)
+      .order('created_at', { ascending: true })
+
+    if (error) throw toAppError(error)
+    return ((data ?? []) as unknown as MessageRow[]).map(toMessage)
   },
 
   /** Newest pin first, and never a deleted message: a trigger unpins those. */
@@ -283,6 +318,7 @@ export const supabaseMessageService: MessageService = {
         authorName: author?.display_name ?? author?.full_name ?? author?.email ?? 'Removed member',
         body: row.body,
         createdAt: row.created_at,
+        parentMessageId: row.parent_message_id,
       }
     })
   },
@@ -295,7 +331,8 @@ function impl(): MessageService {
 export const messageService: MessageService = {
   list: (channelId, before) => impl().list(channelId, before),
   getById: (messageId) => impl().getById(messageId),
-  send: (channelId, body) => impl().send(channelId, body),
+  send: (channelId, body, parentMessageId) => impl().send(channelId, body, parentMessageId),
+  listReplies: (rootMessageId) => impl().listReplies(rootMessageId),
   edit: (messageId, body) => impl().edit(messageId, body),
   remove: (messageId, reason) => impl().remove(messageId, reason),
   setPinned: (messageId, pinned) => impl().setPinned(messageId, pinned),

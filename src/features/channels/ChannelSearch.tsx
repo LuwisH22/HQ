@@ -102,6 +102,12 @@ export function ChannelSearch({
                 >
                   <p className="text-3xs text-muted-foreground flex items-center gap-1.5">
                     <span className="font-medium">#{result.channelName}</span>
+                    {result.parentMessageId ? (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="text-accent-text">in a thread</span>
+                      </>
+                    ) : null}
                     <span aria-hidden="true">·</span>
                     <span>{result.authorName}</span>
                     <span aria-hidden="true">·</span>

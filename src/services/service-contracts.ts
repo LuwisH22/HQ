@@ -359,6 +359,11 @@ export interface Message {
   editedAt: string | null
   deletedAt: string | null
   createdAt: string
+  /** Set when this message is a reply. One level only. */
+  parentMessageId: string | null
+  /** Live replies beneath this message. Maintained by the database. */
+  replyCount: number
+  lastReplyAt: string | null
 }
 
 export interface MessagePage {
@@ -377,7 +382,10 @@ export interface MessageService {
   /** `before` is the createdAt of the oldest message already held. */
   list(channelId: string, before?: string): Promise<MessagePage>
   getById(messageId: string): Promise<Message | null>
-  send(channelId: string, body: string): Promise<Message>
+  /** `parentMessageId` makes it a reply in that message's thread. */
+  send(channelId: string, body: string, parentMessageId?: string | null): Promise<Message>
+  /** A thread's replies, oldest first. */
+  listReplies(rootMessageId: string): Promise<Message[]>
   /** Authors only. `messages.moderate` confers removal, never rewriting. */
   edit(messageId: string, body: string): Promise<void>
   /** Soft delete: the author's own, or anyone's with `messages.moderate`. */
@@ -425,6 +433,8 @@ export interface MessageSearchResult {
   authorName: string
   body: string
   createdAt: string
+  /** Set when the hit is a reply, so a result can say where it lives. */
+  parentMessageId: string | null
 }
 
 // --- Read state (Phase 2 · C2) ---------------------------------------------

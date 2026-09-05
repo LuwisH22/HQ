@@ -1381,7 +1381,27 @@ function toMessage(m: DemoMessage): Message {
     editedAt: m.editedAt,
     deletedAt: m.deletedAt,
     createdAt: m.createdAt,
+    parentMessageId: m.parentMessageId,
+    replyCount: m.replyCount,
+    lastReplyAt: m.lastReplyAt,
   }
+}
+
+/**
+ * Recount a thread from its rows, the way the trigger does.
+ *
+ * Recomputed rather than incremented so the number cannot drift away from the
+ * replies it describes.
+ */
+function recountThread(rootId: string): void {
+  const store = db()
+  const root = store.messages.find((m) => m.id === rootId)
+  if (!root) return
+
+  const live = store.messages.filter((m) => m.parentMessageId === rootId && m.deletedAt === null)
+  root.replyCount = live.length
+  root.lastReplyAt =
+    live.length === 0 ? null : live.map((m) => m.createdAt).sort((a, b) => b.localeCompare(a))[0]!
 }
 
 export const demoMessageService: MessageService = {
@@ -1391,6 +1411,8 @@ export const demoMessageService: MessageService = {
 
     const all = db()
       .messages.filter((m) => m.channelId === channelId)
+      // Roots only: a reply belongs to its thread, not to the timeline.
+      .filter((m) => m.parentMessageId === null)
       .filter((m) => (before ? m.createdAt < before : true))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
@@ -1406,10 +1428,11 @@ export const demoMessageService: MessageService = {
     return toMessage(message)
   },
 
-  async send(channelId, body) {
+  async send(channelId, body, parentMessageId = null) {
     await latency()
     const channel = channelById(channelId)
     const member = memberOf(requireCurrentUserId())
+    // A reply needs exactly what a message needs. No new permission.
     if (!member || !canInChannel(channel, member, 'messages.send')) {
       throw new AppError('forbidden', 'You cannot post in that channel')
     }
@@ -1417,6 +1440,24 @@ export const demoMessageService: MessageService = {
     const trimmed = body.trim()
     if (trimmed === '') throw new AppError('validation', 'A message cannot be empty')
     if (trimmed.length > 4000) throw new AppError('validation', 'That message is too long')
+
+    // The port of tg_message_thread_guard. Shape is the database's to enforce.
+    if (parentMessageId !== null) {
+      const parent = db().messages.find((m) => m.id === parentMessageId)
+      if (!parent) throw new AppError('not_found', 'That message no longer exists')
+      if (parent.parentMessageId !== null) {
+        throw new AppError('validation', 'A reply cannot itself be replied to')
+      }
+      if (parent.channelId !== channelId) {
+        throw new AppError(
+          'validation',
+          'A reply must be in the same channel as the message it replies to',
+        )
+      }
+      if (parent.deletedAt !== null) {
+        throw new AppError('validation', 'That message has been deleted')
+      }
+    }
 
     const message: DemoMessage = {
       id: crypto.randomUUID(),
@@ -1428,11 +1469,28 @@ export const demoMessageService: MessageService = {
       editedAt: null,
       deletedAt: null,
       createdAt: new Date().toISOString(),
+      parentMessageId,
+      replyCount: 0,
+      lastReplyAt: null,
     }
     db().messages.push(message)
+    if (parentMessageId !== null) recountThread(parentMessageId)
     recordMentions(message)
     persist()
     return toMessage(message)
+  },
+
+  async listReplies(rootMessageId) {
+    await latency()
+    const root = db().messages.find((m) => m.id === rootMessageId)
+    if (!root) return []
+    // A reply is visible exactly where its root is.
+    assertCanReadChannel(root.channelId)
+
+    return db()
+      .messages.filter((m) => m.parentMessageId === rootMessageId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(toMessage)
   },
 
   async edit(messageId, body) {
@@ -1477,6 +1535,7 @@ export const demoMessageService: MessageService = {
     message.body = ''
     message.deletedAt = new Date().toISOString()
     clearAfterSoftDelete(message)
+    if (message.parentMessageId !== null) recountThread(message.parentMessageId)
 
     // Only moderation is worth a permanent record; auditing every author
     // tidying up their own typo would bury the entries that matter.
@@ -1624,6 +1683,7 @@ export const demoMessageService: MessageService = {
           authorName: m.authorId ? displayName(m.authorId) : 'Removed member',
           body: m.body,
           createdAt: m.createdAt,
+          parentMessageId: m.parentMessageId,
         }
       })
   },

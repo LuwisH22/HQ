@@ -36,6 +36,7 @@ import { TypingIndicator } from './TypingIndicator'
 import { MessageRow, DayDivider } from './MessageRow'
 import { Composer } from './Composer'
 import { ChannelSearch } from './ChannelSearch'
+import { ThreadPanel } from './ThreadPanel'
 import { ChannelPanelColumn, ChannelPanelContent } from './ChannelPanel'
 
 /**
@@ -92,9 +93,20 @@ export function ChannelChatPage() {
   const setPanelOpen = useUiStore((state) => state.setChannelPanelOpen)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  // Which thread the panel is showing, if any. The panel has a mode; there
+  // is no fourth column.
+  const [threadRootId, setThreadRootId] = useState<string | null>(null)
 
   const detailsOpen = isDesktop ? panelOpen : sheetOpen
   const toggleDetails = () => (isDesktop ? setPanelOpen(!panelOpen) : setSheetOpen((open) => !open))
+
+  function openThread(rootId: string): void {
+    setThreadRootId(rootId)
+    // A thread that opened into a collapsed panel would look like nothing
+    // happened at all.
+    if (isDesktop) setPanelOpen(true)
+    else setSheetOpen(true)
+  }
 
   const messagesQuery = useQuery({
     queryKey: queryKeys.messages.list(channel?.id ?? 'none'),
@@ -256,7 +268,16 @@ export function ChannelChatPage() {
     )
   }
 
-  const panel = (
+  const threadRoot = threadRootId ? (messages.find((m) => m.id === threadRootId) ?? null) : null
+
+  const panel = threadRoot ? (
+    <ThreadPanel
+      root={threadRoot}
+      channelName={channel.name}
+      channelArchived={channel.archivedAt !== null}
+      onClose={() => setThreadRootId(null)}
+    />
+  ) : (
     <ChannelPanelContent
       channel={channel}
       members={channelMembers}
@@ -403,6 +424,7 @@ export function ChannelChatPage() {
                           // the same permission as sending.
                           canReact: canSend && channel.archivedAt === null,
                         }}
+                        onReply={() => openThread(message.id)}
                         onReact={(emoji) => react.mutate({ id: message.id, emoji })}
                         onUnreact={(emoji) => unreact.mutate({ id: message.id, emoji })}
                         onEdit={(body) => saveEdit.mutate({ id: message.id, body })}

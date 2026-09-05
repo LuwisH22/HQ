@@ -523,6 +523,9 @@ export interface Database {
           deleted_at: string | null
           deleted_by: string | null
           created_at: string
+          parent_message_id: string | null
+          reply_count: number
+          last_reply_at: string | null
         }
         /**
          * Unlike the channel tables, messages are inserted directly: the
@@ -533,6 +536,8 @@ export interface Database {
           channel_id: string
           author_id: string
           body: string
+          /** A reply. One level only; a trigger refuses a reply to a reply. */
+          parent_message_id?: string | null
         }
         /** A trigger refuses every column but the body from a client. */
         Update: { body: string }
@@ -661,6 +666,7 @@ export interface Database {
           body: string
           created_at: string
           rank: number
+          parent_message_id: string | null
         }[]
       }
       channel_member_ids: {

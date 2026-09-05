@@ -9,9 +9,14 @@ import { createClient } from '@supabase/supabase-js'
  * organization's sidebar. Each spec still deletes its own; this is the net
  * underneath, so a red run costs a red run and not a cluttered workspace.
  *
- * Deliberately narrow. It only touches names built by `uniqueName`, and only
- * when the channel holds no messages: a channel somebody has spoken in is not
- * test litter, whatever it is called.
+ * Deliberately narrow, and narrow on the right axis. It only touches names
+ * built by `uniqueName`, which carry the Playwright project inside them —
+ * `probe-desktop-12345`, `thread-mobile-98168`. Nobody types that.
+ *
+ * It used to also require the channel to be empty, which sounded careful and
+ * was useless: a thread test always leaves a message behind, so its channels
+ * could never be swept and accumulated instead. The project name is the real
+ * guard.
  */
 
 const PREFIXES = [
@@ -23,6 +28,18 @@ const PREFIXES = [
   'chat-',
   'reuse-',
   'section-',
+  'unread-',
+  'nostub-',
+  'nosearch-',
+  'search-',
+  'pinpanel-',
+  'react-',
+  'threadsearch-',
+  'threadreact-',
+  'threaddel-',
+  'threadcount-',
+  'threadback-',
+  'thread-',
 ]
 
 function readEnvFile(path: string): Record<string, string> {
@@ -54,7 +71,10 @@ interface NamedRow {
 
 /** Only names this suite generates: `<prefix>-<project>-<digits>`. */
 function isTestLitter(name: string): boolean {
-  return PREFIXES.some((prefix) => name.startsWith(prefix)) && /-\d+(-alt)?$/.test(name)
+  return (
+    PREFIXES.some((prefix) => name.startsWith(prefix)) &&
+    /-(desktop|mobile|moderation|signout)-\d+(-alt)?$/.test(name)
+  )
 }
 
 export default async function globalTeardown(): Promise<void> {
@@ -80,15 +100,6 @@ export default async function globalTeardown(): Promise<void> {
 
   for (const channel of channels) {
     if (!isTestLitter(channel.name)) continue
-
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('id')
-      .eq('channel_id', channel.id)
-    if ((messages ?? []).length > 0) {
-      console.warn(`teardown: leaving ${channel.name} alone — it has messages in it.`)
-      continue
-    }
 
     const { error } = await supabase.rpc('delete_channel', { p_channel_id: channel.id })
     if (error) console.warn(`teardown: could not delete ${channel.name}: ${error.message}`)

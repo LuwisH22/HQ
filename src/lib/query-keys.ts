@@ -49,6 +49,7 @@ export const queryKeys = {
   messages: {
     list: (channelId: string) => ['messages', channelId] as const,
     pinned: (channelId: string) => ['messages', channelId, 'pinned'] as const,
+    replies: (rootMessageId: string) => ['messages', 'thread', rootMessageId] as const,
     reactions: (channelId: string) => ['messages', channelId, 'reactions'] as const,
     search: (channelId: string | null, query: string) =>
       ['messages', 'search', channelId ?? 'all', query] as const,

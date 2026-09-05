@@ -84,6 +84,7 @@ export const demoMessageService: MessageService = {
   list: unreachable,
   getById: unreachable,
   send: unreachable,
+  listReplies: unreachable,
   edit: unreachable,
   remove: unreachable,
   setPinned: unreachable,
