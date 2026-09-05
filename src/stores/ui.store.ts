@@ -36,6 +36,14 @@ interface UiState {
    * had opened it yet.
    */
   collapsedCategories: string[]
+  /**
+   * Whether the channel's side panel is open on a wide screen.
+   *
+   * Open by default: it is where the channel says who is in it and what is
+   * happening, and a panel nobody knows to look for may as well not exist.
+   * Phones get a sheet instead, whose state is local to the screen.
+   */
+  channelPanelOpen: boolean
 
   setActiveOrganization: (organizationId: string | null) => void
   setSidebarCollapsed: (collapsed: boolean) => void
@@ -46,6 +54,7 @@ interface UiState {
   setProfileOpen: (open: boolean) => void
   setTheme: (theme: ThemePreference) => void
   toggleCategory: (categoryId: string) => void
+  setChannelPanelOpen: (open: boolean) => void
 }
 
 export const useUiStore = create<UiState>()(
@@ -58,6 +67,7 @@ export const useUiStore = create<UiState>()(
       profileOpen: false,
       theme: 'dark',
       collapsedCategories: [],
+      channelPanelOpen: true,
 
       setActiveOrganization: (activeOrganizationId) => set({ activeOrganizationId }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
@@ -71,6 +81,7 @@ export const useUiStore = create<UiState>()(
       setProfileOpen: (profileOpen) =>
         set(profileOpen ? { profileOpen, mobileNavOpen: false } : { profileOpen }),
       setTheme: (theme) => set({ theme }),
+      setChannelPanelOpen: (channelPanelOpen) => set({ channelPanelOpen }),
       toggleCategory: (categoryId) =>
         set((state) => ({
           collapsedCategories: state.collapsedCategories.includes(categoryId)
@@ -81,7 +92,7 @@ export const useUiStore = create<UiState>()(
     {
       name: 'lfg-hq-ui',
       storage: createJSONStorage(() => localStorage),
-      version: 2,
+      version: 3,
       // Transient state must not survive a restart: nobody wants to reopen the
       // app to a command palette they closed yesterday.
       partialize: (state) => ({
@@ -89,6 +100,7 @@ export const useUiStore = create<UiState>()(
         sidebarCollapsed: state.sidebarCollapsed,
         theme: state.theme,
         collapsedCategories: state.collapsedCategories,
+        channelPanelOpen: state.channelPanelOpen,
       }),
     },
   ),

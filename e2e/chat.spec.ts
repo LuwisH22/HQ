@@ -60,6 +60,105 @@ test('opens and switches channels from the navigation', async ({ page }, testInf
   await deleteChannel(page, second)
 })
 
+/** The panel's collapse control, which is a sheet toggle on a phone. */
+function panelToggle(page: Page) {
+  return page.getByRole('button', { name: /(Open|Close) panel/ }).first()
+}
+
+test('opens the channel panel by default and collapses it on request', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName(testInfo.project.name)
+  await createChannel(page, name)
+
+  const panel = page.getByRole('complementary', { name: 'Channel details' })
+  const isMobile = testInfo.project.name === 'mobile'
+
+  if (isMobile) {
+    // A phone has no room for a permanent second column, so the panel is a
+    // sheet the same control opens.
+    await expect(panel).toHaveCount(0)
+    await panelToggle(page).click()
+    await expect(page.getByRole('list', { name: 'Channel members' })).toBeVisible({
+      timeout: 15_000,
+    })
+    await page.getByRole('button', { name: 'Close panel' }).first().click()
+    await expect(page.getByRole('list', { name: 'Channel members' })).toHaveCount(0)
+  } else {
+    // Open on arrival: a panel nobody knows to look for may as well not exist.
+    await expect(panel).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Close panel' })).toBeVisible()
+
+    await panelToggle(page).click()
+    await expect(panel).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Open panel' })).toBeVisible()
+
+    await panelToggle(page).click()
+    await expect(panel).toBeVisible()
+  }
+
+  // The member count moved into the panel; it is not the header control.
+  await expect(page.getByRole('button', { name: /members/i })).toHaveCount(0)
+
+  await deleteChannel(page, name)
+})
+
+test('widens the conversation when the panel closes, without stranding it', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'The panel is a sheet on phones, not a column.')
+
+  const name = uniqueName(testInfo.project.name)
+  await createChannel(page, name)
+
+  const composer = page.getByRole('textbox', { name: `Message ${name}` })
+  const openBox = await composer.boundingBox()
+
+  await panelToggle(page).click()
+  await expect(page.getByRole('button', { name: 'Open panel' })).toBeVisible()
+  // Past the 240ms transition.
+  await page.waitForTimeout(600)
+
+  const closedBox = await composer.boundingBox()
+  expect(openBox).not.toBeNull()
+  expect(closedBox).not.toBeNull()
+
+  // The conversation gets the space the panel gave up...
+  expect(closedBox!.width).toBeGreaterThan(openBox!.width)
+
+  // ...and stays centred rather than sliding to the far-left edge. Measured
+  // against the chat area, not the viewport: the sidebar occupies the first
+  // 256px of the window and is not space the conversation was ever offered.
+  const area = (await page.getByRole('main').boundingBox())!
+  const leftGap = closedBox!.x - area.x
+  const rightGap = area.x + area.width - (closedBox!.x + closedBox!.width)
+  expect(Math.abs(leftGap - rightGap)).toBeLessThan(2)
+  // And it is not flush against anything.
+  expect(leftGap).toBeGreaterThan(8)
+
+  await panelToggle(page).click()
+  await deleteChannel(page, name)
+})
+
+test('names the channel and its members inside the panel', async ({ page }, testInfo) => {
+  const name = uniqueName(testInfo.project.name)
+  await createChannel(page, name)
+
+  if (testInfo.project.name === 'mobile') await panelToggle(page).click()
+
+  const roster = page.getByRole('list', { name: 'Channel members' })
+  await expect(roster).toBeVisible({ timeout: 15_000 })
+  await expect(roster.getByRole('listitem').first()).toBeVisible()
+
+  // The sections future work plugs into are present and honest about being
+  // empty rather than absent.
+  await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
+  await expect(page.getByText('No active voice session.')).toBeVisible()
+  await expect(page.getByText('No active stream.')).toBeVisible()
+
+  await deleteChannel(page, name)
+})
+
 test('sends a message with Enter and keeps Shift+Enter for a new line', async ({
   page,
 }, testInfo) => {
