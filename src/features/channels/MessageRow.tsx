@@ -89,9 +89,14 @@ export function MessageRow({
         message.pinnedAt ? 'bg-primary/6 hover:bg-primary/9' : null,
       )}
     >
-      <div className="w-8 shrink-0">
+      <div className="relative w-8 shrink-0">
         {grouped ? (
-          <span className="text-3xs text-muted-foreground/0 group-hover:text-muted-foreground/60 block pt-[3px] text-right leading-5 tabular-nums transition-colors">
+          // Out of flow, and never wrapped. A locale time is wider than the
+          // 32px the avatar sets, so in the flow it took two lines and made
+          // every continued message a whole blank line taller than the words
+          // it contains. Nothing that only appears on hover should be able to
+          // decide how tall a message is.
+          <span className="text-3xs text-muted-foreground/0 group-hover:text-muted-foreground/60 absolute inset-x-0 top-[3px] text-right leading-5 whitespace-nowrap tabular-nums transition-colors">
             {shortTime(message.createdAt)}
           </span>
         ) : (

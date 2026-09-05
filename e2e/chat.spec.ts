@@ -265,3 +265,51 @@ test('never shows your own typing indicator back to you', async ({ page }, testI
 
   await deleteChannel(page, name)
 })
+
+test('a continued message is only as tall as the words in it', async ({ page }, testInfo) => {
+  const name = uniqueName(testInfo.project.name)
+  await createChannel(page, name)
+  await openChannel(page, name)
+
+  const composer = page.getByRole('textbox', { name: `Message ${name}` })
+  const send = page.getByRole('button', { name: 'Send' })
+
+  // The second one continues the first: same author, same minute, so it drops
+  // the avatar and the name and should be one line of text and nothing else.
+  await composer.fill('opening line')
+  await send.click()
+  await expect(page.getByText('opening line')).toBeVisible({ timeout: 15_000 })
+  await composer.fill('continued line')
+  await send.click()
+  await expect(page.getByText('continued line')).toBeVisible({ timeout: 15_000 })
+
+  const measured = await page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('ul[aria-label="Messages"] li'))
+    const row = rows.find((li) => li.innerText.includes('continued line'))
+    if (!row) return null
+
+    const body = row.querySelector<HTMLElement>('p.whitespace-pre-wrap')
+    const gutter = row.querySelector<HTMLElement>('div.w-8 > span')
+    const lineHeight = gutter ? Number.parseFloat(getComputedStyle(gutter).lineHeight) : 0
+
+    return {
+      row: Math.round(row.getBoundingClientRect().height),
+      body: body ? Math.round(body.getBoundingClientRect().height) : 0,
+      // Rounded up: a fraction of a line must not read as none of one.
+      gutterLines:
+        gutter && lineHeight > 0
+          ? Math.ceil(gutter.getBoundingClientRect().height / lineHeight)
+          : 0,
+    }
+  })
+
+  if (!measured) throw new Error('the continued message was not in the timeline')
+
+  // The hover timestamp lives in the 32px gutter, and a locale time is wider
+  // than that. Left in the flow it wrapped onto a second line and made every
+  // continued message a blank line taller than its own text.
+  expect(measured.gutterLines).toBe(1)
+  expect(measured.row).toBeLessThanOrEqual(measured.body + 8)
+
+  await deleteChannel(page, name)
+})

@@ -149,6 +149,31 @@ test('highlights only the mentions the database recorded', async ({ page }, test
     expect(handles).toContain(text.replace('@', ''))
   }
 
+  // And a message that is nothing but a mention is nothing but that mention:
+  // one span, one line, and the text of the message unchanged.
+  const only = (await highlighted.first().innerText()).trim()
+  await composer(page, name).fill(only)
+  await send(page)
+
+  const alone = page
+    .getByRole('list', { name: 'Messages' })
+    .getByRole('listitem')
+    .filter({ hasText: only })
+    .last()
+  await expect(alone.locator('[data-mention]')).toHaveCount(1, { timeout: 15_000 })
+
+  const shape = await alone.evaluate((li) => {
+    const paragraph = li.querySelector<HTMLElement>('p.whitespace-pre-wrap')
+    if (!paragraph) return null
+    const lineHeight = Number.parseFloat(getComputedStyle(paragraph).lineHeight)
+    return {
+      text: paragraph.textContent,
+      breaks: paragraph.querySelectorAll('br').length,
+      lines: Math.round(paragraph.getBoundingClientRect().height / lineHeight),
+    }
+  })
+  expect(shape).toEqual({ text: only, breaks: 0, lines: 1 })
+
   await deleteChannel(page, name)
 })
 
