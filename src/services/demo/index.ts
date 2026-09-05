@@ -17,7 +17,9 @@ import type {
   Channel,
   ChannelService,
   Message,
+  MessageReaction,
   MessageService,
+  NotificationService,
   CurrentMembership,
   Invitation,
   InvitationService,
@@ -906,6 +908,72 @@ function canInChannel(channel: DemoChannel, member: DemoMember, permission: Perm
   return permissionsForMember(member).can(permission)
 }
 
+/**
+ * Write a mention notification for every member named in a message who can
+ * actually see the channel it was posted in.
+ *
+ * The port of `tg_message_mentions`. The check that matters is the last one.
+ */
+function recordMentions(message: DemoMessage): void {
+  const store = db()
+  const channel = store.channels.find((c) => c.id === message.channelId)
+  if (!channel || message.deletedAt !== null || message.body === '') return
+
+  const handles = new Set(
+    [...message.body.matchAll(/@([A-Za-z0-9._-]{2,40})/g)].map((m) => m[1]?.toLowerCase() ?? ''),
+  )
+
+  for (const handle of handles) {
+    const profile = store.profiles.find(
+      (p) =>
+        (p.displayName ?? '').toLowerCase() === handle ||
+        p.email.split('@')[0]?.toLowerCase() === handle,
+    )
+    if (!profile || profile.id === message.authorId) continue
+
+    const member = store.members.find((m) => m.userId === profile.id)
+    // Never tell somebody about a message in a channel they cannot see.
+    if (!member || !canInChannel(channel, member, 'channels.view')) continue
+
+    store.notifications.push({
+      id: store.notifications.length + 1,
+      recipientId: profile.id,
+      type: 'mention',
+      entityType: 'message',
+      entityId: message.id,
+      actorId: message.authorId,
+      summary: `${message.authorId ? displayName(message.authorId) : 'Someone'} mentioned you in #${channel.name}`,
+      metadata: {
+        channel_id: channel.id,
+        channel_key: channel.key,
+        channel_name: channel.name,
+        excerpt: message.body.slice(0, 160),
+      },
+      readAt: null,
+      createdAt: message.createdAt,
+    })
+  }
+}
+
+/**
+ * What a soft delete takes with it: the port of `tg_message_soft_deleted`.
+ *
+ * A pin pointing at words nobody can read, and reaction counts on an empty
+ * row, are both noise about nothing.
+ */
+function clearAfterSoftDelete(message: DemoMessage): void {
+  const store = db()
+  store.reactions = store.reactions.filter((r) => r.messageId !== message.id)
+  message.pinnedAt = null
+}
+
+/** Whether the signed-in demo user may read a channel. */
+function canReadChannel(channelId: string): boolean {
+  const channel = db().channels.find((c) => c.id === channelId)
+  const member = memberOf(db().currentUserId ?? '')
+  return Boolean(channel && member && canInChannel(channel, member, 'channels.view'))
+}
+
 /** Channels the signed-in demo user may see. */
 function visibleChannels(): DemoChannel[] {
   const member = memberOf(requireCurrentUserId())
@@ -1153,6 +1221,63 @@ export const demoChannelService: ChannelService = {
     persist()
   },
 
+  async unreadCounts() {
+    await latency()
+    const me = requireCurrentUserId()
+    const store = db()
+
+    // Only channels the caller can see, exactly as the SECURITY INVOKER
+    // routine gets from RLS.
+    return visibleChannels()
+      .filter((c) => c.archivedAt === null)
+      .map((channel) => {
+        const read = store.channelReads.find((r) => r.channelId === channel.id && r.userId === me)
+        const unread = store.messages.filter(
+          (m) =>
+            m.channelId === channel.id &&
+            m.deletedAt === null &&
+            m.authorId !== me &&
+            (!read || m.createdAt > read.lastReadAt),
+        ).length
+
+        return { channelId: channel.id, unread, lastReadAt: read?.lastReadAt ?? null }
+      })
+  },
+
+  async markRead(channelId) {
+    await latency()
+    const me = requireCurrentUserId()
+    // Recording a read in a channel you cannot see would be a way to learn
+    // whether it exists.
+    assertCanReadChannel(channelId)
+
+    const store = db()
+    const now = new Date().toISOString()
+    const existing = store.channelReads.find((r) => r.channelId === channelId && r.userId === me)
+
+    if (existing) {
+      // Never backwards: a stale second device must not undo a newer read.
+      existing.lastReadAt = existing.lastReadAt > now ? existing.lastReadAt : now
+    } else {
+      store.channelReads.push({ channelId, userId: me, lastReadAt: now })
+    }
+    persist()
+  },
+
+  async listChannelMembers(channelId) {
+    await latency()
+    const channel = db().channels.find((c) => c.id === channelId)
+    const me = memberOf(requireCurrentUserId())
+
+    // Empty rather than an error for a channel you cannot see: a guessed id
+    // must look the same as an empty channel.
+    if (!channel || !me || !canInChannel(channel, me, 'channels.view')) return []
+
+    return db()
+      .members.filter((m) => canInChannel(channel, m, 'channels.view'))
+      .map((m) => m.userId)
+  },
+
   async listOverrides(channelId) {
     await latency()
     assertPermission(
@@ -1305,6 +1430,7 @@ export const demoMessageService: MessageService = {
       createdAt: new Date().toISOString(),
     }
     db().messages.push(message)
+    recordMentions(message)
     persist()
     return toMessage(message)
   },
@@ -1350,6 +1476,7 @@ export const demoMessageService: MessageService = {
 
     message.body = ''
     message.deletedAt = new Date().toISOString()
+    clearAfterSoftDelete(message)
 
     // Only moderation is worth a permanent record; auditing every author
     // tidying up their own typo would bury the entries that matter.
@@ -1385,6 +1512,168 @@ export const demoMessageService: MessageService = {
       messageId,
       `${pinned ? 'Pinned' : 'Unpinned'} a message in ${channel.name}`,
     )
+    persist()
+  },
+
+  async listPinned(channelId) {
+    await latency()
+    assertCanReadChannel(channelId)
+
+    return db()
+      .messages.filter(
+        (m) => m.channelId === channelId && m.pinnedAt !== null && m.deletedAt === null,
+      )
+      .sort((a, b) => (b.pinnedAt ?? '').localeCompare(a.pinnedAt ?? ''))
+      .map(toMessage)
+  },
+
+  async listReactions(messageIds) {
+    await latency()
+    const me = db().currentUserId
+    const byMessage = new Map<string, MessageReaction[]>()
+    const wanted = new Set(messageIds)
+
+    for (const reaction of db().reactions) {
+      if (!wanted.has(reaction.messageId)) continue
+
+      // A reaction is only visible where its message is.
+      const message = db().messages.find((m) => m.id === reaction.messageId)
+      if (!message || !canReadChannel(message.channelId)) continue
+
+      const list = byMessage.get(reaction.messageId) ?? []
+      const existing = list.find((r) => r.emoji === reaction.emoji)
+      if (existing) {
+        existing.count += 1
+        existing.mine = existing.mine || reaction.userId === me
+      } else {
+        list.push({ emoji: reaction.emoji, count: 1, mine: reaction.userId === me })
+      }
+      byMessage.set(reaction.messageId, list)
+    }
+
+    return byMessage
+  },
+
+  async addReaction(messageId, emoji) {
+    await latency()
+    const me = requireCurrentUserId()
+    const store = db()
+
+    const message = store.messages.find((m) => m.id === messageId)
+    if (!message) throw new AppError('not_found', 'That message no longer exists.')
+    if (message.deletedAt !== null) {
+      throw new AppError('validation', 'A deleted message cannot be reacted to.')
+    }
+
+    // Reacting is speaking in the channel: a deny on messages.send silences
+    // this too, or the deny is circumventable as a signalling channel.
+    const channel = channelById(message.channelId)
+    const member = memberOf(me)
+    if (!member || !canInChannel(channel, member, 'messages.send')) {
+      throw new AppError('forbidden', 'You cannot react in that channel')
+    }
+
+    const already = store.reactions.some(
+      (r) => r.messageId === messageId && r.userId === me && r.emoji === emoji,
+    )
+    // The composite key makes this a row that cannot exist twice, not an
+    // error to report.
+    if (already) return
+
+    store.reactions.push({ messageId, userId: me, emoji, channelId: message.channelId })
+    persist()
+  },
+
+  async removeReaction(messageId, emoji) {
+    await latency()
+    const me = requireCurrentUserId()
+    const store = db()
+
+    store.reactions = store.reactions.filter(
+      (r) => !(r.messageId === messageId && r.userId === me && r.emoji === emoji),
+    )
+    persist()
+  },
+
+  async search(input) {
+    await latency()
+    const needle = input.query.trim().toLowerCase()
+    if (needle === '') return []
+
+    const visible = new Set(visibleChannels().map((c) => c.id))
+
+    return db()
+      .messages.filter(
+        (m) =>
+          m.deletedAt === null &&
+          // The whole isolation story: a channel the caller cannot see cannot
+          // contribute a result.
+          visible.has(m.channelId) &&
+          (input.channelId === null || m.channelId === input.channelId) &&
+          m.body.toLowerCase().includes(needle),
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 30)
+      .map((m) => {
+        const channel = db().channels.find((c) => c.id === m.channelId)
+        return {
+          id: m.id,
+          channelId: m.channelId,
+          channelName: channel?.name ?? 'Unknown channel',
+          channelKey: channel?.key ?? '',
+          authorName: m.authorId ? displayName(m.authorId) : 'Removed member',
+          body: m.body,
+          createdAt: m.createdAt,
+        }
+      })
+  },
+}
+
+/**
+ * Notifications, and the mention trigger that writes them.
+ *
+ * The gate is the same channel resolver everything else uses: a notification
+ * is written only for somebody who could have read the message anyway, which
+ * is what stops a mention leaking a private channel's name.
+ */
+export const demoNotificationService: NotificationService = {
+  async list(_organizationId, limit = 30) {
+    await latency()
+    const me = requireCurrentUserId()
+
+    return db()
+      .notifications.filter((n) => n.recipientId === me)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map((n) => ({
+        id: n.id,
+        type: n.type,
+        entityType: n.entityType,
+        entityId: n.entityId,
+        actorName: n.actorId ? displayName(n.actorId) : null,
+        summary: n.summary,
+        metadata: n.metadata,
+        readAt: n.readAt,
+        createdAt: n.createdAt,
+      }))
+  },
+
+  async unreadCount() {
+    await latency()
+    const me = requireCurrentUserId()
+    return db().notifications.filter((n) => n.recipientId === me && n.readAt === null).length
+  },
+
+  async markRead(ids) {
+    await latency()
+    const me = requireCurrentUserId()
+    const now = new Date().toISOString()
+
+    for (const notification of db().notifications) {
+      if (notification.recipientId !== me || notification.readAt !== null) continue
+      if (ids && !ids.includes(notification.id)) continue
+      notification.readAt = now
+    }
     persist()
   },
 }

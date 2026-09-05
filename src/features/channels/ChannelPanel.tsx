@@ -1,8 +1,9 @@
-import { Hash, LockSimple, Microphone, MonitorPlay } from '@phosphor-icons/react'
+import { Hash, LockSimple, Microphone, MonitorPlay, PushPin } from '@phosphor-icons/react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { initialsFor } from '@/services/profile.service'
 import type { Channel } from '@/services/channel.service'
+import type { Message } from '@/services/message.service'
 import type { OrganizationMember } from '@/services/organization.service'
 import { cn } from '@/lib/utils'
 
@@ -59,10 +60,15 @@ export function ChannelPanelContent({
   channel,
   members,
   membersPending,
+  pinned,
+  pinnedPending,
 }: {
   channel: Channel
+  /** The members who can actually see this channel, resolved in Postgres. */
   members: OrganizationMember[]
   membersPending: boolean
+  pinned: Message[]
+  pinnedPending: boolean
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
@@ -81,13 +87,35 @@ export function ChannelPanelContent({
         </p>
       </div>
 
+      <SectionHeading label="Pinned" count={pinnedPending ? undefined : pinned.length} />
+      {pinnedPending ? (
+        <div className="space-y-2 px-4 py-1" aria-hidden="true">
+          <Skeleton className="h-8 w-full rounded-md" />
+        </div>
+      ) : pinned.length === 0 ? (
+        <p className="text-muted-foreground/70 text-2xs px-4 leading-relaxed">
+          Nothing pinned yet.
+        </p>
+      ) : (
+        <ul aria-label="Pinned messages" className="px-2">
+          {pinned.map((message) => (
+            <li key={message.id} className="flex items-start gap-2 rounded-md px-2 py-1.5">
+              <PushPin className="text-accent-text mt-px size-3.5 shrink-0" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-xs leading-relaxed break-words">{message.body}</p>
+                <p className="text-2xs text-muted-foreground/70 truncate">{message.authorName}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <SectionHeading label="Members" count={membersPending ? undefined : members.length} />
       {channel.isPrivate ? (
-        // Said plainly rather than implied: this is the organization's roster,
-        // and who may actually open a private channel is decided per role in
-        // channel permissions — not by this list.
+        // Now the truth rather than a caveat: channel_member_ids resolves this
+        // list through the same rules that govern the channel itself.
         <p className="text-2xs text-muted-foreground/70 px-4 pb-1 leading-relaxed">
-          Private channel. Access is granted per role in channel permissions.
+          Private channel. Only the roles allowed in are listed.
         </p>
       ) : null}
 

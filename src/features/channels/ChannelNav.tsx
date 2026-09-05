@@ -4,6 +4,7 @@ import { useUiStore } from '@/stores/ui.store'
 import { usePermission } from '@/hooks/use-permission'
 import { cn } from '@/lib/utils'
 import { ChannelCreateMenu } from './ChannelCreateMenu'
+import { useUnreadCounts } from './use-unread'
 import { useChannelDirectory, type ChannelGroup } from './use-channels'
 
 /**
@@ -19,9 +20,11 @@ import { useChannelDirectory, type ChannelGroup } from './use-channels'
 
 function ChannelRow({
   channel,
+  unread,
   onNavigate,
 }: {
   channel: ChannelGroup['channels'][number]
+  unread: number
   onNavigate?: () => void
 }) {
   return (
@@ -34,7 +37,11 @@ function ChannelRow({
           'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
           isActive
             ? 'bg-primary/14 text-foreground font-medium'
-            : 'text-muted-foreground hover:bg-foreground/7 hover:text-foreground',
+            : unread > 0
+              ? // Unread is weight, not colour: the row reads as louder
+                // without becoming a second kind of selected.
+                'text-foreground hover:bg-foreground/7 font-medium'
+              : 'text-muted-foreground hover:bg-foreground/7 hover:text-foreground',
         )
       }
     >
@@ -53,15 +60,34 @@ function ChannelRow({
             <Hash className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
           )}
           <span className="truncate">{channel.name}</span>
+          {unread > 0 ? (
+            <span
+              className="bg-primary/22 text-foreground text-3xs ml-auto min-w-4 rounded-full px-1.5 py-px text-center font-semibold tabular-nums"
+              aria-label={`${String(unread)} unread`}
+            >
+              {unread > 99 ? '99+' : unread}
+            </span>
+          ) : null}
         </>
       )}
     </NavLink>
   )
 }
 
-function CategorySection({ group, onNavigate }: { group: ChannelGroup; onNavigate?: () => void }) {
+function CategorySection({
+  group,
+  unread,
+  onNavigate,
+}: {
+  group: ChannelGroup
+  unread: Map<string, number>
+  onNavigate?: () => void
+}) {
   const collapsed = useUiStore((state) => state.collapsedCategories.includes(group.id))
   const toggleCategory = useUiStore((state) => state.toggleCategory)
+
+  // A folded category still has to say there is something inside it.
+  const hidden = group.channels.reduce((sum, c) => sum + (unread.get(c.id) ?? 0), 0)
 
   return (
     <li>
@@ -79,14 +105,27 @@ function CategorySection({ group, onNavigate }: { group: ChannelGroup; onNavigat
           aria-hidden="true"
         />
         <span className="truncate">{group.name}</span>
-        <span className="text-foreground/28 ml-auto tabular-nums">{group.channels.length}</span>
+        {collapsed && hidden > 0 ? (
+          <span
+            className="bg-primary/22 text-foreground text-3xs ml-auto rounded-full px-1.5 py-px font-semibold tabular-nums"
+            aria-label={`${String(hidden)} unread`}
+          >
+            {hidden > 99 ? '99+' : hidden}
+          </span>
+        ) : (
+          <span className="text-foreground/28 ml-auto tabular-nums">{group.channels.length}</span>
+        )}
       </button>
 
       {collapsed ? null : (
         <ul className="mt-0.5 space-y-px pl-1.5">
           {group.channels.map((channel) => (
             <li key={channel.id}>
-              <ChannelRow channel={channel} onNavigate={onNavigate} />
+              <ChannelRow
+                channel={channel}
+                unread={unread.get(channel.id) ?? 0}
+                onNavigate={onNavigate}
+              />
             </li>
           ))}
         </ul>
@@ -111,6 +150,7 @@ export function ChannelNav({ onNavigate }: { onNavigate?: () => void }) {
   const canView = usePermission('channels.view')
   const canCreate = usePermission('channels.create')
   const directory = useChannelDirectory()
+  const unread = useUnreadCounts()
 
   if (!canView) return null
 
@@ -133,7 +173,7 @@ export function ChannelNav({ onNavigate }: { onNavigate?: () => void }) {
       ) : (
         <ul className="space-y-1.5" aria-label="Channels">
           {directory.navGroups.map((group) => (
-            <CategorySection key={group.id} group={group} onNavigate={onNavigate} />
+            <CategorySection key={group.id} group={group} unread={unread} onNavigate={onNavigate} />
           ))}
         </ul>
       )}

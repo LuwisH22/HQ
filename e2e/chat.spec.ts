@@ -237,12 +237,16 @@ test('pins and unpins a message', async ({ page }, testInfo) => {
   const row = page.getByRole('listitem').filter({ hasText: 'worth pinning' })
   await row.getByRole('button', { name: /Actions for message/ }).click()
   await page.getByRole('menuitem', { name: 'Pin message' }).click()
-  await expect(page.getByLabel('Pinned')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('img', { name: 'Pinned', exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
 
   const pinned = page.getByRole('listitem').filter({ hasText: 'worth pinning' })
   await pinned.getByRole('button', { name: /Actions for message/ }).click()
   await page.getByRole('menuitem', { name: 'Unpin message' }).click()
-  await expect(page.getByLabel('Pinned')).toHaveCount(0, { timeout: 15_000 })
+  await expect(page.getByRole('img', { name: 'Pinned', exact: true })).toHaveCount(0, {
+    timeout: 15_000,
+  })
 
   await deleteChannel(page, name)
 })

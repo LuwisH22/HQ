@@ -5,6 +5,7 @@ import { demoChannelService } from '@/services/demo'
 import type {
   Channel,
   ChannelCategory,
+  ChannelUnread,
   ChannelInput,
   ChannelOverride,
   ChannelPatch,
@@ -15,6 +16,7 @@ import type {
 export type {
   Channel,
   ChannelCategory,
+  ChannelUnread,
   ChannelInput,
   ChannelOverride,
   ChannelPatch,
@@ -176,6 +178,42 @@ export const supabaseChannelService: ChannelService = {
     if (error) throw toAppError(error)
   },
 
+  async unreadCounts(): Promise<ChannelUnread[]> {
+    // SECURITY INVOKER in Postgres: a channel the caller cannot see is not in
+    // the result at all, so there is nothing to filter here.
+    const { data, error } = await getSupabase().rpc('unread_counts')
+    if (error) throw toAppError(error)
+
+    return (data ?? []).map((row) => ({
+      channelId: row.channel_id,
+      unread: row.unread,
+      lastReadAt: row.last_read_at,
+    }))
+  },
+
+  async markRead(channelId: string): Promise<void> {
+    const supabase = getSupabase()
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+    if (!userId) throw new AppError('auth', 'Your session has expired. Please sign in again.')
+
+    // The timestamp is the server's and only moves forward; the client is
+    // only saying "I looked".
+    const { error } = await supabase
+      .from('channel_reads')
+      .upsert({ channel_id: channelId, user_id: userId }, { onConflict: 'channel_id,user_id' })
+
+    if (error) throw toAppError(error)
+  },
+
+  async listChannelMembers(channelId: string): Promise<string[]> {
+    const { data, error } = await getSupabase().rpc('channel_member_ids', {
+      p_channel_id: channelId,
+    })
+    if (error) throw toAppError(error)
+    return data ?? []
+  },
+
   async listOverrides(channelId: string): Promise<ChannelOverride[]> {
     const { data, error } = await getSupabase()
       .from('channel_permission_overrides')
@@ -225,6 +263,9 @@ export const channelService: ChannelService = {
   updateChannel: (channelId, patch) => impl().updateChannel(channelId, patch),
   deleteChannel: (channelId) => impl().deleteChannel(channelId),
   reorderChannels: (organizationId, ids) => impl().reorderChannels(organizationId, ids),
+  unreadCounts: () => impl().unreadCounts(),
+  markRead: (channelId) => impl().markRead(channelId),
+  listChannelMembers: (channelId) => impl().listChannelMembers(channelId),
   listOverrides: (channelId) => impl().listOverrides(channelId),
   setOverride: (channelId, roleId, permissionKey, effect) =>
     impl().setOverride(channelId, roleId, permissionKey, effect),

@@ -436,6 +436,81 @@ export interface Database {
           },
         ]
       }
+      message_reactions: {
+        Row: {
+          message_id: string
+          user_id: string
+          emoji: string
+          channel_id: string
+          created_at: string
+        }
+        /** channel_id is stamped by a trigger; a client never supplies it. */
+        Insert: {
+          message_id: string
+          user_id: string
+          emoji: string
+        }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'message_reactions_message_id_fkey'
+            columns: ['message_id']
+            isOneToOne: false
+            referencedRelation: 'messages'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      channel_reads: {
+        Row: {
+          channel_id: string
+          user_id: string
+          last_read_at: string
+        }
+        /** last_read_at is stamped by a trigger and only moves forward. */
+        Insert: {
+          channel_id: string
+          user_id: string
+        }
+        Update: { channel_id?: string; user_id?: string }
+        Relationships: [
+          {
+            foreignKeyName: 'channel_reads_channel_id_fkey'
+            columns: ['channel_id']
+            isOneToOne: false
+            referencedRelation: 'channels'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          id: number
+          organization_id: string
+          recipient_id: string
+          type: string
+          entity_type: string
+          entity_id: string
+          actor_id: string | null
+          summary: string
+          metadata: Json
+          read_at: string | null
+          created_at: string
+        }
+        /** No INSERT policy exists: only SECURITY DEFINER code writes these. */
+        Insert: never
+        /** A trigger refuses every column but read_at. */
+        Update: { read_at: string | null }
+        Relationships: [
+          {
+            foreignKeyName: 'notifications_recipient_id_fkey'
+            columns: ['recipient_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       messages: {
         Row: {
           id: string
@@ -567,6 +642,34 @@ export interface Database {
           p_is_private?: boolean
         }
         Returns: string
+      }
+      unread_counts: {
+        Args: Record<string, never>
+        Returns: { channel_id: string; unread: number; last_read_at: string | null }[]
+      }
+      search_messages: {
+        Args: {
+          p_query: string
+          p_channel_id?: string | null
+          p_limit?: number
+          p_before?: string | null
+        }
+        Returns: {
+          id: string
+          channel_id: string
+          author_id: string | null
+          body: string
+          created_at: string
+          rank: number
+        }[]
+      }
+      channel_member_ids: {
+        Args: { p_channel_id: string }
+        Returns: string[]
+      }
+      mark_notifications_read: {
+        Args: { p_ids?: number[] | null }
+        Returns: number
       }
       create_channel_in_category: {
         Args: {

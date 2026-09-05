@@ -116,8 +116,8 @@ check('probe channel created', !createError && Boolean(channelId), createError?.
 if (!channelId) process.exit(1)
 
 const topic = `channel:${channelId}`
-const inbox = { insert: [], update: [], typing: [] }
-const gates = { insert: {}, update: {}, typing: {} }
+const inbox = { insert: [], update: [], typing: [], reaction: [], unreaction: [], org: [] }
+const gates = { insert: {}, update: {}, typing: {}, reaction: {}, unreaction: {}, org: {} }
 
 console.log('\n1 · the listener joins the channel topic')
 const channel = listener
@@ -134,6 +134,22 @@ const channel = listener
     inbox.typing.push(payload.payload)
     gates.typing.resolve?.(payload.payload)
   })
+  .on(
+    'postgres_changes',
+    { event: 'INSERT', schema: 'public', table: 'message_reactions' },
+    (payload) => {
+      inbox.reaction.push(payload.new)
+      gates.reaction.resolve?.(payload.new)
+    },
+  )
+  .on(
+    'postgres_changes',
+    { event: 'DELETE', schema: 'public', table: 'message_reactions' },
+    (payload) => {
+      inbox.unreaction.push(payload.old)
+      gates.unreaction.resolve?.(payload.old)
+    },
+  )
 
 const joined = await new Promise((resolve) => {
   const timer = setTimeout(() => resolve('TIMED_OUT'), 15_000)
@@ -223,6 +239,95 @@ console.log('\n4 · a topic for a channel that does not exist is refused')
   await stranger.removeChannel(bogus)
 }
 
+console.log('\n5 · reaction events arrive, both ways')
+const { data: reactionTarget } = await author
+  .from('messages')
+  .insert({ channel_id: channelId, author_id: authorId, body: 'react to me' })
+  .select('id')
+  .single()
+
+// Give the second subscription the same settle the first one got.
+await new Promise((resolve) => setTimeout(resolve, 1500))
+
+const reactionGate = waitFor(gates.reaction)
+const { error: reactError } = await author
+  .from('message_reactions')
+  .insert({ message_id: reactionTarget.id, user_id: authorId, emoji: '\ud83d\udc4d' })
+check('reaction added', !reactError, reactError?.message ?? '')
+
+const reactionEvent = await reactionGate
+check('the listener was told about the reaction', reactionEvent !== 'TIMED_OUT',
+  reactionEvent === 'TIMED_OUT' ? 'no event arrived' : `emoji ${String(reactionEvent.emoji)}`)
+check('the payload carries the channel the filter needs',
+  reactionEvent !== 'TIMED_OUT' && reactionEvent.channel_id === channelId,
+  reactionEvent === 'TIMED_OUT' ? '-' : String(reactionEvent.channel_id))
+
+// The point of REPLICA IDENTITY FULL: without it a DELETE payload carries the
+// primary key alone, and a subscription filtering on channel_id never sees it.
+const unreactionGate = waitFor(gates.unreaction)
+await author
+  .from('message_reactions')
+  .delete()
+  .eq('message_id', reactionTarget.id)
+  .eq('user_id', authorId)
+  .eq('emoji', '\ud83d\udc4d')
+
+const unreactionEvent = await unreactionGate
+check('the listener was told about the removal', unreactionEvent !== 'TIMED_OUT',
+  unreactionEvent === 'TIMED_OUT' ? 'no event arrived' : 'received')
+// Supabase projects a DELETE payload down to the replica identity, which is
+// the primary key — channel_id is not in it, whatever REPLICA IDENTITY FULL
+// says. So the client subscribes to reactions unfiltered and lets RLS scope
+// delivery, rather than filtering on a column that removals do not carry.
+check('the removal payload identifies which reaction went',
+  unreactionEvent !== 'TIMED_OUT' &&
+    unreactionEvent.emoji === '\ud83d\udc4d' &&
+    unreactionEvent.message_id === reactionTarget.id,
+  unreactionEvent === 'TIMED_OUT' ? '-' : Object.keys(unreactionEvent).join(', '))
+
+console.log('\n6 · pin events ride the existing message subscription')
+const pinGate = waitFor(gates.update)
+const { error: pinError } = await author.rpc('pin_message', {
+  p_message_id: reactionTarget.id, p_pinned: true,
+})
+check('pin succeeded', !pinError, pinError?.message ?? '')
+const pinEvent = await pinGate
+check('the listener saw the pin', pinEvent !== 'TIMED_OUT' && pinEvent.pinned_at !== null,
+  pinEvent === 'TIMED_OUT' ? 'no event arrived' : 'pinned_at set')
+
+console.log('\n7 · the organization topic')
+const orgTopic = `org:${orgId}`
+// Not private: it carries Postgres Changes only, and Postgres Changes
+// filters row delivery by RLS per subscriber.
+const orgChannel = listener
+  .channel(orgTopic)
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+    inbox.org.push(payload.new)
+    gates.org.resolve?.(payload.new)
+  })
+
+const orgJoined = await new Promise((resolve) => {
+  const timer = setTimeout(() => resolve('TIMED_OUT'), 15_000)
+  orgChannel.subscribe((status, err) => {
+    if (status === 'SUBSCRIBED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      clearTimeout(timer)
+      resolve(err ? `${status}: ${String(err.message ?? err)}` : status)
+    }
+  })
+})
+check('listener joined the organization topic', orgJoined === 'SUBSCRIBED', String(orgJoined))
+await new Promise((resolve) => setTimeout(resolve, 2500))
+
+const orgGate = waitFor(gates.org)
+await author
+  .from('messages')
+  .insert({ channel_id: channelId, author_id: authorId, body: 'unread badge trigger' })
+const orgEvent = await orgGate
+check('a message in any channel reaches the organization topic', orgEvent !== 'TIMED_OUT',
+  orgEvent === 'TIMED_OUT' ? 'no event arrived' : 'received')
+
+await listener.removeChannel(orgChannel)
+
 console.log('\n5 · cleanup')
 await listener.removeChannel(channel)
 await author.removeChannel(emitter)
@@ -235,7 +340,9 @@ await author.auth.signOut()
 console.log(`
 NOT MEASURED HERE — and not claimed
 -----------------------------------
-That a member WITHOUT access to a channel receives no typing events. Both
+That a member WITHOUT access to a channel receives no typing events, no
+reaction events, no organization-topic events and no notification of a
+mention in it. Both
 clients here share the only credential available, so there is no second
 identity to deny. The rule is enforced by the RLS policies on
 realtime.messages, which route through the same can_in_channel resolver as

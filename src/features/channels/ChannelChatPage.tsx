@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { CardSkeleton, EmptyState, ErrorState, ForbiddenState } from '@/components/common/states'
+import { channelService } from '@/services/channel.service'
 import { messageService } from '@/services/message.service'
 import type { Message } from '@/services/message.service'
 import { organizationService } from '@/services/organization.service'
@@ -34,6 +35,7 @@ import { useChannelRealtime } from './use-channel-realtime'
 import { TypingIndicator } from './TypingIndicator'
 import { MessageRow, DayDivider } from './MessageRow'
 import { Composer } from './Composer'
+import { ChannelSearch } from './ChannelSearch'
 import { ChannelPanelColumn, ChannelPanelContent } from './ChannelPanel'
 
 /**
@@ -89,6 +91,7 @@ export function ChannelChatPage() {
   const panelOpen = useUiStore((state) => state.channelPanelOpen)
   const setPanelOpen = useUiStore((state) => state.setChannelPanelOpen)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const detailsOpen = isDesktop ? panelOpen : sheetOpen
   const toggleDetails = () => (isDesktop ? setPanelOpen(!panelOpen) : setSheetOpen((open) => !open))
@@ -110,9 +113,36 @@ export function ChannelChatPage() {
   const invalidateMessages = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(channel?.id ?? 'none') })
 
-  const realtime = useChannelRealtime(channel?.id ?? null, user?.id ?? null, () => {
-    void invalidateMessages()
+  const realtime = useChannelRealtime(
+    channel?.id ?? null,
+    user?.id ?? null,
+    () => {
+      void invalidateMessages()
+      // Pinning is an UPDATE on the message, so it arrives on this same event.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.messages.pinned(channel?.id ?? 'none'),
+      })
+    },
+    () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.messages.reactions(channel?.id ?? 'none'),
+      })
+    },
+  )
+
+  // Resolved in Postgres through the same rules that govern the channel, so a
+  // private channel lists the people actually allowed into it rather than the
+  // whole organization.
+  const channelMemberIdsQuery = useQuery({
+    queryKey: queryKeys.channelMembers.forChannel(channel?.id ?? 'none'),
+    queryFn: () => channelService.listChannelMembers(channel?.id as string),
+    enabled: Boolean(channel),
   })
+
+  const channelMembers = useMemo(() => {
+    const allowed = new Set(channelMemberIdsQuery.data ?? [])
+    return (membersQuery.data ?? []).filter((m) => allowed.has(m.userId))
+  }, [membersQuery.data, channelMemberIdsQuery.data])
 
   const typingNames = useMemo(() => {
     const byUser = new Map((membersQuery.data ?? []).map((m) => [m.userId, m.profile]))
@@ -127,6 +157,50 @@ export function ChannelChatPage() {
   }, [realtime.typingUserIds, membersQuery.data])
 
   const messages = useMemo(() => messagesQuery.data?.messages ?? [], [messagesQuery.data])
+
+  const messageIds = useMemo(() => messages.map((m) => m.id), [messages])
+
+  const reactionsQuery = useQuery({
+    queryKey: [...queryKeys.messages.reactions(channel?.id ?? 'none'), messageIds.length],
+    queryFn: () => messageService.listReactions(messageIds),
+    enabled: messageIds.length > 0,
+  })
+
+  const pinnedQuery = useQuery({
+    queryKey: queryKeys.messages.pinned(channel?.id ?? 'none'),
+    queryFn: () => messageService.listPinned(channel?.id as string),
+    enabled: Boolean(channel),
+  })
+
+  const invalidateReactions = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.messages.reactions(channel?.id ?? 'none'),
+    })
+
+  const react = useMutation({
+    mutationFn: (input: { id: string; emoji: string }) =>
+      messageService.addReaction(input.id, input.emoji),
+    onSuccess: () => invalidateReactions(),
+    onError: (error: unknown) => toast.error(errorMessage(error)),
+  })
+
+  const unreact = useMutation({
+    mutationFn: (input: { id: string; emoji: string }) =>
+      messageService.removeReaction(input.id, input.emoji),
+    onSuccess: () => invalidateReactions(),
+    onError: (error: unknown) => toast.error(errorMessage(error)),
+  })
+
+  // Opening a channel is what marks it read. Fired on arrival and again
+  // whenever new messages land while it is on screen, so the badge does not
+  // reappear behind the reader's back.
+  useEffect(() => {
+    if (!channel || !organizationId) return
+    void channelService.markRead(channel.id).then(
+      () => queryClient.invalidateQueries({ queryKey: queryKeys.reads.unread(organizationId) }),
+      () => undefined,
+    )
+  }, [channel, organizationId, messages.length, queryClient])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
@@ -182,13 +256,13 @@ export function ChannelChatPage() {
     )
   }
 
-  const members = membersQuery.data ?? []
-
   const panel = (
     <ChannelPanelContent
       channel={channel}
-      members={members}
-      membersPending={membersQuery.isPending}
+      members={channelMembers}
+      membersPending={membersQuery.isPending || channelMemberIdsQuery.isPending}
+      pinned={pinnedQuery.data ?? []}
+      pinnedPending={pinnedQuery.isPending}
     />
   )
 
@@ -223,24 +297,20 @@ export function ChannelChatPage() {
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            {/* Searching a channel needs a server-side search; this is the
-                control it will hang from, and it says so rather than
-                pretending to work. */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    disabled
-                    aria-label="Search this channel"
-                    className="text-muted-foreground size-8"
-                  >
-                    <MagnifyingGlass className="size-[18px]" aria-hidden="true" />
-                  </Button>
-                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setSearchOpen((open) => !open)}
+                  aria-label="Search this channel"
+                  aria-expanded={searchOpen}
+                  className="text-muted-foreground hover:text-foreground size-8"
+                >
+                  <MagnifyingGlass className="size-[18px]" aria-hidden="true" />
+                </Button>
               </TooltipTrigger>
-              <TooltipContent>Channel search arrives with C2</TooltipContent>
+              <TooltipContent>Search messages</TooltipContent>
             </Tooltip>
 
             {canManage ? (
@@ -273,7 +343,17 @@ export function ChannelChatPage() {
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {searchOpen ? (
+          <div className="min-h-0 flex-1">
+            <ChannelSearch
+              channelId={channel.id}
+              channelName={channel.name}
+              onClose={() => setSearchOpen(false)}
+            />
+          </div>
+        ) : null}
+
+        <div className={cn('min-h-0 flex-1 overflow-y-auto', searchOpen && 'hidden')}>
           {/* Centred and bounded in both states, so closing the panel widens
               the conversation rather than stranding it against the left edge.
               `justify-end` keeps a short conversation on the composer. */}
@@ -312,13 +392,19 @@ export function ChannelChatPage() {
                       <MessageRow
                         message={message}
                         grouped={continues(previous, message)}
+                        reactions={reactionsQuery.data?.get(message.id) ?? []}
                         actions={{
                           // Editing belongs to the author. Moderation confers
                           // removal, never rewriting somebody else's words.
                           canEdit: isMine,
                           canPin,
                           canDelete: isMine || canModerate,
+                          // Reacting is speaking in the channel, so it rides on
+                          // the same permission as sending.
+                          canReact: canSend && channel.archivedAt === null,
                         }}
+                        onReact={(emoji) => react.mutate({ id: message.id, emoji })}
+                        onUnreact={(emoji) => unreact.mutate({ id: message.id, emoji })}
                         onEdit={(body) => saveEdit.mutate({ id: message.id, body })}
                         onTogglePin={() =>
                           pin.mutate({ id: message.id, pinned: message.pinnedAt === null })

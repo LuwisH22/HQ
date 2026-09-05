@@ -3,9 +3,22 @@ import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
 import { demoMessageService } from '@/services/demo'
 import { firstOf } from './postgrest'
-import type { Message, MessagePage, MessageService } from './service-contracts'
+import type {
+  Message,
+  MessagePage,
+  MessageReaction,
+  MessageSearchInput,
+  MessageSearchResult,
+  MessageService,
+} from './service-contracts'
 
-export type { Message, MessagePage } from './service-contracts'
+export type {
+  Message,
+  MessagePage,
+  MessageReaction,
+  MessageSearchInput,
+  MessageSearchResult,
+} from './service-contracts'
 
 /**
  * Channel messages.
@@ -146,6 +159,133 @@ export const supabaseMessageService: MessageService = {
     })
     if (error) throw toAppError(error)
   },
+
+  /** Newest pin first, and never a deleted message: a trigger unpins those. */
+  async listPinned(channelId: string): Promise<Message[]> {
+    const { data, error } = await getSupabase()
+      .from('messages')
+      .select(COLUMNS)
+      .eq('channel_id', channelId)
+      .not('pinned_at', 'is', null)
+      .is('deleted_at', null)
+      .order('pinned_at', { ascending: false })
+      .limit(25)
+
+    if (error) throw toAppError(error)
+    return ((data ?? []) as unknown as MessageRow[]).map(toMessage)
+  },
+
+  async listReactions(messageIds: readonly string[]): Promise<Map<string, MessageReaction[]>> {
+    const byMessage = new Map<string, MessageReaction[]>()
+    if (messageIds.length === 0) return byMessage
+
+    const supabase = getSupabase()
+    const { data: userData } = await supabase.auth.getUser()
+    const me = userData.user?.id ?? null
+
+    // One request for the whole page. Rows arrive already scoped: a reaction
+    // on a message the caller cannot read is not in the response.
+    const { data, error } = await supabase
+      .from('message_reactions')
+      .select('message_id, emoji, user_id')
+      .in('message_id', [...messageIds])
+
+    if (error) throw toAppError(error)
+
+    for (const row of data ?? []) {
+      const list = byMessage.get(row.message_id) ?? []
+      const existing = list.find((r) => r.emoji === row.emoji)
+      if (existing) {
+        existing.count += 1
+        existing.mine = existing.mine || row.user_id === me
+      } else {
+        list.push({ emoji: row.emoji, count: 1, mine: row.user_id === me })
+      }
+      byMessage.set(row.message_id, list)
+    }
+
+    return byMessage
+  },
+
+  async addReaction(messageId: string, emoji: string): Promise<void> {
+    const supabase = getSupabase()
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+    if (!userId) throw new AppError('auth', 'Your session has expired. Please sign in again.')
+
+    // user_id is set from the session and the policy checks it again against
+    // auth.uid() — reacting as somebody else is refused twice.
+    const { error } = await supabase
+      .from('message_reactions')
+      .insert({ message_id: messageId, user_id: userId, emoji })
+
+    if (error) throw toAppError(error)
+  },
+
+  async removeReaction(messageId: string, emoji: string): Promise<void> {
+    const supabase = getSupabase()
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+    if (!userId) throw new AppError('auth', 'Your session has expired. Please sign in again.')
+
+    const { error } = await supabase
+      .from('message_reactions')
+      .delete()
+      .eq('message_id', messageId)
+      .eq('user_id', userId)
+      .eq('emoji', emoji)
+
+    if (error) throw toAppError(error)
+  },
+
+  /**
+   * Full text search.
+   *
+   * The routine is SECURITY INVOKER, so the messages policy has already
+   * decided what may come back before this code sees anything. Channel names
+   * are resolved separately because the routine returns ids, and the channels
+   * the caller can name are the same ones it could search.
+   */
+  async search(input: MessageSearchInput): Promise<MessageSearchResult[]> {
+    const supabase = getSupabase()
+
+    const { data, error } = await supabase.rpc('search_messages', {
+      p_query: input.query,
+      p_channel_id: input.channelId,
+      p_before: input.before ?? null,
+    })
+    if (error) throw toAppError(error)
+
+    const rows = data ?? []
+    if (rows.length === 0) return []
+
+    const [{ data: channels }, { data: profiles }] = await Promise.all([
+      supabase.from('channels').select('id, key, name'),
+      supabase
+        .from('profiles')
+        .select('id, display_name, full_name, email')
+        .in('id', [
+          ...new Set(rows.map((r) => r.author_id).filter((id): id is string => Boolean(id))),
+        ]),
+    ])
+
+    const channelById = new Map((channels ?? []).map((c) => [c.id, c]))
+    const profileById = new Map((profiles ?? []).map((p) => [p.id, p]))
+
+    return rows.map((row) => {
+      const channel = channelById.get(row.channel_id)
+      const author = row.author_id ? profileById.get(row.author_id) : undefined
+      return {
+        id: row.id,
+        channelId: row.channel_id,
+        channelName: channel?.name ?? 'Unknown channel',
+        channelKey: channel?.key ?? '',
+        authorName: author?.display_name ?? author?.full_name ?? author?.email ?? 'Removed member',
+        body: row.body,
+        createdAt: row.created_at,
+      }
+    })
+  },
 }
 
 function impl(): MessageService {
@@ -159,4 +299,9 @@ export const messageService: MessageService = {
   edit: (messageId, body) => impl().edit(messageId, body),
   remove: (messageId, reason) => impl().remove(messageId, reason),
   setPinned: (messageId, pinned) => impl().setPinned(messageId, pinned),
+  listPinned: (channelId) => impl().listPinned(channelId),
+  listReactions: (messageIds) => impl().listReactions(messageIds),
+  addReaction: (messageId, emoji) => impl().addReaction(messageId, emoji),
+  removeReaction: (messageId, emoji) => impl().removeReaction(messageId, emoji),
+  search: (input) => impl().search(input),
 }

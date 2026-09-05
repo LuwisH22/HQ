@@ -60,6 +60,9 @@ const TABLES = [
   'organization_members',
   'invitations',
   'audit_logs',
+  'message_reactions',
+  'channel_reads',
+  'notifications',
 ]
 
 /** Functions that must never be callable without a session. */
@@ -177,6 +180,14 @@ const HELPERS = [
   ['can_join_channel_topic', { p_topic: 'channel:' + ORG, p_permission: 'channels.view' }],
   ['create_channel_in_category', { p_organization_id: ORG, p_name: 'probe',
                                   p_category_name: 'probe', p_is_private: false }],
+  // Phase 2 · C2.
+  ['unread_counts', {}],
+  ['search_messages', { p_query: 'probe' }],
+  ['channel_member_ids', { p_channel_id: ORG }],
+  ['mark_notifications_read', {}],
+  ['can_in_channel_for', { p_user_id: ORG, p_channel_id: ORG, p_permission: 'channels.view' }],
+  ['has_org_permission_for', { p_user_id: ORG, p_organization_id: ORG,
+                              p_permission: 'channels.view' }],
 ]
 for (const [fn, args] of HELPERS) {
   const { error } = await supabase.rpc(fn, args)

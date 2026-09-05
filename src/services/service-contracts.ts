@@ -320,6 +320,20 @@ export interface ChannelService {
   deleteChannel(channelId: string): Promise<void>
   reorderChannels(organizationId: string, ids: readonly string[]): Promise<void>
 
+  // --- C2 ---
+  /** Unread counts for every channel the caller can see, in one call. */
+  unreadCounts(): Promise<ChannelUnread[]>
+  /** Records that the caller has read this channel up to now. */
+  markRead(channelId: string): Promise<void>
+  /**
+   * The members who can actually see a channel.
+   *
+   * Resolved in Postgres through the same rules that govern the channel, so a
+   * private channel lists the people allowed into it rather than the whole
+   * organization.
+   */
+  listChannelMembers(channelId: string): Promise<string[]>
+
   listOverrides(channelId: string): Promise<ChannelOverride[]>
   /** `effect: null` clears the override, returning that role to inherit. */
   setOverride(
@@ -369,6 +383,77 @@ export interface MessageService {
   /** Soft delete: the author's own, or anyone's with `messages.moderate`. */
   remove(messageId: string, reason?: string): Promise<void>
   setPinned(messageId: string, pinned: boolean): Promise<void>
+
+  // --- C2 ---
+  /** Pinned messages in a channel, newest pin first. */
+  listPinned(channelId: string): Promise<Message[]>
+  /**
+   * Reactions on a set of messages, already aggregated per emoji.
+   *
+   * Fetched for a whole page at once rather than per message: fifty messages
+   * is one request, not fifty.
+   */
+  listReactions(messageIds: readonly string[]): Promise<Map<string, MessageReaction[]>>
+  addReaction(messageId: string, emoji: string): Promise<void>
+  removeReaction(messageId: string, emoji: string): Promise<void>
+  /**
+   * Full text search. `channelId` null searches every channel the caller can
+   * see — which is decided by the messages policy, not here.
+   */
+  search(input: MessageSearchInput): Promise<MessageSearchResult[]>
+}
+
+/** One emoji on one message, counted. */
+export interface MessageReaction {
+  emoji: string
+  count: number
+  /** Whether the signed-in member is one of the people who reacted. */
+  mine: boolean
+}
+
+export interface MessageSearchInput {
+  query: string
+  channelId: string | null
+  before?: string
+}
+
+export interface MessageSearchResult {
+  id: string
+  channelId: string
+  channelName: string
+  channelKey: string
+  authorName: string
+  body: string
+  createdAt: string
+}
+
+// --- Read state (Phase 2 · C2) ---------------------------------------------
+
+export interface ChannelUnread {
+  channelId: string
+  unread: number
+  lastReadAt: string | null
+}
+
+// --- Notifications (Phase 2 · C2) ------------------------------------------
+
+export interface Notification {
+  id: number
+  type: string
+  entityType: string
+  entityId: string
+  actorName: string | null
+  summary: string
+  metadata: Record<string, unknown>
+  readAt: string | null
+  createdAt: string
+}
+
+export interface NotificationService {
+  list(organizationId: string, limit?: number): Promise<Notification[]>
+  unreadCount(organizationId: string): Promise<number>
+  /** `ids` omitted marks every unread one read. */
+  markRead(ids?: readonly number[]): Promise<void>
 }
 
 export interface ProfileService {

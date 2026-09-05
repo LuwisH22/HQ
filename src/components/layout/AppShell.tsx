@@ -9,6 +9,7 @@ import { Topbar } from './Topbar'
 import { MobileNavDrawer, MobileTabBar } from './MobileNav'
 import { CommandPalette } from './CommandPalette'
 import { ProfileDialog } from '@/features/profile/ProfileDialog'
+import { useUnreadRealtime } from '@/features/channels/use-unread'
 
 /**
  * The persistent application frame.
@@ -24,6 +25,10 @@ export function AppShell() {
 
   useKeyboardShortcut({ key: 'b', mod: true }, () => setSidebarCollapsed(!sidebarCollapsed))
   useKeyboardShortcut({ key: 'Escape', allowInInput: true }, () => setMobileNavOpen(false))
+
+  // One organization-wide subscription for the whole app, not one per
+  // rendered channel list.
+  useUnreadRealtime()
 
   return (
     <div className="bg-background flex h-dvh w-full overflow-hidden">

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { DotsThree, PushPin, Smiley, ArrowBendUpLeft, PencilSimple } from '@phosphor-icons/react'
+import { DotsThree, PushPin, ArrowBendUpLeft, PencilSimple } from '@phosphor-icons/react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +11,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { initialsFor } from '@/services/profile.service'
-import type { Message } from '@/services/message.service'
+import type { Message, MessageReaction } from '@/services/message.service'
+import { MessageReactions, ReactionPicker } from './MessageReactions'
 import { cn } from '@/lib/utils'
 
 /**
@@ -31,6 +32,8 @@ export interface MessageActions {
   canEdit: boolean
   canPin: boolean
   canDelete: boolean
+  /** Reacting is speaking: a deny on messages.send silences this too. */
+  canReact: boolean
 }
 
 function shortTime(iso: string): string {
@@ -45,7 +48,7 @@ function UpcomingAction({
 }: {
   label: string
   hint: string
-  icon: typeof Smiley
+  icon: typeof ArrowBendUpLeft
 }) {
   return (
     <Tooltip>
@@ -73,23 +76,30 @@ export function MessageRow({
   message,
   grouped,
   actions,
+  reactions,
   onEdit,
   onTogglePin,
   onDelete,
+  onReact,
+  onUnreact,
 }: {
   message: Message
   /** Continues the message above it: no avatar, no name. */
   grouped: boolean
   actions: MessageActions
+  reactions: readonly MessageReaction[]
   onEdit: (body: string) => void
   onTogglePin: () => void
   onDelete: () => void
+  onReact: (emoji: string) => void
+  onUnreact: (emoji: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.body)
 
   const removed = message.deletedAt !== null
-  const showActions = !removed && (actions.canEdit || actions.canPin || actions.canDelete)
+  const showActions =
+    !removed && (actions.canEdit || actions.canPin || actions.canDelete || actions.canReact)
 
   return (
     <li
@@ -161,12 +171,20 @@ export function MessageRow({
             </Button>
           </form>
         ) : (
-          <p className="text-foreground/92 text-sm leading-relaxed break-words whitespace-pre-wrap">
-            {message.body}
-            {message.editedAt ? (
-              <span className="text-3xs text-muted-foreground/60"> (edited)</span>
-            ) : null}
-          </p>
+          <>
+            <p className="text-foreground/92 text-sm leading-relaxed break-words whitespace-pre-wrap">
+              {message.body}
+              {message.editedAt ? (
+                <span className="text-3xs text-muted-foreground/60"> (edited)</span>
+              ) : null}
+            </p>
+            <MessageReactions
+              reactions={reactions}
+              canReact={actions.canReact}
+              onPick={onReact}
+              onToggle={(emoji, mine) => (mine ? onUnreact(emoji) : onReact(emoji))}
+            />
+          </>
         )}
       </div>
 
@@ -178,10 +196,11 @@ export function MessageRow({
             'group-focus-within:opacity-100 group-hover:opacity-100',
           )}
         >
-          {/* Reactions and threads are later phases. The controls are here so
-              the toolbar does not change shape when they land, and they say
-              so rather than pretending to work. */}
-          <UpcomingAction label="Add reaction" hint="Reactions arrive with C2" icon={Smiley} />
+          {actions.canReact ? <ReactionPicker onPick={onReact} label="Add a reaction" /> : null}
+
+          {/* Threads are still a later phase. The control is here so the
+              toolbar does not change shape when they land, and it says so
+              rather than pretending to work. */}
           <UpcomingAction
             label="Reply in thread"
             hint="Threads arrive with C3"

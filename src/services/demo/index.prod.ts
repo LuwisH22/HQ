@@ -4,6 +4,7 @@ import type {
   ChannelService,
   MessageService,
   InvitationService,
+  NotificationService,
   OrganizationService,
   ProfileService,
 } from '../service-contracts'
@@ -74,6 +75,9 @@ export const demoChannelService: ChannelService = {
   reorderChannels: unreachable,
   listOverrides: unreachable,
   setOverride: unreachable,
+  unreadCounts: unreachable,
+  markRead: unreachable,
+  listChannelMembers: unreachable,
 }
 
 export const demoMessageService: MessageService = {
@@ -83,6 +87,17 @@ export const demoMessageService: MessageService = {
   edit: unreachable,
   remove: unreachable,
   setPinned: unreachable,
+  listPinned: unreachable,
+  listReactions: unreachable,
+  addReaction: unreachable,
+  removeReaction: unreachable,
+  search: unreachable,
+}
+
+export const demoNotificationService: NotificationService = {
+  list: unreachable,
+  unreadCount: unreachable,
+  markRead: unreachable,
 }
 
 export const demoProfileService: ProfileService = {

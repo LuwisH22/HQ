@@ -5,6 +5,7 @@ import { useUiStore } from '@/stores/ui.store'
 import { useConnectionStatus } from '@/hooks/use-connection-status'
 import { modifierKeyLabel } from '@/lib/platform'
 import { DemoModeBanner } from '@/features/demo'
+import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { cn } from '@/lib/utils'
 
 /**
@@ -40,6 +41,7 @@ export function Topbar({ title }: { title?: string }) {
 
       <div className="app-no-drag ml-auto flex items-center gap-2">
         <DemoModeBanner />
+        <NotificationBell />
         {connection !== 'online' ? (
           <Badge
             variant={connection === 'offline' ? 'destructive' : 'warning'}

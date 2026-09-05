@@ -48,6 +48,23 @@ export const queryKeys = {
 
   messages: {
     list: (channelId: string) => ['messages', channelId] as const,
+    pinned: (channelId: string) => ['messages', channelId, 'pinned'] as const,
+    reactions: (channelId: string) => ['messages', channelId, 'reactions'] as const,
+    search: (channelId: string | null, query: string) =>
+      ['messages', 'search', channelId ?? 'all', query] as const,
+  },
+
+  channelMembers: {
+    forChannel: (channelId: string) => ['channel-members', channelId] as const,
+  },
+
+  reads: {
+    unread: (organizationId: string) => ['unread', organizationId] as const,
+  },
+
+  notifications: {
+    all: (organizationId: string) => ['notifications', organizationId] as const,
+    unreadCount: (organizationId: string) => ['notifications', organizationId, 'count'] as const,
   },
 
   audit: {

@@ -944,6 +944,225 @@ console.log('\nC1 · messages are not writable in a channel you cannot reach')
     error ? `blocked (${error.code ?? ''})` : 'ACCEPTED')
 }
 
+console.log('\nC2 · Decision 1 — the extraction is equivalent')
+{
+  // The delegation must agree with the extraction for the caller themselves.
+  // Every other authorization check in this file already ran against the
+  // redefined functions; this pins the two forms together explicitly.
+  for (const [label, permission] of [
+    ['channels.view', 'channels.view'],
+    ['messages.send', 'messages.send'],
+    ['messages.pin', 'messages.pin'],
+  ]) {
+    const { data: viaCaller } = await supabase.rpc('can_in_channel', {
+      p_channel_id: probePublic, p_permission: permission,
+    })
+    const { data: viaUser } = await supabase.rpc('can_in_channel_for', {
+      p_user_id: userId, p_channel_id: probePublic, p_permission: permission,
+    })
+    check(`can_in_channel agrees with can_in_channel_for for ${label}`,
+      viaCaller === viaUser && viaCaller === true, `${String(viaCaller)} / ${String(viaUser)}`)
+  }
+
+  const { data: orgCaller } = await supabase.rpc('has_org_permission', {
+    p_organization_id: org?.id, p_permission: 'channels.view',
+  })
+  const { data: orgUser } = await supabase.rpc('has_org_permission_for', {
+    p_user_id: userId, p_organization_id: org?.id, p_permission: 'channels.view',
+  })
+  check('has_org_permission agrees with has_org_permission_for',
+    orgCaller === orgUser && orgCaller === true)
+
+  // A user who is nobody resolves to false rather than raising.
+  const { data: nobody, error: nobodyError } = await supabase.rpc('can_in_channel_for', {
+    p_user_id: '00000000-0000-4000-8000-000000000000',
+    p_channel_id: probePublic, p_permission: 'channels.view',
+  })
+  check('an unknown user resolves to false without raising', !nobodyError && nobody === false,
+    nobodyError ? `RAISED: ${nobodyError.message.slice(0, 40)}` : String(nobody))
+}
+
+console.log('\nC2 · reactions')
+let probeReactionMessage = null
+{
+  const { data } = await supabase
+    .from('messages')
+    .insert({ channel_id: probePublic, author_id: userId, body: 'verify-live reaction target' })
+    .select('id')
+    .single()
+  probeReactionMessage = data?.id ?? null
+
+  const { error } = await supabase
+    .from('message_reactions')
+    .insert({ message_id: probeReactionMessage, user_id: userId, emoji: '\ud83d\udc4d' })
+  check('a reaction can be added', !error, error?.message ?? '')
+
+  const { data: row } = await supabase
+    .from('message_reactions')
+    .select('channel_id')
+    .eq('message_id', probeReactionMessage)
+    .maybeSingle()
+  check('channel_id is stamped by the database', row?.channel_id === probePublic,
+    row?.channel_id ?? 'missing')
+}
+{
+  const { error } = await supabase
+    .from('message_reactions')
+    .insert({ message_id: probeReactionMessage, user_id: org?.id, emoji: '\ud83d\udd25' })
+  check('reacting under another name is refused', Boolean(error),
+    error ? `blocked (${error.code ?? ''})` : 'ACCEPTED — IMPERSONATION POSSIBLE')
+}
+{
+  const { error } = await supabase
+    .from('message_reactions')
+    .insert({ message_id: probeReactionMessage, user_id: userId, emoji: '\ud83d\udc4d' })
+  check('the same reaction twice is refused', Boolean(error),
+    error ? `blocked (${error.code ?? ''})` : 'ACCEPTED — DUPLICATE')
+}
+{
+  const { error } = await supabase
+    .from('message_reactions')
+    .insert({ message_id: probeReactionMessage, user_id: userId, emoji: 'lgtm' })
+  check('a text label is not an emoji', Boolean(error),
+    error ? `refused (${error.code ?? ''})` : 'ACCEPTED')
+}
+{
+  const { error } = await supabase
+    .from('message_reactions')
+    .insert({ message_id: probeReactionMessage, user_id: userId, emoji: '\ud83c\udf89', channel_id: probePrivate })
+  // The trigger overwrites whatever a client sends, so this must land in the
+  // real channel rather than the one the client named.
+  const { data: rows } = await supabase
+    .from('message_reactions')
+    .select('emoji, channel_id')
+    .eq('message_id', probeReactionMessage)
+  const forged = (rows ?? []).find((r) => r.emoji === '\ud83c\udf89')
+  check('a client-supplied channel_id is overwritten', !error && forged?.channel_id === probePublic,
+    forged?.channel_id ?? 'absent')
+}
+
+console.log('\nC2 · a soft delete takes the pin and the reactions with it')
+{
+  await supabase.rpc('pin_message', { p_message_id: probeReactionMessage, p_pinned: true })
+  await supabase.rpc('delete_message', { p_message_id: probeReactionMessage })
+
+  const { data: after } = await supabase
+    .from('messages').select('pinned_at, deleted_at').eq('id', probeReactionMessage).maybeSingle()
+  check('the pin is cleared', after?.pinned_at === null && after?.deleted_at !== null)
+
+  const { data: left } = await supabase
+    .from('message_reactions').select('emoji').eq('message_id', probeReactionMessage)
+  check('the reactions are gone', (left ?? []).length === 0, `${String((left ?? []).length)} left`)
+}
+
+console.log('\nC2 · read state')
+{
+  const { error } = await supabase
+    .from('channel_reads')
+    .upsert({ channel_id: probePublic, user_id: userId }, { onConflict: 'channel_id,user_id' })
+  check('a read can be recorded', !error, error?.message ?? '')
+
+  const { error: forgedError } = await supabase
+    .from('channel_reads')
+    .upsert({ channel_id: probePublic, user_id: org?.id }, { onConflict: 'channel_id,user_id' })
+  check('recording a read for somebody else is refused', Boolean(forgedError),
+    forgedError ? `blocked (${forgedError.code ?? ''})` : 'ACCEPTED')
+
+  const { error: unknownError } = await supabase
+    .from('channel_reads')
+    .upsert({ channel_id: '00000000-0000-4000-8000-000000000000', user_id: userId })
+  check('recording a read in an unknown channel is refused', Boolean(unknownError),
+    unknownError ? `blocked (${unknownError.code ?? ''})` : 'ACCEPTED')
+}
+{
+  const { data, error } = await supabase.rpc('unread_counts')
+  check('unread_counts returns a row per visible channel', !error && Array.isArray(data),
+    error?.message ?? `${String((data ?? []).length)} channels`)
+  const forPublic = (data ?? []).find((r) => r.channel_id === probePublic)
+  check('the probe channel is counted', Boolean(forPublic),
+    forPublic ? `unread ${String(forPublic.unread)}` : 'absent')
+}
+
+console.log('\nC2 · search')
+{
+  const marker = `zqxjv${String(Date.now() % 100000)}`
+  const { data: sent } = await supabase
+    .from('messages')
+    .insert({ channel_id: probePublic, author_id: userId, body: `verify-live ${marker} needle` })
+    .select('id')
+    .single()
+
+  const { data: found, error } = await supabase.rpc('search_messages', { p_query: marker })
+  check('a message is findable by a word in it',
+    !error && (found ?? []).some((r) => r.id === sent?.id), error?.message ?? '')
+
+  const { data: scoped } = await supabase.rpc('search_messages', {
+    p_query: marker, p_channel_id: probePrivate,
+  })
+  check('narrowing to another channel finds nothing', (scoped ?? []).length === 0,
+    `${String((scoped ?? []).length)} results`)
+
+  const { data: empty, error: emptyError } = await supabase.rpc('search_messages', { p_query: '' })
+  check('an empty query matches nothing rather than everything',
+    !emptyError && (empty ?? []).length === 0, `${String((empty ?? []).length)} results`)
+
+  const { data: junk, error: junkError } = await supabase.rpc('search_messages', {
+    p_query: '"unclosed and & | ! (',
+  })
+  check('malformed input is refused without raising', !junkError,
+    junkError ? `RAISED: ${junkError.message.slice(0, 40)}` : `${String((junk ?? []).length)} results`)
+
+  await supabase.rpc('delete_message', { p_message_id: sent?.id })
+  const { data: afterDelete } = await supabase.rpc('search_messages', { p_query: marker })
+  check('a deleted message stops being findable', (afterDelete ?? []).length === 0,
+    `${String((afterDelete ?? []).length)} results`)
+}
+
+console.log('\nC2 · notifications')
+{
+  const { data: rows, error } = await supabase.from('notifications').select('id, recipient_id')
+  check('the notification list is readable', !error, error?.message ?? '')
+  check('every row belongs to the caller',
+    (rows ?? []).every((r) => r.recipient_id === userId),
+    `${String((rows ?? []).length)} rows`)
+
+  const { error: insertError } = await supabase.from('notifications').insert({
+    organization_id: org?.id, recipient_id: userId, type: 'mention',
+    entity_type: 'message', entity_id: 'x', summary: 'forged',
+  })
+  // There is no INSERT policy at all: a client cannot manufacture one.
+  check('a client cannot write a notification', Boolean(insertError),
+    insertError ? `blocked (${insertError.code ?? ''})` : 'ACCEPTED — FORGERY POSSIBLE')
+
+  const { error: markError } = await supabase.rpc('mark_notifications_read', {})
+  check('marking read succeeds', !markError, markError?.message ?? '')
+}
+
+console.log('\nC2 · channel membership resolves through the same rules')
+{
+  const { data: publicMembers, error } = await supabase.rpc('channel_member_ids', {
+    p_channel_id: probePublic,
+  })
+  check('a public channel lists its members', !error && (publicMembers ?? []).length > 0,
+    error?.message ?? `${String((publicMembers ?? []).length)} members`)
+  check('the caller is among them', (publicMembers ?? []).includes(userId))
+
+  const { data: privateMembers } = await supabase.rpc('channel_member_ids', {
+    p_channel_id: probePrivate,
+  })
+  // The owner short-circuits every check, so they are the one guaranteed
+  // member of a private channel with no overrides.
+  check('a private channel lists only who is allowed in',
+    (privateMembers ?? []).length < (publicMembers ?? []).length,
+    `${String((privateMembers ?? []).length)} of ${String((publicMembers ?? []).length)}`)
+
+  const { data: unknown } = await supabase.rpc('channel_member_ids', {
+    p_channel_id: '00000000-0000-4000-8000-000000000000',
+  })
+  check('an unknown channel yields nothing rather than an error',
+    (unknown ?? []).length === 0, `${String((unknown ?? []).length)}`)
+}
+
 console.log('\nB3 · a channel and its category in one call')
 
 const comboName = `probe-combo-${String(Date.now() % 100000)}`

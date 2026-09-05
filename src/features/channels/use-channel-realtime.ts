@@ -46,6 +46,7 @@ export function useChannelRealtime(
   channelId: string | null,
   currentUserId: string | null,
   onMessageChange: () => void,
+  onReactionChange: () => void = () => undefined,
 ): ChannelRealtime {
   const [typing, setTyping] = useState<Record<string, number>>({})
   const [connected, setConnected] = useState(false)
@@ -56,6 +57,8 @@ export function useChannelRealtime(
   // Kept in a ref so the effect does not re-subscribe on every render.
   const onChangeRef = useRef(onMessageChange)
   onChangeRef.current = onMessageChange
+  const onReactionRef = useRef(onReactionChange)
+  onReactionRef.current = onReactionChange
 
   useEffect(() => {
     // Demo mode has no server to talk to; the store is local and synchronous.
@@ -76,6 +79,14 @@ export function useChannelRealtime(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages', filter: `channel_id=eq.${channelId}` },
         () => onChangeRef.current(),
+      )
+      // Deliberately unfiltered. A DELETE payload carries the replica
+      // identity, which Supabase projects down to the primary key — so a
+      // filter on channel_id would silently never match a removed reaction.
+      // RLS scopes delivery to reactions on messages this client could read
+      // anyway, which is the guarantee that actually matters.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, () =>
+        onReactionRef.current(),
       )
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         const data = payload as Partial<TypingPayload>

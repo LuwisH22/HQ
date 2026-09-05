@@ -16,7 +16,7 @@ import type { InvitationStatus, MemberStatus } from '@/types/database.types'
 const STORAGE_KEY = 'lfg-hq-demo-db'
 // Bumped when the seed shape changes, so a stale store is discarded rather
 // than half-migrated.
-const SCHEMA_VERSION = 5
+const SCHEMA_VERSION = 6
 
 // --- Row shapes (camelCase; the demo layer sits above the SQL naming) -------
 
@@ -112,6 +112,9 @@ export interface DemoDatabase {
   channels: DemoChannel[]
   channelOverrides: DemoChannelOverride[]
   messages: DemoMessage[]
+  reactions: DemoReaction[]
+  channelReads: DemoChannelRead[]
+  notifications: DemoNotification[]
 }
 
 export interface DemoChannelCategory {
@@ -141,6 +144,33 @@ export interface DemoMessage {
   pinnedAt: string | null
   editedAt: string | null
   deletedAt: string | null
+  createdAt: string
+}
+
+/** One emoji, one person, one message. The triple is the identity. */
+export interface DemoReaction {
+  messageId: string
+  userId: string
+  emoji: string
+  channelId: string
+}
+
+export interface DemoChannelRead {
+  channelId: string
+  userId: string
+  lastReadAt: string
+}
+
+export interface DemoNotification {
+  id: number
+  recipientId: string
+  type: string
+  entityType: string
+  entityId: string
+  actorId: string | null
+  summary: string
+  metadata: Record<string, unknown>
+  readAt: string | null
   createdAt: string
 }
 
@@ -628,6 +658,9 @@ function buildSeed(): DemoDatabase {
       },
     ],
     channelOverrides: [],
+    reactions: [],
+    channelReads: [],
+    notifications: [],
     messages: [
       {
         id: demoId(GROUP.message, 0),
