@@ -7,6 +7,8 @@ import { channelService } from '@/services/channel.service'
 import { conversationService } from '@/services/conversation.service'
 import { messageService } from '@/services/message.service'
 import type { Message } from '@/services/message.service'
+import { attachmentService } from '@/services/attachment.service'
+import type { UploadedAttachment } from '@/services/attachment.service'
 import { queryKeys } from '@/lib/query-keys'
 import { errorMessage } from '@/lib/errors'
 import { useAuth } from '@/hooks/use-auth'
@@ -80,6 +82,11 @@ export function ThreadPanel({
     queryFn: () => messageService.listReactions(ids),
   })
 
+  const attachmentsQuery = useQuery({
+    queryKey: [...queryKeys.attachments.forMessages(placeId, ids.length), 'thread', root.id],
+    queryFn: () => attachmentService.listFor(ids),
+  })
+
   async function refresh(): Promise<void> {
     await queryClient.invalidateQueries({ queryKey: queryKeys.messages.replies(root.id) })
     await queryClient.invalidateQueries({
@@ -88,13 +95,20 @@ export function ThreadPanel({
     // The root's reply count lives on the message itself, so the timeline is
     // stale as soon as a reply lands.
     await queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(placeId) })
+    await attachmentsQuery.refetch()
   }
 
   const reply = useMutation({
-    mutationFn: (body: string) =>
-      inConversation
-        ? messageService.sendToConversation(placeId, body, root.id)
-        : messageService.send(placeId, body, root.id),
+    // The reply first, then its files: the attachment policy asks whether the
+    // caller authored a live message they may still send to.
+    mutationFn: async (input: { body: string; attachments: readonly UploadedAttachment[] }) => {
+      const message = inConversation
+        ? await messageService.sendToConversation(placeId, input.body, root.id)
+        : await messageService.send(placeId, input.body, root.id)
+      if (input.attachments.length > 0) {
+        await attachmentService.attach(message.id, input.attachments)
+      }
+    },
     onSuccess: refresh,
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
@@ -185,6 +199,7 @@ export function ThreadPanel({
             grouped={false}
             reactions={reactionsQuery.data?.get(root.id) ?? []}
             mentions={mentionsQuery.data?.get(root.id) ?? []}
+            attachments={attachmentsQuery.data?.get(root.id) ?? []}
             currentUserId={user?.id ?? null}
             actions={actionsFor(root)}
             {...rowHandlers(root)}
@@ -223,6 +238,7 @@ export function ThreadPanel({
                 }
                 reactions={reactionsQuery.data?.get(message.id) ?? []}
                 mentions={mentionsQuery.data?.get(message.id) ?? []}
+                attachments={attachmentsQuery.data?.get(message.id) ?? []}
                 currentUserId={user?.id ?? null}
                 actions={actionsFor(message)}
                 {...rowHandlers(message)}
@@ -239,7 +255,7 @@ export function ThreadPanel({
             placeKind={inConversation ? 'conversation' : 'channel'}
             disabled={false}
             sending={reply.isPending}
-            onSend={(body) => reply.mutate(body)}
+            onSend={(body, attachments) => reply.mutate({ body, attachments })}
             onTyping={() => undefined}
             mentionCandidates={mentionCandidatesQuery.data ?? []}
           />

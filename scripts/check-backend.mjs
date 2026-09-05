@@ -67,6 +67,7 @@ const TABLES = [
   'conversations',
   'conversation_members',
   'conversation_reads',
+  'message_attachments',
 ]
 
 /** Functions that must never be callable without a session. */
@@ -202,6 +203,36 @@ const HELPERS = [
 for (const [fn, args] of HELPERS) {
   const { error } = await supabase.rpc(fn, args)
   check(fn, Boolean(error), error ? `blocked (${error.code ?? 'error'})` : 'REACHABLE')
+}
+
+// --- 6. the attachment bucket is private and closed ------------------------
+console.log('\nstorage (the bucket must be private and shut to anonymous callers)')
+{
+  const BUCKET = 'message-attachments'
+
+  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl('anything/at-all')
+  const probe = await fetch(pub.publicUrl)
+  // A public bucket would serve this. A private one refuses whatever the path.
+  check('the bucket serves nothing publicly', probe.status >= 400, `HTTP ${String(probe.status)}`)
+
+  const { data: listed, error: listError } = await supabase.storage.from(BUCKET).list()
+  check('anonymous listing is refused', Boolean(listError) || (listed ?? []).length === 0,
+    listError ? `blocked (${listError.message})` : `returned ${String((listed ?? []).length)}`)
+
+  const { data: signed, error: signError } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl('anything/at-all', 60)
+  check('anonymous signing is refused', Boolean(signError) || !signed?.signedUrl,
+    signError ? 'blocked' : 'ISSUED')
+
+  // An allowed content type, so what refuses this is the policy rather than
+  // the bucket's type list.
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(`anything/${String(Date.now())}`, new Blob(['x'], { type: 'text/plain' }), {
+      contentType: 'text/plain',
+    })
+  check('anonymous upload is refused', Boolean(uploadError), uploadError?.message ?? 'ACCEPTED')
 }
 
 console.log(

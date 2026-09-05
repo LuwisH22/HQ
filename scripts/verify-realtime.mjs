@@ -377,6 +377,63 @@ check('a message in any channel reaches the organization topic', orgEvent !== nu
 
 await listener.removeChannel(orgChannel)
 
+console.log('\n9 · a message with a file on it')
+{
+  const BUCKET = 'message-attachments'
+  const PIXEL = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  )
+
+  const objectPath = `${authorId}/${crypto.randomUUID()}`
+  const { error: upError } = await author.storage
+    .from(BUCKET)
+    .upload(objectPath, PIXEL, { contentType: 'image/png' })
+  check('the file is uploaded before the message exists', !upError, upError?.message ?? '')
+
+  const gate = waitFor(gates.insert, 12_000, (m) => m.body === 'realtime attachment probe')
+  const { data: carrier } = await author
+    .from('messages')
+    .insert({ channel_id: channelId, author_id: authorId, body: 'realtime attachment probe' })
+    .select('id')
+    .single()
+  await author.from('message_attachments').insert({
+    message_id: carrier?.id,
+    storage_path: objectPath,
+    file_name: 'pixel.png',
+  })
+
+  const event = await gate
+  check('the message arrives on the existing subscription', event !== null,
+    event ? 'received' : 'nothing arrived in 12s')
+
+  // The bytes are storage's business. Realtime carries the row, and the row
+  // has no column that could hold a file.
+  const payload = JSON.stringify(event ?? {})
+  check('and carries no file content', !payload.includes('iVBORw0KGgo'),
+    `${String(payload.length)} bytes of payload`)
+  check('the payload is a message row and nothing more',
+    event !== null && !('storage_path' in event) && !('file_name' in event))
+
+  // The metadata is not on the publication, so it is fetched after the event —
+  // which is the design rather than a gap: one transport for state, storage
+  // for bytes.
+  const { data: attached } = await author
+    .from('message_attachments')
+    .select('id, file_name, mime_type, byte_size')
+    .eq('message_id', carrier?.id)
+  check('the metadata is there to be fetched', (attached ?? []).length === 1,
+    `${String((attached ?? []).length)} rows`)
+  check('and says what storage said', attached?.[0]?.mime_type === 'image/png',
+    String(attached?.[0]?.mime_type))
+
+  await author.rpc('delete_message', { p_message_id: carrier?.id })
+  await author.storage.from(BUCKET).remove([objectPath])
+  const { data: left } = await author.storage.from(BUCKET).list(authorId)
+  check('and leaves nothing behind',
+    !(left ?? []).some((o) => `${authorId}/${o.name}` === objectPath))
+}
+
 console.log('\n8 · the direct message topic')
 {
   const { data: roster } = await author

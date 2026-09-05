@@ -1664,6 +1664,171 @@ console.log('\nC3 · a direct message is not a channel')
   }
 }
 
+console.log('\nC3 · attachments')
+{
+  const BUCKET = 'message-attachments'
+  // A one-pixel PNG: real enough to be an image, small enough to be inline.
+  const PIXEL = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  )
+
+  const objectPath = `${userId}/${crypto.randomUUID()}`
+  const { error: upError } = await supabase.storage
+    .from(BUCKET)
+    .upload(objectPath, PIXEL, { contentType: 'image/png' })
+  check('an upload into your own prefix is accepted', !upError, upError?.message ?? '')
+
+  const strangerPath = `00000000-0000-4000-8000-000000000000/${crypto.randomUUID()}`
+  const { error: prefixError } = await supabase.storage
+    .from(BUCKET)
+    .upload(strangerPath, PIXEL, { contentType: 'image/png' })
+  // The prefix is the whole write rule: nobody can put anything anywhere but
+  // under their own id, which is also why nobody can overwrite anybody.
+  check("another member's prefix is refused", Boolean(prefixError),
+    prefixError ? 'refused' : 'ACCEPTED')
+
+  const { error: typeError } = await supabase.storage
+    .from(BUCKET)
+    .upload(`${userId}/${crypto.randomUUID()}`, Buffer.from('#!/bin/sh\n'), {
+      contentType: 'application/x-sh',
+    })
+  check('a kind of file that cannot be attached is refused', Boolean(typeError),
+    typeError?.message ?? 'ACCEPTED')
+
+  const { error: sizeError } = await supabase.storage
+    .from(BUCKET)
+    .upload(`${userId}/${crypto.randomUUID()}`, Buffer.alloc(26 * 1024 * 1024, 1), {
+      contentType: 'application/zip',
+    })
+  check('a file over 25 MB is refused', Boolean(sizeError), sizeError?.message ?? 'ACCEPTED')
+
+  // --- the metadata -------------------------------------------------------
+  const { data: carrier } = await supabase
+    .from('messages')
+    .insert({ channel_id: probePublic, author_id: userId, body: 'verify-live attachment probe' })
+    .select('id')
+    .single()
+
+  const { data: row, error: attachError } = await supabase
+    .from('message_attachments')
+    .insert({
+      message_id: carrier?.id,
+      storage_path: objectPath,
+      file_name: 'pixel.png',
+      // Deliberately wrong, both of them.
+      mime_type: 'text/html',
+      byte_size: 999999,
+    })
+    .select('id, mime_type, byte_size')
+    .single()
+  check('an attachment is recorded', !attachError, attachError?.message ?? '')
+  // The client says what it likes; storage is what is believed.
+  check('storage decides the content type', row?.mime_type === 'image/png', String(row?.mime_type))
+  check('storage decides the size', row?.byte_size === PIXEL.length, String(row?.byte_size))
+
+  const { error: dupError } = await supabase.from('message_attachments').insert({
+    message_id: carrier?.id, storage_path: objectPath, file_name: 'again.png',
+  })
+  check('one object cannot be attached twice', Boolean(dupError), dupError?.code ?? 'ACCEPTED')
+
+  const { error: ghostError } = await supabase.from('message_attachments').insert({
+    message_id: carrier?.id,
+    storage_path: `${userId}/${crypto.randomUUID()}`,
+    file_name: 'nothing.png',
+  })
+  check('a path with no object behind it is refused', Boolean(ghostError),
+    ghostError ? 'refused' : 'ACCEPTED')
+
+  const { error: theirsError } = await supabase.from('message_attachments').insert({
+    message_id: carrier?.id, storage_path: strangerPath, file_name: 'theirs.png',
+  })
+  check("another member's path is refused", Boolean(theirsError),
+    theirsError ? 'refused' : 'ACCEPTED')
+
+  const { error: updateError } = await supabase
+    .from('message_attachments').update({ file_name: 'renamed.png' }).eq('id', row?.id)
+  const { data: unchanged } = await supabase
+    .from('message_attachments').select('file_name').eq('id', row?.id).maybeSingle()
+  check('an attachment cannot be edited', Boolean(updateError) || unchanged?.file_name === 'pixel.png',
+    updateError ? 'refused' : 'no policy matched the update')
+
+  const { error: deleteError } = await supabase
+    .from('message_attachments').delete().eq('id', row?.id)
+  const { data: stillThere } = await supabase
+    .from('message_attachments').select('id').eq('id', row?.id).maybeSingle()
+  check('nor deleted on its own', Boolean(deleteError) || Boolean(stillThere),
+    deleteError ? 'refused' : 'no policy matched the delete')
+
+  // --- attaching to somebody else's message -------------------------------
+  const { data: roster } = await supabase
+    .from('organization_members').select('user_id').neq('user_id', userId)
+  const partner = (roster ?? [])[0]?.user_id
+  if (partner) {
+    const { data: theirMessage } = await supabase
+      .from('messages')
+      .insert({ channel_id: probePublic, author_id: userId, body: 'probe' })
+      .select('id')
+      .single()
+    // Not a real test of somebody else's message — there is one credential —
+    // but the rule that gates it is the author check, and this is the same
+    // insert path with a fresh object.
+    const secondPath = `${userId}/${crypto.randomUUID()}`
+    await supabase.storage.from(BUCKET).upload(secondPath, PIXEL, { contentType: 'image/png' })
+    const { error: secondError } = await supabase.from('message_attachments').insert({
+      message_id: theirMessage?.id, storage_path: secondPath, file_name: 'second.png',
+    })
+    check('a second file attaches to a second message', !secondError, secondError?.message ?? '')
+    await supabase.rpc('delete_message', { p_message_id: theirMessage?.id })
+    await supabase.storage.from(BUCKET).remove([secondPath])
+  }
+
+  // --- signed urls --------------------------------------------------------
+  const { data: signed, error: signError } = await supabase.storage
+    .from(BUCKET).createSignedUrl(objectPath, 60)
+  check('a signed url is issued for a file you can see', !signError && Boolean(signed?.signedUrl),
+    signError?.message ?? '')
+
+  if (signed?.signedUrl) {
+    const fetched = await fetch(signed.signedUrl)
+    check('and it returns the bytes', fetched.status === 200, `HTTP ${String(fetched.status)}`)
+  }
+
+  const { data: download } = await supabase.storage
+    .from(BUCKET).createSignedUrl(objectPath, 60, { download: true })
+  if (download?.signedUrl) {
+    const fetched = await fetch(download.signedUrl)
+    // The disposition is what keeps a file the browser might otherwise render
+    // a download and nothing else.
+    check('a download url carries a disposition',
+      (fetched.headers.get('content-disposition') ?? '').includes('attachment'),
+      fetched.headers.get('content-disposition') ?? 'none')
+  }
+
+  const { data: ghostSigned } = await supabase.storage
+    .from(BUCKET).createSignedUrl(`${crypto.randomUUID()}/${crypto.randomUUID()}`, 60)
+  check('no url is issued for an object that is not yours', !ghostSigned?.signedUrl,
+    ghostSigned?.signedUrl ? 'ISSUED' : 'refused')
+
+  // --- lifecycle ----------------------------------------------------------
+  await supabase.rpc('delete_message', { p_message_id: carrier?.id })
+  const { data: after } = await supabase
+    .from('message_attachments').select('id').eq('message_id', carrier?.id)
+  // A file listed under a message whose words are gone is residue, so it goes
+  // the way the reactions and the mentions go.
+  check('a deleted message keeps no attachment metadata', (after ?? []).length === 0,
+    `${String((after ?? []).length)} rows`)
+
+  await supabase.storage.from(BUCKET).remove([objectPath])
+  const { data: leftOver } = await supabase.storage.from(BUCKET).list(userId)
+  const names = new Set((leftOver ?? []).map((o) => `${userId}/${o.name}`))
+  // Its own objects, not the whole prefix: a real attachment somebody sent
+  // lives here too, and this section is not the place to have an opinion
+  // about it.
+  check('the probe leaves nothing of its own behind', !names.has(objectPath),
+    `${String(names.size)} objects under the prefix`)
+}
+
 console.log('\nB3 · a channel and its category in one call')
 
 const comboName = `probe-combo-${String(Date.now() % 100000)}`

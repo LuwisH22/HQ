@@ -16,7 +16,7 @@ import type { InvitationStatus, MemberStatus } from '@/types/database.types'
 const STORAGE_KEY = 'lfg-hq-demo-db'
 // Bumped when the seed shape changes, so a stale store is discarded rather
 // than half-migrated.
-const SCHEMA_VERSION = 9
+const SCHEMA_VERSION = 10
 
 // --- Row shapes (camelCase; the demo layer sits above the SQL naming) -------
 
@@ -119,6 +119,7 @@ export interface DemoDatabase {
   conversations: DemoConversation[]
   conversationMembers: DemoConversationMember[]
   conversationReads: DemoConversationRead[]
+  attachments: DemoAttachment[]
 }
 
 export interface DemoChannelCategory {
@@ -158,6 +159,24 @@ export interface DemoConversationMember {
   conversationId: string
   userId: string
   joinedAt: string
+}
+
+/**
+ * A file on a message.
+ *
+ * The bytes are not here. Demo mode has no storage service, so an upload is
+ * kept as an object URL in memory for as long as the tab lives — enough to
+ * render an image and to open a file, and gone on reload, which is honest
+ * about what demo mode is.
+ */
+export interface DemoAttachment {
+  id: string
+  messageId: string
+  storagePath: string
+  fileName: string
+  mimeType: string
+  byteSize: number
+  createdAt: string
 }
 
 export interface DemoConversationRead {
@@ -711,6 +730,7 @@ function buildSeed(): DemoDatabase {
     conversations: [],
     conversationMembers: [],
     conversationReads: [],
+    attachments: [],
     messages: [
       {
         id: demoId(GROUP.message, 0),

@@ -64,6 +64,14 @@ export const queryKeys = {
     mentionable: (placeId: string) => ['mention-candidates', placeId] as const,
   },
 
+  attachments: {
+    forMessages: (placeId: string, count: number) => ['attachments', placeId, count] as const,
+    // Keyed by the objects themselves: a signed URL belongs to a path, not to
+    // the message that happens to list it.
+    urls: (paths: readonly string[], kind: 'inline' | 'download') =>
+      ['attachment-urls', kind, [...paths].sort().join('|')] as const,
+  },
+
   conversations: {
     all: (organizationId: string) => ['conversations', organizationId] as const,
     detail: (conversationId: string) => ['conversations', 'detail', conversationId] as const,

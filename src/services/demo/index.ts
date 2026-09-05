@@ -16,8 +16,10 @@ import type {
   AuthService,
   Channel,
   ChannelService,
+  AttachmentService,
   Conversation,
   ConversationService,
+  MessageAttachment,
   MentionCandidate,
   Message,
   MessageMention,
@@ -43,12 +45,14 @@ import {
   recordAudit,
   resetDemoDatabase,
   DEMO_OWNER_PROFILE_ID,
+  type DemoAttachment,
   type DemoChannel,
   type DemoConversation,
   type DemoMember,
   type DemoMessage,
   type DemoRole,
 } from './demo-database'
+import { rejectAttachment, uploadTypeOf } from '@/features/channels/attachments'
 import { PERMISSION_CATALOG } from './permission-catalog'
 
 /**
@@ -1003,6 +1007,9 @@ function clearAfterSoftDelete(message: DemoMessage): void {
   const store = db()
   store.reactions = store.reactions.filter((r) => r.messageId !== message.id)
   store.mentions = store.mentions.filter((m) => m.messageId !== message.id)
+  // A file listed under a message whose words are gone is the same kind of
+  // residue a reaction count on an empty row would be.
+  store.attachments = store.attachments.filter((a) => a.messageId !== message.id)
   message.pinnedAt = null
 }
 
@@ -2153,6 +2160,152 @@ function byRecency(a: Conversation, b: Conversation): number {
   if (a.lastMessageAt) return -1
   if (b.lastMessageAt) return 1
   return a.otherName.localeCompare(b.otherName)
+}
+
+/**
+ * Files on messages.
+ *
+ * The port of the attachments schema and its storage policies, minus the
+ * storage: an upload is remembered as an object URL in this tab, and the rules
+ * that matter are the ones about who may attach and who may see — a message
+ * you can read, and nothing else.
+ */
+const demoObjectUrls = new Map<string, string>()
+
+export const demoAttachmentService: AttachmentService = {
+  async upload(file) {
+    await latency()
+    const me = requireCurrentUserId()
+
+    const rejection = rejectAttachment(file)
+    // The bucket refuses these before a byte is written; this is the same
+    // rule, stated where the demo has no bucket to refuse it.
+    if (rejection) throw new AppError('validation', rejection.message)
+
+    // The same shape the storage policy admits: your own prefix, a fresh id.
+    const storagePath = `${me}/${crypto.randomUUID()}`
+    // A real browser gets a real object URL to render from. Where there is no
+    // such API — a test environment — the entry is still made, because what is
+    // being stood in for is "storage has this object", and the rules worth
+    // testing are about who may ask for it rather than what comes back.
+    demoObjectUrls.set(
+      storagePath,
+      typeof URL.createObjectURL === 'function'
+        ? URL.createObjectURL(file)
+        : `demo-attachment:${storagePath}`,
+    )
+
+    return {
+      storagePath,
+      fileName: file.name,
+      mimeType: uploadTypeOf(file),
+      byteSize: file.size,
+    }
+  },
+
+  async attach(messageId, uploads) {
+    await latency()
+    const me = requireCurrentUserId()
+    const store = db()
+
+    const message = store.messages.find((m) => m.id === messageId)
+    if (!message) throw new AppError('not_found', 'That message no longer exists.')
+    // Attaching is part of sending: the author's own live message, in a place
+    // they may still send to.
+    if (message.authorId !== me || message.deletedAt !== null) {
+      throw new AppError('forbidden', 'You can only attach to your own message')
+    }
+
+    if (message.channelId !== null) {
+      const channel = channelById(message.channelId)
+      const member = memberOf(me)
+      if (!member || !canInChannel(channel, member, 'messages.send')) {
+        throw new AppError('forbidden', 'You cannot post in that channel')
+      }
+    } else {
+      assertCanReadConversation(message.conversationId!)
+    }
+
+    for (const upload of uploads) {
+      // Only your own prefix, the same rule the storage policy states.
+      if (upload.storagePath.split('/')[0] !== me) {
+        throw new AppError('forbidden', 'That file does not belong to you')
+      }
+      if (store.attachments.some((a) => a.storagePath === upload.storagePath)) {
+        throw new AppError('validation', 'That file is already attached to a message')
+      }
+
+      const attachment: DemoAttachment = {
+        id: crypto.randomUUID(),
+        messageId,
+        storagePath: upload.storagePath,
+        fileName: upload.fileName.trim().slice(0, 255) || 'attachment',
+        mimeType: upload.mimeType,
+        byteSize: upload.byteSize,
+        createdAt: new Date().toISOString(),
+      }
+      store.attachments.push(attachment)
+    }
+    persist()
+  },
+
+  async listFor(messageIds) {
+    await latency()
+    const byMessage = new Map<string, MessageAttachment[]>()
+    const wanted = new Set(messageIds)
+
+    for (const attachment of db().attachments) {
+      if (!wanted.has(attachment.messageId)) continue
+
+      // An attachment is only visible where its message is.
+      const message = db().messages.find((m) => m.id === attachment.messageId)
+      if (!message || !canReadMessage(message)) continue
+
+      const list = byMessage.get(attachment.messageId) ?? []
+      list.push({ ...attachment })
+      byMessage.set(attachment.messageId, list)
+    }
+
+    return byMessage
+  },
+
+  async signedUrls(paths) {
+    await latency()
+    const urls = new Map<string, string>()
+    const me = db().currentUserId
+
+    for (const path of paths) {
+      const url = demoObjectUrls.get(path)
+      if (!url) continue
+
+      // Your own object, or one attached to a message you can read — the same
+      // two branches the storage policy has.
+      const attachment = db().attachments.find((a) => a.storagePath === path)
+      const message = attachment
+        ? db().messages.find((m) => m.id === attachment.messageId)
+        : undefined
+      const mine = path.split('/')[0] === me
+      if (!mine && (!message || !canReadMessage(message))) continue
+
+      urls.set(path, url)
+    }
+
+    return urls
+  },
+
+  async discard(paths) {
+    await latency()
+    const me = db().currentUserId
+    for (const path of paths) {
+      // Only ever your own, as the delete policy says.
+      if (path.split('/')[0] !== me) continue
+      const url = demoObjectUrls.get(path)
+      if (url?.startsWith('blob:') && typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(url)
+      }
+      demoObjectUrls.delete(path)
+    }
+  },
 }
 
 export const demoNotificationService: NotificationService = {

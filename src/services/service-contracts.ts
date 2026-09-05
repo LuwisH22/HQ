@@ -509,6 +509,60 @@ export interface ChannelUnread {
   lastReadAt: string | null
 }
 
+// --- Attachments (Phase 2 · C3) --------------------------------------------
+
+/**
+ * A file on a message.
+ *
+ * `mimeType` and `byteSize` are what storage says they are, not what the
+ * uploader claimed: a trigger reads them back out of the object. `storagePath`
+ * is the object's name, and the only thing a signed URL can be minted from.
+ */
+export interface MessageAttachment {
+  id: string
+  messageId: string
+  storagePath: string
+  fileName: string
+  mimeType: string
+  byteSize: number
+  createdAt: string
+}
+
+/** A file that has been uploaded but is not yet on a message. */
+export interface UploadedAttachment {
+  storagePath: string
+  fileName: string
+  mimeType: string
+  byteSize: number
+}
+
+export interface AttachmentService {
+  /**
+   * Puts the bytes in the bucket under the caller's own prefix.
+   *
+   * The message does not exist yet, which is the point: the file is uploaded
+   * while the composer is still open, and attached only when it is sent.
+   */
+  upload(file: File): Promise<UploadedAttachment>
+  /** Records the metadata against a message the caller has just sent. */
+  attach(messageId: string, uploads: readonly UploadedAttachment[]): Promise<void>
+  /** Attachments for a page of messages, keyed by message. */
+  listFor(messageIds: readonly string[]): Promise<Map<string, MessageAttachment[]>>
+  /**
+   * Short-lived URLs for objects the caller can read.
+   *
+   * `download` asks storage for a Content-Disposition, which is what keeps a
+   * file the browser might otherwise render as markup a download and nothing
+   * else.
+   */
+  signedUrls(
+    paths: readonly string[],
+    options?: { download?: boolean },
+  ): Promise<Map<string, string>>
+  /** Best-effort removal of objects the caller uploaded and did not send. */
+  discard(paths: readonly string[]): Promise<void>
+}
+
 // --- Conversations (Phase 2 · C3) ------------------------------------------
 
 /**

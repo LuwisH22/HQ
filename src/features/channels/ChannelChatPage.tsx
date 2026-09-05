@@ -20,6 +20,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { CardSkeleton, EmptyState, ErrorState, ForbiddenState } from '@/components/common/states'
 import { channelService } from '@/services/channel.service'
 import { messageService } from '@/services/message.service'
+import { attachmentService } from '@/services/attachment.service'
+import type { UploadedAttachment } from '@/services/attachment.service'
 import { organizationService } from '@/services/organization.service'
 import { queryKeys } from '@/lib/query-keys'
 import { errorMessage } from '@/lib/errors'
@@ -116,6 +118,9 @@ export function ChannelChatPage() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.messages.mentions(channel?.id ?? 'none'),
       })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.attachments.forMessages(channel?.id ?? 'none', messageIds.length),
+      })
     },
     () => {
       void queryClient.invalidateQueries({
@@ -175,6 +180,12 @@ export function ChannelChatPage() {
     staleTime: 5 * 60_000,
   })
 
+  const attachmentsQuery = useQuery({
+    queryKey: queryKeys.attachments.forMessages(channel?.id ?? 'none', messageIds.length),
+    queryFn: () => attachmentService.listFor(messageIds),
+    enabled: messageIds.length > 0,
+  })
+
   const pinnedQuery = useQuery({
     queryKey: queryKeys.messages.pinned(channel?.id ?? 'none'),
     queryFn: () => messageService.listPinned(channel?.id as string),
@@ -216,7 +227,15 @@ export function ChannelChatPage() {
   }, [messages.length, channel?.id])
 
   const send = useMutation({
-    mutationFn: (body: string) => messageService.send(channel?.id as string, body),
+    // Two steps, in this order: the message first, then the files against it.
+    // The attachment policy asks whether the caller authored a live message
+    // they may still send to, so there has to be one before there can be any.
+    mutationFn: async (input: { body: string; attachments: readonly UploadedAttachment[] }) => {
+      const message = await messageService.send(channel?.id as string, input.body)
+      if (input.attachments.length > 0) {
+        await attachmentService.attach(message.id, input.attachments)
+      }
+    },
     onSuccess: async () => {
       realtime.clearTyping()
       await invalidateMessages()
@@ -413,6 +432,7 @@ export function ChannelChatPage() {
                         grouped={continuesRun(previous, message)}
                         reactions={reactionsQuery.data?.get(message.id) ?? []}
                         mentions={mentionsQuery.data?.get(message.id) ?? []}
+                        attachments={attachmentsQuery.data?.get(message.id) ?? []}
                         currentUserId={user?.id ?? null}
                         actions={{
                           // Editing belongs to the author. Moderation confers
@@ -457,7 +477,7 @@ export function ChannelChatPage() {
                 : undefined
             }
             sending={send.isPending}
-            onSend={(body) => send.mutate(body)}
+            onSend={(body, attachments) => send.mutate({ body, attachments })}
             onTyping={realtime.noteTyping}
             mentionCandidates={mentionCandidatesQuery.data ?? []}
           />

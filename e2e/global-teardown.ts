@@ -47,6 +47,14 @@ const PREFIXES = [
   'mentionkeys-',
   'mentionmail-',
   'mention-',
+  'attachthread-',
+  'attachdrop-',
+  'attachonly-',
+  'attachpriv-',
+  'attachimg-',
+  'attachdoc-',
+  'attachno-',
+  'attach-',
 ]
 
 function readEnvFile(path: string): Record<string, string> {
@@ -92,10 +100,11 @@ export default async function globalTeardown(): Promise<void> {
   if (!url || !key || !env.E2E_EMAIL || !env.E2E_PASSWORD) return
 
   const supabase = createClient(url, key, { auth: { persistSession: false } })
-  const { error: authError } = await supabase.auth.signInWithPassword({
+  const { data: auth, error: authError } = await supabase.auth.signInWithPassword({
     email: env.E2E_EMAIL,
     password: env.E2E_PASSWORD,
   })
+  const userId = auth?.user?.id ?? ''
   if (authError) {
     console.warn(`teardown: could not sign in (${authError.message}); leaving anything behind.`)
     return
@@ -136,6 +145,30 @@ export default async function globalTeardown(): Promise<void> {
     if (error)
       console.warn(`teardown: could not delete category ${category.name}: ${error.message}`)
     else removed += 1
+  }
+
+  // Files a failed run uploaded but never attached to anything. An object with
+  // no attachment row is reachable by nobody but its uploader, which is who
+  // this is — and a real attachment always has a row, so this cannot take one.
+  const { data: objects } = await supabase.storage.from('message-attachments').list(userId, {
+    limit: 1000,
+  })
+  const orphans: string[] = []
+
+  for (const object of (objects ?? []) as { name: string }[]) {
+    const path = `${userId}/${object.name}`
+    const { data: linked } = await supabase
+      .from('message_attachments')
+      .select('id')
+      .eq('storage_path', path)
+      .maybeSingle()
+    if (!linked) orphans.push(path)
+  }
+
+  if (orphans.length > 0) {
+    const { error } = await supabase.storage.from('message-attachments').remove(orphans)
+    if (error) console.warn(`teardown: could not remove orphaned files: ${error.message}`)
+    else removed += orphans.length
   }
 
   if (removed > 0) console.warn(`teardown: swept up ${String(removed)} leftover test objects.`)

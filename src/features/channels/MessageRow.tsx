@@ -11,7 +11,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { initialsFor } from '@/services/profile.service'
 import type { Message, MessageMention, MessageReaction } from '@/services/message.service'
+import type { MessageAttachment } from '@/services/attachment.service'
 import { MessageReactions, ReactionPicker } from './MessageReactions'
+import { MessageAttachments } from './MessageAttachments'
 import { MessageBody } from './MessageBody'
 import { ThreadSummary } from './ThreadPanel'
 import { cn } from '@/lib/utils'
@@ -47,6 +49,7 @@ export function MessageRow({
   actions,
   reactions,
   mentions,
+  attachments = [],
   currentUserId,
   onEdit,
   onTogglePin,
@@ -61,6 +64,8 @@ export function MessageRow({
   actions: MessageActions
   reactions: readonly MessageReaction[]
   mentions: readonly MessageMention[]
+  /** Files on this message. Gone with its words when it is deleted. */
+  attachments?: readonly MessageAttachment[]
   /** Who is reading, so a mention of them can look different. */
   currentUserId: string | null
   onEdit: (body: string) => void
@@ -171,6 +176,7 @@ export function MessageRow({
               currentUserId={currentUserId}
               edited={message.editedAt !== null}
             />
+            <MessageAttachments attachments={attachments} />
             <MessageReactions
               reactions={reactions}
               canReact={actions.canReact}

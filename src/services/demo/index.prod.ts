@@ -1,6 +1,7 @@
 import type {
   AuditService,
   AuthService,
+  AttachmentService,
   ChannelService,
   ConversationService,
   MessageService,
@@ -107,6 +108,14 @@ export const demoConversationService: ConversationService = {
   startDirect: unreachable,
   markRead: unreachable,
   listMentionCandidates: unreachable,
+}
+
+export const demoAttachmentService: AttachmentService = {
+  upload: unreachable,
+  attach: unreachable,
+  listFor: unreachable,
+  signedUrls: unreachable,
+  discard: unreachable,
 }
 
 export const demoNotificationService: NotificationService = {

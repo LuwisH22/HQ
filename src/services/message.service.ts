@@ -2,6 +2,7 @@ import { getSupabase } from '@/lib/supabase'
 import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
 import { demoMessageService } from '@/services/demo'
+import { attachmentService } from './attachment.service'
 import { firstOf } from './postgrest'
 import type {
   Message,
@@ -225,11 +226,23 @@ export const supabaseMessageService: MessageService = {
 
   /** Soft delete. The author may remove their own; a moderator, anyone's. */
   async remove(messageId: string, reason?: string): Promise<void> {
+    // Read the paths first: deleting the message takes the metadata with it,
+    // and after that there is nothing left to say which objects were its.
+    const attached = await attachmentService.listFor([messageId])
+
     const { error } = await getSupabase().rpc('delete_message', {
       p_message_id: messageId,
       p_reason: reason ?? null,
     })
     if (error) throw toAppError(error)
+
+    // Best effort, and only the caller's own objects — the storage policy
+    // admits nothing outside their prefix, so a moderator removing somebody
+    // else's message leaves the bytes behind. That is the documented limit of
+    // cleanup without a worker, and those objects are unreachable rather than
+    // exposed: with no attachment row, only their uploader can read them.
+    const paths = (attached.get(messageId) ?? []).map((a) => a.storagePath)
+    if (paths.length > 0) await attachmentService.discard(paths)
   },
 
   async setPinned(messageId: string, pinned: boolean): Promise<void> {

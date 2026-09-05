@@ -482,6 +482,37 @@ export interface Database {
           },
         ]
       }
+      message_attachments: {
+        Row: {
+          id: string
+          message_id: string
+          storage_path: string
+          file_name: string
+          /** Read from storage by a trigger; never what the client claimed. */
+          mime_type: string
+          byte_size: number
+          created_at: string
+        }
+        Insert: {
+          message_id: string
+          storage_path: string
+          file_name: string
+          /** Sent for shape only: the trigger overwrites both from storage. */
+          mime_type?: string
+          byte_size?: number
+        }
+        /** Immutable: an attachment is a fact about a message that was sent. */
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'message_attachments_message_id_fkey'
+            columns: ['message_id']
+            isOneToOne: false
+            referencedRelation: 'messages'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       conversations: {
         Row: {
           id: string
