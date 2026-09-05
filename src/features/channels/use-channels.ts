@@ -35,7 +35,16 @@ export interface ChannelDirectory {
   allChannels: Channel[]
   /** Categories in order, each with its channels; empty ones dropped. */
   groups: ChannelGroup[]
-  /** Categories in order, each with its channels; empty ones kept. */
+  /**
+   * As `groups`, but a category with nothing in it yet is kept.
+   *
+   * The sidebar needs this so that creating an empty section visibly does
+   * something. It is not a disclosure: `can_see_category` only returns an
+   * empty category to someone who may manage channels, so a member who should
+   * not know a section exists never receives the row in the first place.
+   */
+  navGroups: ChannelGroup[]
+  /** As `navGroups`, and archived channels too. Settings manages both. */
   groupsWithEmpty: ChannelGroup[]
   isPending: boolean
   isError: boolean
@@ -97,6 +106,7 @@ export function useChannelDirectory(): ChannelDirectory {
   const channels = useMemo(() => allChannels.filter((c) => c.archivedAt === null), [allChannels])
 
   const groups = useMemo(() => group(categories, channels, false), [categories, channels])
+  const navGroups = useMemo(() => group(categories, channels, true), [categories, channels])
   const groupsWithEmpty = useMemo(
     () => group(categories, allChannels, true),
     [categories, allChannels],
@@ -107,6 +117,7 @@ export function useChannelDirectory(): ChannelDirectory {
     channels,
     allChannels,
     groups,
+    navGroups,
     groupsWithEmpty,
     // Only a query that is actually running can be pending: with no permission
     // both sit disabled forever, and a spinner that never resolves is worse

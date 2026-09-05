@@ -1,19 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import {
-  Hash,
-  LockSimple,
-  Plus,
-  Trash,
-  Archive,
-  ArrowCounterClockwise,
-} from '@phosphor-icons/react'
+import { Hash, LockSimple, Trash, Archive, ArrowCounterClockwise } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { CardSkeleton, ErrorState, ForbiddenState } from '@/components/common/states'
 import { channelService } from '@/services/channel.service'
 import { useChannelDirectory } from '@/features/channels/use-channels'
@@ -24,7 +15,12 @@ import { usePermission } from '@/hooks/use-permission'
 import { ChannelPermissionsDialog } from './ChannelPermissionsDialog'
 
 /**
- * Channel and category management.
+ * Channel and category administration.
+ *
+ * Editing, not creating. A channel is made from the + beside Channels in the
+ * sidebar, where the channels already are — coming to Settings to start a
+ * conversation was a detour through an administration screen, and it is the
+ * everyday action of the two.
  *
  * Everything here is a thin wrapper over a guarded routine: the database
  * re-checks the permission and the hierarchy for each action, so hiding a
@@ -41,8 +37,6 @@ export function ChannelsSettings() {
   const canDelete = usePermission('channels.delete')
   const canManagePermissions = usePermission('channels.permissions_manage')
 
-  const [newCategory, setNewCategory] = useState('')
-  const [newChannel, setNewChannel] = useState('')
   const [permissionsFor, setPermissionsFor] = useState<Channel | null>(null)
 
   const directory = useChannelDirectory()
@@ -50,44 +44,6 @@ export function ChannelsSettings() {
   async function refresh(): Promise<void> {
     await directory.invalidate()
   }
-
-  const createCategory = useMutation({
-    mutationFn: (name: string) => channelService.createCategory(organizationId as string, name),
-    onSuccess: async () => {
-      setNewCategory('')
-      await refresh()
-      toast.success('Category created.')
-    },
-    onError: (error: unknown) => toast.error(errorMessage(error)),
-  })
-
-  /**
-   * One routine creates the channel and, when the category named above it does
-   * not exist yet, the category too — in a single transaction. Creating them
-   * from here as two calls would leave an empty category behind whenever the
-   * channel failed, which is precisely the mess this replaces.
-   */
-  const createChannel = useMutation({
-    mutationFn: (isPrivate: boolean) =>
-      channelService.createChannelInCategory(organizationId as string, {
-        name: newChannel.trim(),
-        categoryName: newCategory.trim() || null,
-        isPrivate,
-      }),
-    onSuccess: async () => {
-      const category = newCategory.trim()
-      setNewChannel('')
-      // The category name stays put: filing several channels under one
-      // section is the common case, and retyping it each time is friction.
-      await refresh()
-      toast.success(
-        category
-          ? `Channel created in ${matchingCategory?.name ?? category}.`
-          : 'Channel created. It is uncategorised.',
-      )
-    },
-    onError: (error: unknown) => toast.error(errorMessage(error)),
-  })
 
   const archive = useMutation({
     mutationFn: (input: { id: string; archived: boolean }) =>
@@ -117,18 +73,6 @@ export function ChannelsSettings() {
     onError: (error: unknown) => toast.error(errorMessage(error)),
   })
 
-  /**
-   * The category the typed name already refers to, if any. Matching is
-   * case-insensitive because "Competitive" and "competitive" are one section
-   * to everyone reading the sidebar — the server matches the same way, and
-   * this only tells the person which of the two things is about to happen.
-   */
-  const matchingCategory = useMemo(() => {
-    const wanted = newCategory.trim().toLowerCase()
-    if (wanted === '') return null
-    return directory.categories.find((c) => c.name.toLowerCase() === wanted) ?? null
-  }, [newCategory, directory.categories])
-
   const grouped = directory.groupsWithEmpty
 
   if (!canView) return <ForbiddenState />
@@ -149,99 +93,14 @@ export function ChannelsSettings() {
 
   return (
     <div className="space-y-4">
-      {canCreate || canManage ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Add</CardTitle>
-          </CardHeader>
-          {/* The two fields read top to bottom as one sentence — this channel,
-              in that category — because the previous layout put a button
-              beside each and made them look like unrelated actions. */}
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="new-category">Category</Label>
-              <Input
-                id="new-category"
-                list="existing-categories"
-                value={newCategory}
-                onChange={(event) => setNewCategory(event.target.value)}
-                placeholder="Optional — leave empty for an uncategorised channel"
-                aria-label="New category name"
-                autoComplete="off"
-              />
-              {/* Autocomplete over what already exists, so the usual way to
-                  reach a category is to pick it rather than retype it. */}
-              <datalist id="existing-categories">
-                {directory.categories.map((category) => (
-                  <option key={category.id} value={category.name} />
-                ))}
-              </datalist>
-              <p className="text-muted-foreground text-2xs">
-                {newCategory.trim() === ''
-                  ? 'The channel will be uncategorised.'
-                  : matchingCategory
-                    ? `Goes into the existing ${matchingCategory.name}.`
-                    : `Creates ${newCategory.trim()} and puts the channel in it.`}
-              </p>
-            </div>
-
-            {canCreate ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="new-channel">Channel</Label>
-                <Input
-                  id="new-channel"
-                  value={newChannel}
-                  onChange={(event) => setNewChannel(event.target.value)}
-                  placeholder="New channel name"
-                  aria-label="New channel name"
-                  maxLength={40}
-                />
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Button
-                    loading={createChannel.isPending}
-                    disabled={newChannel.trim().length === 0}
-                    onClick={() => createChannel.mutate(false)}
-                  >
-                    <Hash className="size-3.5" aria-hidden="true" />
-                    Public channel
-                  </Button>
-                  <Button
-                    variant="outline"
-                    loading={createChannel.isPending}
-                    disabled={newChannel.trim().length === 0}
-                    onClick={() => createChannel.mutate(true)}
-                  >
-                    <LockSimple className="size-3.5" aria-hidden="true" />
-                    Private channel
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
-            {/* Kept for the one case the flow above cannot express: a section
-                created deliberately empty, to be filled in later. */}
-            {canManage ? (
-              <div className="border-border border-t pt-3">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  loading={createCategory.isPending}
-                  disabled={newCategory.trim().length === 0 || matchingCategory !== null}
-                  onClick={() => createCategory.mutate(newCategory.trim())}
-                >
-                  <Plus className="size-3.5" aria-hidden="true" />
-                  Category only
-                </Button>
-                <p className="text-muted-foreground text-2xs mt-1.5">
-                  {matchingCategory
-                    ? `${matchingCategory.name} already exists.`
-                    : 'Creates the category above and no channel.'}
-                </p>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+      <div>
+        <h2 className="text-sm font-semibold">Channels</h2>
+        <p className="text-muted-foreground text-2xs mt-0.5 leading-relaxed">
+          {canCreate
+            ? 'Rename, move, archive and set permissions here. New channels are created with + beside Channels in the sidebar.'
+            : 'Every channel you can see, and what each one is for.'}
+        </p>
+      </div>
 
       {grouped.map((group) => {
         // Bound out here: narrowing `group.category` does not survive into the
@@ -295,6 +154,9 @@ export function ChannelsSettings() {
                       </div>
 
                       {channel.archivedAt ? <Badge variant="warning">Archived</Badge> : null}
+                      <span className="text-2xs text-muted-foreground/70">
+                        {channel.isPrivate ? 'Private' : 'Public'}
+                      </span>
 
                       {canManagePermissions ? (
                         <Button

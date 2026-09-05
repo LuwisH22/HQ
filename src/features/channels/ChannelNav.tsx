@@ -1,10 +1,9 @@
 import { NavLink } from 'react-router-dom'
-import { CaretRight, Hash, LockSimple, Plus, ChatTeardropText } from '@phosphor-icons/react'
-import { Button } from '@/components/ui/button'
-import { Link } from 'react-router-dom'
+import { CaretRight, Hash, LockSimple, ChatTeardropText } from '@phosphor-icons/react'
 import { useUiStore } from '@/stores/ui.store'
 import { usePermission } from '@/hooks/use-permission'
 import { cn } from '@/lib/utils'
+import { ChannelCreateMenu } from './ChannelCreateMenu'
 import { useChannelDirectory, type ChannelGroup } from './use-channels'
 
 /**
@@ -110,25 +109,16 @@ function SectionHeading({ label, action }: { label: string; action?: React.React
 
 export function ChannelNav({ onNavigate }: { onNavigate?: () => void }) {
   const canView = usePermission('channels.view')
-  const canManage = usePermission('channels.manage')
+  const canCreate = usePermission('channels.create')
   const directory = useChannelDirectory()
 
   if (!canView) return null
 
   return (
     <>
-      <SectionHeading
-        label="Channels"
-        action={
-          canManage ? (
-            <Button asChild size="icon-sm" variant="ghost" className="text-muted-foreground size-5">
-              <Link to="/settings/channels" aria-label="Manage channels" onClick={onNavigate}>
-                <Plus className="size-3.5" aria-hidden="true" />
-              </Link>
-            </Button>
-          ) : null
-        }
-      />
+      {/* Creating happens here rather than in Settings: a channel is made in
+          the middle of a conversation about needing one. */}
+      <SectionHeading label="Channels" action={<ChannelCreateMenu onNavigate={onNavigate} />} />
 
       {directory.isPending ? (
         <div className="space-y-1 px-1" aria-hidden="true">
@@ -136,13 +126,13 @@ export function ChannelNav({ onNavigate }: { onNavigate?: () => void }) {
             <div key={i} className="bg-foreground/7 h-6 rounded-sm" />
           ))}
         </div>
-      ) : directory.groups.length === 0 ? (
+      ) : directory.navGroups.length === 0 ? (
         <p className="text-muted-foreground text-2xs px-1 leading-relaxed">
-          {canManage ? 'No channels yet. Use + to create one.' : 'No channels you can see yet.'}
+          {canCreate ? 'No channels yet. Use + to create one.' : 'No channels you can see yet.'}
         </p>
       ) : (
         <ul className="space-y-1.5" aria-label="Channels">
-          {directory.groups.map((group) => (
+          {directory.navGroups.map((group) => (
             <CategorySection key={group.id} group={group} onNavigate={onNavigate} />
           ))}
         </ul>

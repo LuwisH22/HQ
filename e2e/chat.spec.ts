@@ -1,4 +1,11 @@
 import { expect, test, type Page } from '@playwright/test'
+import {
+  createChannel as createChannelViaSidebar,
+  deleteChannel,
+  main,
+  openNav,
+  uniqueName as uniqueChannelName,
+} from './channel-helpers'
 
 /**
  * Phase 2 · C1 — chat through the real UI.
@@ -10,42 +17,23 @@ import { expect, test, type Page } from '@playwright/test'
 
 test.use({ storageState: '.auth/owner.json' })
 
-/** The page itself, excluding the sidebar and the drawer around it. */
-function main(page: Page) {
-  return page.getByRole('main')
-}
-
 function uniqueName(project: string): string {
-  return `chat-${project}-${String(Date.now() % 100000)}`
+  return uniqueChannelName('chat', project)
 }
 
+/** Create a channel and land in its conversation. */
 async function createChannel(page: Page, name: string): Promise<void> {
-  await page.goto('/#/settings/channels')
-  await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible({ timeout: 20_000 })
-  await page.getByLabel('New category name').fill('')
-  await page.getByRole('textbox', { name: 'New channel name' }).fill(name)
-  await page.getByRole('button', { name: 'Public channel', exact: true }).click()
-  await expect(main(page).getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
-}
-
-async function deleteChannel(page: Page, name: string): Promise<void> {
-  await page.goto('/#/settings/channels')
-  page.once('dialog', (dialog) => void dialog.accept())
-  await page.getByRole('button', { name: `Delete ${name}`, exact: true }).click()
-  await expect(main(page).getByText(name, { exact: true })).toHaveCount(0, { timeout: 15_000 })
+  await page.goto('/#/')
+  await createChannelViaSidebar(page, name)
 }
 
 async function openChannel(page: Page, name: string): Promise<void> {
   await page.goto('/#/channels')
-  await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('heading', { name: 'Channels', level: 1 })).toBeVisible({
+    timeout: 20_000,
+  })
   await main(page).getByRole('link').filter({ hasText: name }).first().click()
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 })
-}
-
-/** The channel list lives in the sidebar on desktop and the drawer on phones. */
-async function openNav(page: Page): Promise<void> {
-  const opener = page.getByRole('button', { name: 'Open navigation' })
-  if (await opener.isVisible()) await opener.click()
 }
 
 test('opens and switches channels from the navigation', async ({ page }, testInfo) => {

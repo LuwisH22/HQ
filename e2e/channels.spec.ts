@@ -1,4 +1,14 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import {
+  createCategory,
+  createChannel,
+  deleteCategory,
+  deleteChannel,
+  gotoChannelSettings,
+  main,
+  openNav,
+  uniqueName,
+} from './channel-helpers'
 
 /**
  * Phase 1.5 · B3 — channels through the real UI.
@@ -11,48 +21,18 @@ import { expect, test, type Page } from '@playwright/test'
 
 test.use({ storageState: '.auth/owner.json' })
 
-/** The page itself, excluding the sidebar and the drawer around it. */
-function main(page: Page) {
-  return page.getByRole('main')
-}
-
-function uniqueName(prefix: string, project: string): string {
-  return `${prefix}-${project}-${String(Date.now() % 100000)}`
-}
-
-test.beforeEach(async ({ page }) => {
-  await page.goto('/#/settings/channels')
-  await expect(page.getByRole('heading', { name: 'Add' })).toBeVisible({ timeout: 20_000 })
-})
-
-async function createChannel(
-  page: Page,
-  name: string,
-  visibility: 'Public' | 'Private',
-  category?: string,
-) {
-  // Left empty, the channel is uncategorised — which is what most of these
-  // specs want, and what the section says it will do.
-  await page.getByLabel('New category name').fill(category ?? '')
-  await page.getByRole('textbox', { name: 'New channel name' }).fill(name)
-  await page.getByRole('button', { name: `${visibility} channel`, exact: true }).click()
-  await expect(main(page).getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
-}
-
-async function deleteChannel(page: Page, name: string) {
-  page.once('dialog', (dialog) => void dialog.accept())
-  await page.getByRole('button', { name: `Delete ${name}` }).click()
-  await expect(main(page).getByText(name, { exact: true })).toHaveCount(0, { timeout: 15_000 })
-}
-
-test('creates a channel, archives it, restores it, then deletes it', async ({ page }, testInfo) => {
+test('creates a channel from the sidebar, archives it, restores it, then deletes it', async ({
+  page,
+}, testInfo) => {
   const name = uniqueName('probe', testInfo.project.name)
 
-  await createChannel(page, name, 'Public')
+  await page.goto('/#/')
+  await createChannel(page, name)
 
+  await gotoChannelSettings(page)
   // Archive is the reversible operation, and it is the one offered first.
   await page.getByRole('button', { name: `Archive ${name}` }).click()
-  await expect(page.getByText('Archived')).toBeVisible({ timeout: 15_000 })
+  await expect(main(page).getByText('Archived')).toBeVisible({ timeout: 15_000 })
 
   await page.getByRole('button', { name: `Restore ${name}` }).click()
   await expect(page.getByRole('button', { name: `Archive ${name}` })).toBeVisible({
@@ -67,14 +47,14 @@ test('a private channel is marked as private and reachable from the directory', 
 }, testInfo) => {
   const name = uniqueName('secret', testInfo.project.name)
 
-  await createChannel(page, name, 'Private')
+  await page.goto('/#/')
+  await createChannel(page, name, { visibility: 'Private' })
 
   // The owner sees it, because ownership is a column and not a role.
   await page.goto('/#/channels')
-  await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Channels', level: 1 })).toBeVisible()
   await expect(main(page).getByText(name, { exact: true })).toBeVisible({ timeout: 15_000 })
 
-  await page.goto('/#/settings/channels')
   await deleteChannel(page, name)
 })
 
@@ -83,8 +63,10 @@ test('offers Allow, Inherit and Deny for each overridable permission', async ({
 }, testInfo) => {
   const name = uniqueName('perms', testInfo.project.name)
 
-  await createChannel(page, name, 'Private')
+  await page.goto('/#/')
+  await createChannel(page, name, { visibility: 'Private' })
 
+  await gotoChannelSettings(page)
   await page
     .getByRole('listitem')
     .filter({ hasText: name })
@@ -112,17 +94,20 @@ test('creates a category and its first channel in one action', async ({ page }, 
   const category = uniqueName('section', testInfo.project.name)
   const channel = uniqueName('inside', testInfo.project.name)
 
-  await createChannel(page, channel, 'Public', category)
+  await page.goto('/#/')
+  await createChannel(page, channel, { newCategory: category })
 
-  // The point of the change: the channel is under the category just typed,
-  // not sitting in Uncategorised beneath it.
-  await expect(
-    page.getByRole('list', { name: `${category} channels` }).getByText(channel, { exact: true }),
-  ).toBeVisible({ timeout: 15_000 })
+  // The point of the flow: the channel is under the category just named, in
+  // the sidebar, without a reload or a trip to Settings.
+  await openNav(page)
+  await expect(page.getByRole('button', { name: new RegExp(`^${category}`) })).toBeVisible()
 
-  // A second channel names the same category and must not make a duplicate.
+  // A second channel picks the same category from the list, and must not make
+  // a duplicate of it.
   const second = uniqueName('alongside', testInfo.project.name)
-  await createChannel(page, second, 'Private', category.toUpperCase())
+  await createChannel(page, second, { category })
+
+  await gotoChannelSettings(page)
   await expect(page.getByRole('heading', { name: category, exact: true })).toHaveCount(1)
   await expect(
     page.getByRole('list', { name: `${category} channels` }).getByRole('listitem'),
@@ -130,29 +115,43 @@ test('creates a category and its first channel in one action', async ({ page }, 
 
   await deleteChannel(page, channel)
   await deleteChannel(page, second)
-  page.once('dialog', (dialog) => void dialog.accept())
-  await page.getByRole('button', { name: `Delete category ${category}` }).click()
-  await expect(main(page).getByText(category, { exact: true })).toHaveCount(0, { timeout: 15_000 })
+  await deleteCategory(page, category)
 })
 
-test('names an existing category before it is used, and offers no duplicate', async ({
+test('creates an empty category from the sidebar and refuses a duplicate', async ({
   page,
 }, testInfo) => {
   const category = uniqueName('reuse', testInfo.project.name)
 
-  await page.getByLabel('New category name').fill(category)
-  await page.getByRole('button', { name: 'Category only' }).click()
-  await expect(page.getByRole('heading', { name: category, exact: true })).toBeVisible({
+  await page.goto('/#/')
+  await createCategory(page, category)
+
+  // It appears in the sidebar immediately, empty, with no navigation.
+  await openNav(page)
+  await expect(page.getByRole('button', { name: new RegExp(`^${category}`) })).toBeVisible({
     timeout: 15_000,
   })
+  await expect(page).toHaveURL(/#\/$/)
 
-  // Typing it again recognises it, and the category-only button steps aside
-  // rather than offering to make a second one.
-  await page.getByLabel('New category name').fill(category)
-  await expect(page.getByText(`${category} already exists.`)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Category only' })).toBeDisabled()
+  // Naming it again is refused rather than making a second one.
+  await openNav(page)
+  await page.getByRole('button', { name: 'Create channel or category' }).click()
+  await page.getByRole('menuitem', { name: 'Create category' }).click()
+  await page.getByLabel('Category name').fill(category)
+  await expect(page.getByText('A category with that name already exists.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('heading', { name: 'Create category' })).toHaveCount(0)
 
-  page.once('dialog', (dialog) => void dialog.accept())
-  await page.getByRole('button', { name: `Delete category ${category}` }).click()
-  await expect(main(page).getByText(category, { exact: true })).toHaveCount(0, { timeout: 15_000 })
+  await deleteCategory(page, category)
+})
+
+test('no longer offers a creation form in settings', async ({ page }) => {
+  await gotoChannelSettings(page)
+
+  // Creation moved to the sidebar; settings is for editing what exists.
+  await expect(page.getByRole('heading', { name: 'Add' })).toHaveCount(0)
+  await expect(page.getByLabel('New channel name')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Public channel' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Category only' })).toHaveCount(0)
 })

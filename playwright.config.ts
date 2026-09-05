@@ -34,6 +34,9 @@ const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`
 
 export default defineConfig({
   testDir: './e2e',
+  // A failing test leaves its channel behind in the live organization. Each
+  // spec still cleans up after itself; this is the net underneath.
+  globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
