@@ -357,3 +357,76 @@ test('keeps a run of messages compact and a long one intact', async ({ page }, t
 
   await deleteChannel(page, name)
 })
+
+test('keeps the hover timestamp in the gutter, clear of the words', async ({ page }, testInfo) => {
+  const name = uniqueName(testInfo.project.name)
+  await createChannel(page, name)
+  await openChannel(page, name)
+
+  const composer = page.getByRole('textbox', { name: `Message ${name}` })
+  const send = page.getByRole('button', { name: 'Send' })
+
+  await composer.fill('opening line')
+  await send.click()
+  await expect(page.getByText('opening line', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await composer.fill('my name is luwis')
+  await send.click()
+  await expect(page.getByText('my name is luwis', { exact: true })).toBeVisible({ timeout: 15_000 })
+
+  // The timestamp only shows on hover, which is what a reader would do to see
+  // it. Its geometry is the same either way; the hover is here so the test
+  // measures what somebody actually looks at.
+  const row = page
+    .getByRole('list', { name: 'Messages' })
+    .getByRole('listitem')
+    .filter({ hasText: 'my name is luwis' })
+  await row.hover()
+
+  const measured = await row.evaluate((li) => {
+    const stamp = li.querySelector<HTMLElement>('div.w-8 > span')
+    const gutter = li.querySelector<HTMLElement>('div.w-8')
+    const body = li.querySelector<HTMLElement>('p.whitespace-pre-wrap')
+    if (!stamp || !gutter || !body) return null
+
+    // The painted text, not the box around it. The box never overlapped
+    // anything; it was the glyphs spilling out of a box too narrow to hold
+    // them that reached into the message, so measuring the element would
+    // have missed the defect entirely.
+    const ink = document.createRange()
+    ink.selectNodeContents(stamp)
+
+    const lineHeight = Number.parseFloat(getComputedStyle(body).lineHeight)
+    return {
+      text: stamp.textContent ?? '',
+      stampRight: ink.getBoundingClientRect().right,
+      stampWidth: ink.getBoundingClientRect().width,
+      gutterRight: gutter.getBoundingClientRect().right,
+      bodyLeft: body.getBoundingClientRect().left,
+      bodyHeight: body.getBoundingClientRect().height,
+      rowHeight: li.getBoundingClientRect().height,
+      stampLines: Math.ceil(
+        stamp.getBoundingClientRect().height /
+          Number.parseFloat(getComputedStyle(stamp).lineHeight),
+      ),
+      lineHeight,
+    }
+  })
+
+  if (!measured) throw new Error('the continued message was not in the timeline')
+
+  // There is a time to read at all, and it is one line of it.
+  expect(measured.text).toMatch(/\d/)
+  expect(measured.stampWidth).toBeGreaterThan(0)
+  expect(measured.stampLines).toBe(1)
+
+  // It stops at the gutter's edge and leaves the gap the row was designed
+  // with, rather than running into the first characters of the message.
+  expect(measured.stampRight).toBeLessThanOrEqual(measured.gutterRight)
+  expect(measured.bodyLeft - measured.stampRight).toBeGreaterThanOrEqual(8)
+
+  // And none of that cost the row any height.
+  expect(Math.round(measured.bodyHeight)).toBe(Math.round(measured.lineHeight))
+  expect(measured.rowHeight).toBeLessThanOrEqual(measured.bodyHeight + 8)
+
+  await deleteChannel(page, name)
+})

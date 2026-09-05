@@ -91,12 +91,18 @@ export function MessageRow({
     >
       <div className="relative w-8 shrink-0">
         {grouped ? (
-          // Out of flow, and never wrapped. A locale time is wider than the
-          // 32px the avatar sets, so in the flow it took two lines and made
-          // every continued message a whole blank line taller than the words
-          // it contains. Nothing that only appears on hover should be able to
-          // decide how tall a message is.
-          <span className="text-3xs text-muted-foreground/0 group-hover:text-muted-foreground/60 absolute inset-x-0 top-[3px] text-right leading-5 whitespace-nowrap tabular-nums transition-colors">
+          // Out of flow, never wrapped, and anchored by its right edge only.
+          //
+          // A locale time is wider than the 32px the avatar sets. In the flow
+          // it wrapped, and made every continued message a blank line taller
+          // than its own words. Pinned to both edges of the gutter it could
+          // not wrap and could not grow either, so the glyphs spilled past the
+          // end edge and into the first characters of the message.
+          //
+          // With only `right` set the box sizes to its text and grows the
+          // other way, into the padding the row already has — away from the
+          // words rather than over them, whatever the locale writes.
+          <span className="text-3xs text-muted-foreground/0 group-hover:text-muted-foreground/60 absolute top-[3px] right-0 text-right leading-5 whitespace-nowrap tabular-nums transition-colors">
             {shortTime(message.createdAt)}
           </span>
         ) : (
