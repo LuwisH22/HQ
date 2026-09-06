@@ -213,8 +213,19 @@ check('roster readable', (members ?? []).length >= 1, `${String((members ?? []).
 const self = (members ?? []).find((m) => m.user_id === userId)
 check('caller is a member', Boolean(self))
 
-const { data: audit } = await supabase.from('audit_logs').select('action, summary').order('created_at', { ascending: false }).limit(5)
-check('audit log readable with audit.read', Array.isArray(audit), `${String((audit ?? []).length)} entr(y|ies)`)
+// Scoped to the organization, which is how the application reads it and the
+// only way the (organization_id, created_at desc) index can be used. An
+// unscoped read asks Postgres to sort the whole append-only table under RLS,
+// and once the log is long enough that is a statement timeout rather than a
+// permission answer.
+const { data: audit, error: auditError } = await supabase
+  .from('audit_logs')
+  .select('action, summary')
+  .eq('organization_id', org?.id ?? '')
+  .order('created_at', { ascending: false })
+  .limit(5)
+check('audit log readable with audit.read', Array.isArray(audit) && !auditError,
+  auditError?.message ?? `${String((audit ?? []).length)} entr(y|ies)`)
 // Query for it rather than hoping it is still in the most recent few rows —
 // every invitation and role edit pushes it further down the log.
 const { count: bootstrapCount } = await supabase

@@ -10,6 +10,7 @@ import { MobileNavDrawer, MobileTabBar } from './MobileNav'
 import { CommandPalette } from './CommandPalette'
 import { ProfileDialog } from '@/features/profile/ProfileDialog'
 import { useUnreadRealtime } from '@/features/channels/use-unread'
+import { VoiceSessionBar } from '@/features/voice/VoiceSessionBar'
 
 /**
  * The persistent application frame.
@@ -55,6 +56,9 @@ export function AppShell() {
             </Suspense>
           </ErrorBoundary>
         </main>
+        {/* Above the tab bar and never over it: the same session the sidebar
+            shows, drawn for a phone. */}
+        <VoiceSessionBar layout="bar" />
         <MobileTabBar />
       </div>
 

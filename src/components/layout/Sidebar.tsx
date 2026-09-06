@@ -9,6 +9,7 @@ import { useUiStore } from '@/stores/ui.store'
 import { cn } from '@/lib/utils'
 import { NAV_ITEMS, type NavItem } from './navigation'
 import { OrganizationSwitcher } from './OrganizationSwitcher'
+import { VoiceSessionBar } from '@/features/voice/VoiceSessionBar'
 import { ProfileButton, SignOutButton } from './UserMenu'
 
 function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
@@ -148,6 +149,10 @@ export function Sidebar() {
           </>
         ) : null}
       </nav>
+
+      {/* The call, if there is one. Above the footer rather than in the
+          channel list: it is where you are, not where you might go. */}
+      <VoiceSessionBar />
 
       {/* Three controls, three jobs: your profile, the way out, and the
           width of this panel. They used to be a dropdown and one small arrow,

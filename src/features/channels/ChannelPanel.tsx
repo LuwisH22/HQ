@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Hash, LockSimple, Microphone, MonitorPlay, PushPin } from '@phosphor-icons/react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -6,6 +7,7 @@ import type { Channel } from '@/services/channel.service'
 import type { Message } from '@/services/message.service'
 import type { OrganizationMember } from '@/services/organization.service'
 import { cn } from '@/lib/utils'
+import { VoiceActivity } from '@/features/voice/VoiceActivity'
 
 /**
  * What a channel is, who is in it, and what is happening in it.
@@ -70,6 +72,14 @@ export function ChannelPanelContent({
   pinned: Message[]
   pinnedPending: boolean
 }) {
+  // The roster this panel already loaded, keyed by user id: a voice
+  // participant is an identity, and this is what puts a face on one.
+  const avatars = useMemo(() => {
+    const byUser = new Map<string, string | null>()
+    for (const member of members) byUser.set(member.userId, member.profile.avatarUrl)
+    return byUser
+  }, [members])
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
       <SectionHeading label="Channel" />
@@ -146,11 +156,19 @@ export function ChannelPanelContent({
         </ul>
       )}
 
-      {/* Foundations only. Nothing behind these yet — no voice, no streaming,
-          no infrastructure — and they say so rather than looking broken. */}
+      {/* Voice is real now and says what it can actually see. Streaming is
+          still a foundation, and says so rather than looking broken. */}
       <SectionHeading label="Activity" />
       <div className="pb-4">
-        <ActivityRow icon={Microphone} label="Voice" detail="No active voice session." />
+        {channel.type === 'voice' ? (
+          <VoiceActivity channel={channel} avatars={avatars} />
+        ) : (
+          <ActivityRow
+            icon={Microphone}
+            label="Voice"
+            detail="This is a text channel. Voice lives in voice channels."
+          />
+        )}
         <ActivityRow icon={MonitorPlay} label="Streaming" detail="No active stream." />
       </div>
     </div>

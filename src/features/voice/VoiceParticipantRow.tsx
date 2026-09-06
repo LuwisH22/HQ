@@ -1,7 +1,7 @@
 import { MicrophoneSlash } from '@phosphor-icons/react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { initialsFor } from '@/services/profile.service'
-import type { VoiceParticipant } from '@/services/voice.service'
+import type { VoiceParticipant } from '@/services/voice-session'
 import { cn } from '@/lib/utils'
 import { ParticipantVolume } from './ParticipantVolume'
 

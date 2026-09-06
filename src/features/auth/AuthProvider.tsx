@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { voiceCommands } from '@/services/voice-session'
 import { authService } from '@/services/auth.service'
 import type { AuthIdentity } from '@/services/service-contracts'
 import { useUiStore } from '@/stores/ui.store'
@@ -54,6 +55,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         previousUserId.current = nextUserId
         // Never serve one account's cached rows to another.
         queryClient.clear()
+        // Nor leave one account's microphone open for the next. A page
+        // changing is not a reason to end a call; the account changing is.
+        void voiceCommands.endForSignOut()
         if (!nextUserId) setActiveOrganization(null)
       }
     })

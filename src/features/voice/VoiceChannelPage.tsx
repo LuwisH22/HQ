@@ -1,11 +1,11 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Ear, Microphone, SpeakerHigh, Users, WarningCircle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/common/states'
 import { organizationService } from '@/services/organization.service'
-import { voiceService } from '@/services/voice.service'
+import { voiceCommands } from '@/services/voice-session'
 import type { Channel } from '@/services/channel.service'
 import { queryKeys } from '@/lib/query-keys'
 import { errorMessage } from '@/lib/errors'
@@ -64,17 +64,14 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
     return byUser
   }, [membersQuery.data])
 
-  // Leaving the page leaves the room. A voice connection that outlived its
-  // page would be a microphone nobody can see they are holding.
-  useEffect(() => {
-    return () => {
-      void voiceService.disconnect()
-    }
-  }, [channel.id])
+  // Deliberately no cleanup here. The session belongs to the application, not
+  // to this page: navigating to Settings and back should find the same call,
+  // not a second one. A page unmount is not a Leave, and the persistent bar in
+  // the shell is what makes that visible while you are elsewhere.
 
   async function join(): Promise<void> {
     try {
-      await voiceService.connect(channel.id)
+      await voiceCommands.connect(channel.id)
     } catch (error) {
       toast.error(errorMessage(error))
     }
@@ -202,11 +199,9 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
             deafened={voice.deafened}
             canSpeak={voice.canSpeak}
             pushToTalk={voice.pushToTalk}
-            onToggleMic={() => void voiceService.setMicrophoneEnabled(!voice.micEnabled)}
-            onToggleDeafen={() => {
-              voiceService.setDeafened(!voice.deafened)
-            }}
-            onLeave={() => void voiceService.disconnect()}
+            onToggleMic={() => void voiceCommands.setMicrophoneEnabled(!voice.micEnabled)}
+            onToggleDeafen={() => void voiceCommands.setDeafened(!voice.deafened)}
+            onLeave={() => void voiceCommands.disconnect()}
           />
         </div>
       ) : null}

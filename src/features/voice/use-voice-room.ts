@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { voiceService, type VoiceState } from '@/services/voice.service'
+import { voiceSession, type VoiceState } from '@/services/voice-session'
 
 /**
  * The voice session, as React sees it.
@@ -13,5 +13,5 @@ import { voiceService, type VoiceState } from '@/services/voice.service'
  * where nobody is talking rerenders nothing.
  */
 export function useVoiceRoom(): VoiceState {
-  return useSyncExternalStore(voiceService.subscribe, voiceService.getSnapshot)
+  return useSyncExternalStore(voiceSession.subscribe, voiceSession.getSnapshot)
 }

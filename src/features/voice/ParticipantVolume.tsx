@@ -5,7 +5,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { voiceService } from '@/services/voice.service'
+import { voiceCommands } from '@/services/voice-session'
 import { MAX_VOLUME, useVoiceStore } from '@/stores/voice.store'
 import { cn } from '@/lib/utils'
 
@@ -62,7 +62,7 @@ export function ParticipantVolume({ identity, name }: { identity: string; name: 
           aria-label={`Volume for ${name}`}
           className="accent-primary w-full"
           onChange={(event) => {
-            voiceService.setParticipantVolume(identity, Number(event.target.value) / 100)
+            void voiceCommands.setParticipantVolume(identity, Number(event.target.value) / 100)
           }}
         />
 
@@ -72,7 +72,7 @@ export function ParticipantVolume({ identity, name }: { identity: string; name: 
           onClick={() => {
             // Applied first, forgotten second: the other order would write the
             // value straight back into the store it just cleared.
-            voiceService.setParticipantVolume(identity, MAX_VOLUME)
+            void voiceCommands.setParticipantVolume(identity, MAX_VOLUME)
             reset(identity)
           }}
         >

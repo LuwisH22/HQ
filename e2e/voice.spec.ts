@@ -37,6 +37,17 @@ test.use({
 const status = (page: Page) => page.locator('[data-voice-status]')
 const people = (page: Page, name: string) => page.getByRole('list', { name: `People in ${name}` })
 const controls = (page: Page) => page.getByRole('group', { name: 'Voice controls' })
+const sessionBar = (page: Page) => page.getByRole('region', { name: 'Voice session' })
+
+/** Every token the page has asked for, so a second one would be visible. */
+async function countTokenRequests(page: Page): Promise<() => number> {
+  let asked = 0
+  await page.route('**/functions/v1/voice-token', (route) => {
+    asked += 1
+    return route.fallback()
+  })
+  return () => asked
+}
 
 /** Remember every microphone this page opens, so Leave can be checked. */
 async function watchMicrophones(page: Page): Promise<void> {
@@ -187,16 +198,25 @@ test('deafens and undeafens, locally, without leaving', async ({ page }, testInf
   await deleteChannel(page, name)
 })
 
-test('leaves the room when the page does', async ({ page }, testInfo) => {
-  const name = uniqueName('voicenav', testInfo.project.name)
+test('keeps the room when the page goes', async ({ page }, testInfo) => {
+  const name = uniqueName('voicekeep', testInfo.project.name)
   await watchMicrophones(page)
   await page.goto('/#/')
   await createChannel(page, name, { kind: 'Voice' })
   await joinVoice(page, name)
   await expect.poll(() => liveTracks(page), { timeout: 15_000 }).toBeGreaterThan(0)
+  const open = await liveTracks(page)
 
-  // Navigating away is not a way to keep a microphone open.
+  // The session belongs to the application, not to the page that started it.
+  // Leaving the page is not leaving the call — that is what the bar is for.
   await page.goto('/#/')
+  await expect(sessionBar(page).first()).toBeVisible({ timeout: 15_000 })
+  await expect(status(page)).toHaveCount(0)
+  expect(await liveTracks(page)).toBe(open)
+
+  // Only an explicit Leave releases it.
+  await sessionBar(page).first().getByRole('button', { name: 'Leave voice' }).click()
+  await expect(sessionBar(page)).toHaveCount(0, { timeout: 20_000 })
   await expect.poll(() => liveTracks(page), { timeout: 20_000 }).toBe(0)
 
   await deleteChannel(page, name)
@@ -409,6 +429,115 @@ test('offers no volume control for yourself', async ({ page }, testInfo) => {
   await deleteChannel(page, name)
 })
 
+test('stays in the call while you go and look at something else', async ({ page }, testInfo) => {
+  test.slow()
+  const name = uniqueName('voicenav', testInfo.project.name)
+  await watchMicrophones(page)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+
+  const tokens = await countTokenRequests(page)
+  await joinVoice(page, name)
+  expect(tokens()).toBe(1)
+
+  // The microphone is published just after the room connects, so wait for it
+  // rather than assuming the two happened together.
+  await expect.poll(() => liveTracks(page), { timeout: 15_000 }).toBeGreaterThan(0)
+  const open = await liveTracks(page)
+
+  // Deafened before we go, so we can see the state survive the journey.
+  await controls(page).getByRole('button', { name: 'Deafen' }).click()
+  await expect(controls(page).getByRole('button', { name: 'Undeafen' })).toBeVisible()
+
+  // The rounds: dashboard, settings, members, and a direct message.
+  for (const route of ['/#/', '/#/settings', '/#/members', '/#/messages']) {
+    await page.goto(route)
+    // The page is gone; the call is not. The bar is how you can tell.
+    await expect(sessionBar(page).first()).toBeVisible({ timeout: 15_000 })
+    await expect(sessionBar(page).first()).toContainText(name)
+    await expect(sessionBar(page).first()).toContainText(/connected|Listening/i)
+    // And the microphone is still the one that was opened, not a new one.
+    expect(await liveTracks(page)).toBe(open)
+    await expect(sessionBar(page).first().getByRole('button', { name: 'Undeafen' })).toBeVisible()
+  }
+
+  // Back where we started, by the bar's own link — which is the shortest way
+  // back to a call from anywhere in the application.
+  await sessionBar(page)
+    .first()
+    .getByRole('link', { name: new RegExp(name) })
+    .click()
+
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected', { timeout: 15_000 })
+  await expect(page.getByRole('button', { name: 'Join voice' })).toHaveCount(0)
+  await expect(controls(page).getByRole('button', { name: 'Undeafen' })).toBeVisible()
+  await expect(people(page, name).getByRole('listitem')).toHaveCount(1)
+
+  // One token, one room, one microphone, for the whole trip.
+  expect(tokens()).toBe(1)
+  expect(await liveTracks(page)).toBe(open)
+
+  await leaveVoice(page)
+  await expect(sessionBar(page)).toHaveCount(0)
+  await expect.poll(() => liveTracks(page), { timeout: 15_000 }).toBe(0)
+
+  await deleteChannel(page, name)
+})
+
+test('leaves from the bar, from wherever you happen to be', async ({ page }, testInfo) => {
+  const name = uniqueName('voicebar', testInfo.project.name)
+  await watchMicrophones(page)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+  await joinVoice(page, name)
+  await expect.poll(() => liveTracks(page), { timeout: 15_000 }).toBeGreaterThan(0)
+
+  await page.goto('/#/members')
+  const bar = sessionBar(page).first()
+  await expect(bar).toBeVisible({ timeout: 15_000 })
+
+  // The same disconnect the voice page calls, from a page that knows nothing
+  // about voice.
+  await bar.getByRole('button', { name: 'Leave voice' }).click()
+
+  await expect(sessionBar(page)).toHaveCount(0, { timeout: 20_000 })
+  await expect.poll(() => liveTracks(page), { timeout: 15_000 }).toBe(0)
+
+  await deleteChannel(page, name)
+})
+
+test('keeps push-to-talk working after the page has changed', async ({ page }, testInfo) => {
+  const name = uniqueName('voicepttnav', testInfo.project.name)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+  await joinVoice(page, name)
+
+  await controls(page).getByRole('button', { name: 'Voice settings' }).click()
+  await page.getByRole('menuitemradio', { name: /Push to talk/ }).click()
+  await expect(page.getByRole('menu', { name: 'Voice settings' })).toHaveCount(0)
+
+  await page.goto('/#/')
+  const bar = sessionBar(page).first()
+  await expect(bar).toBeVisible({ timeout: 15_000 })
+  const mic = bar.getByRole('button', { name: /Push to talk is on/ })
+  await expect(mic).toBeDisabled()
+
+  // The listeners are the session's, not the page's, so the key still works
+  // on a page that has never heard of voice.
+  await page.keyboard.down('Space')
+  await expect(
+    bar.getByRole('button', { name: /Mute microphone|Push to talk is on/ }),
+  ).toBeVisible()
+  await page.keyboard.up('Space')
+
+  // Whatever happened, it did not end the call and did not open a second one.
+  await expect(bar).toContainText(/connected/i)
+
+  await bar.getByRole('button', { name: 'Leave voice' }).click()
+  await expect(sessionBar(page)).toHaveCount(0, { timeout: 20_000 })
+  await deleteChannel(page, name)
+})
+
 test('leaves text channels exactly as they were', async ({ page }, testInfo) => {
   const name = uniqueName('voicetext', testInfo.project.name)
   await page.goto('/#/')
@@ -448,6 +577,20 @@ test('fits a narrow screen, connected and not', async ({ page }, testInfo) => {
   expect(await overflowing()).toBe(false)
   await expect(controls(page).getByRole('button', { name: 'Leave voice' })).toBeInViewport()
 
-  await leaveVoice(page)
+  // And the persistent bar, on a page with a tab bar under it. It must sit
+  // above the navigation rather than over it, and reach nobody's edge.
+  await page.goto('/#/')
+  const bar = sessionBar(page).first()
+  await expect(bar).toBeVisible({ timeout: 15_000 })
+  expect(await overflowing()).toBe(false)
+  await expect(bar.getByRole('button', { name: 'Leave voice' })).toBeInViewport()
+
+  const tabs = page.getByRole('navigation', { name: 'Primary' })
+  await expect(tabs).toBeInViewport()
+  const [barBox, tabBox] = await Promise.all([bar.boundingBox(), tabs.boundingBox()])
+  expect(barBox && tabBox && barBox.y + barBox.height).toBeLessThanOrEqual((tabBox?.y ?? 0) + 1)
+
+  await sessionBar(page).first().getByRole('button', { name: 'Leave voice' }).click()
+  await expect(sessionBar(page)).toHaveCount(0, { timeout: 20_000 })
   await deleteChannel(page, name)
 })

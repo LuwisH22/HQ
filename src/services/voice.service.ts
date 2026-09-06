@@ -14,6 +14,13 @@ import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
 import { demoVoiceService } from '@/services/demo'
 import {
+  emitVoice,
+  IDLE_VOICE,
+  voiceSession,
+  type VoiceParticipant,
+  type VoiceState,
+} from './voice-session'
+import {
   clampVolume,
   useVoiceStore,
   type AudioProcessing,
@@ -56,46 +63,6 @@ import {
  * that anybody could edit out. It is written down here rather than implied.
  */
 
-export type VoiceStatus =
-  'idle' | 'requesting' | 'connecting' | 'connected' | 'reconnecting' | 'error'
-
-export interface VoiceParticipant {
-  /** The Supabase user id, which is what the token puts in the room. */
-  identity: string
-  name: string
-  isLocal: boolean
-  speaking: boolean
-  /** No microphone published, or one that is muted. They read the same. */
-  muted: boolean
-}
-
-export interface VoiceState {
-  status: VoiceStatus
-  /** The LFG HQ channel, never a room name: the room is the server's word. */
-  channelId: string | null
-  participants: readonly VoiceParticipant[]
-  micEnabled: boolean
-  /** Local only. Nobody else can tell, and nobody else is affected. */
-  deafened: boolean
-  /**
-   * Connected, but with no microphone: permission was refused or there is no
-   * device. Listening still works, which is why this is a state to be in and
-   * not a failure to join.
-   */
-  micBlocked: boolean
-  /**
-   * Whether the token permits a microphone at all.
-   *
-   * The server's answer, read from the grant rather than asked for. False
-   * means listen-only: the interface says so and offers no microphone, and
-   * the media server would refuse the track even if it did.
-   */
-  canSpeak: boolean
-  /** Holding a key to talk, rather than being open by default. */
-  pushToTalk: boolean
-  error: string | null
-}
-
 /** What the Edge Function hands back. Nothing here is a secret but the token. */
 interface VoiceGrant {
   token: string
@@ -108,26 +75,15 @@ interface VoiceGrant {
   expiresInSeconds: number
 }
 
-const IDLE: VoiceState = {
-  status: 'idle',
-  channelId: null,
-  participants: [],
-  micEnabled: false,
-  deafened: false,
-  micBlocked: false,
-  canSpeak: false,
-  pushToTalk: false,
-  error: null,
-}
+/**
+ * The state lives in the session module, which the whole application can read
+ * without loading any of this. This module is its only writer.
+ */
+const emit = emitVoice
+const IDLE = IDLE_VOICE
+const now = (): VoiceState => voiceSession.getSnapshot()
 
-let state: VoiceState = IDLE
 let room: Room | null = null
-const listeners = new Set<() => void>()
-
-function emit(next: Partial<VoiceState>): void {
-  state = { ...state, ...next }
-  for (const listener of listeners) listener()
-}
 
 function describe(participant: Participant, isLocal: boolean): VoiceParticipant {
   return {
@@ -280,14 +236,14 @@ function wire(next: Room): void {
   next
     .on(RoomEvent.ParticipantConnected, () => {
       // Somebody arriving while you are deafened does not get to be heard.
-      if (state.deafened) {
+      if (now().deafened) {
         for (const publication of remoteAudio(next)) publication.setSubscribed(false)
       }
       refresh()
     })
     .on(RoomEvent.ParticipantDisconnected, refresh)
     .on(RoomEvent.TrackPublished, (publication: RemoteTrackPublication) => {
-      if (state.deafened && publication.kind === Track.Kind.Audio) {
+      if (now().deafened && publication.kind === Track.Kind.Audio) {
         publication.setSubscribed(false)
       }
       refresh()
@@ -371,13 +327,13 @@ function pttKeyDown(event: KeyboardEvent): void {
   if (event.repeat || event.altKey || event.ctrlKey || event.metaKey) return
   if (event.code !== useVoiceStore.getState().pushToTalkKey) return
   if (isTypingTarget(event.target)) return
-  if (!room || !state.canSpeak) return
+  if (!room || !now().canSpeak) return
 
   // Only now, and only for this key: Space keeps scrolling the page, and
   // pressing buttons, everywhere it is not being used to talk.
   event.preventDefault()
   event.stopPropagation()
-  if (!state.micEnabled) void voiceService.setMicrophoneEnabled(true)
+  if (!now().micEnabled) void voiceService.setMicrophoneEnabled(true)
 }
 
 function pttKeyUp(event: KeyboardEvent): void {
@@ -385,7 +341,7 @@ function pttKeyUp(event: KeyboardEvent): void {
   if (!room) return
   event.preventDefault()
   event.stopPropagation()
-  if (state.micEnabled) void voiceService.setMicrophoneEnabled(false)
+  if (now().micEnabled) void voiceService.setMicrophoneEnabled(false)
 }
 
 /**
@@ -398,7 +354,7 @@ function pttKeyUp(event: KeyboardEvent): void {
  */
 function pttRelease(): void {
   if (!room) return
-  if (state.micEnabled) void voiceService.setMicrophoneEnabled(false)
+  if (now().micEnabled) void voiceService.setMicrophoneEnabled(false)
 }
 
 function attachPushToTalk(): void {
@@ -422,15 +378,6 @@ function detachPushToTalk(): void {
 }
 
 export const voiceService = {
-  getSnapshot: (): VoiceState => state,
-
-  subscribe: (listener: () => void): (() => void) => {
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-    }
-  },
-
   /**
    * Join the voice channel.
    *
@@ -444,7 +391,7 @@ export const voiceService = {
    * participant's token itself, so a long call never leans on this one.
    */
   async connect(channelId: string): Promise<void> {
-    if (state.status === 'connected' && state.channelId === channelId) return
+    if (now().status === 'connected' && now().channelId === channelId) return
     await voiceService.disconnect()
 
     emit({ ...IDLE, status: 'requesting', channelId })
@@ -456,6 +403,12 @@ export const voiceService = {
       emit({ status: 'error', error: toAppError(error).message })
       throw error
     }
+
+    // Both are the server's answer, and both are needed before anything can
+    // report the room as connected: LiveKit's own ConnectionStateChanged can
+    // arrive first, and a bar that renders "connected" without knowing whether
+    // there is a microphone flickers one in and out of existence.
+    emit({ channelName: grant.channelName, canSpeak: grant.canSpeak === true })
 
     const next = new Room(roomOptions())
     room = next
@@ -474,11 +427,7 @@ export const voiceService = {
     }
 
     applyAllVolumes(next)
-    emit({
-      status: 'connected',
-      canSpeak: grant.canSpeak === true,
-      participants: snapshotParticipants(next),
-    })
+    emit({ status: 'connected', participants: snapshotParticipants(next) })
 
     // Listen-only. The token refuses a microphone, so asking the browser for
     // one would be a permission prompt in aid of nothing.
@@ -595,7 +544,7 @@ export const voiceService = {
     const pushToTalk = mode === 'push-to-talk'
     emit({ pushToTalk })
 
-    if (!room || !state.canSpeak) {
+    if (!room || !now().canSpeak) {
       detachPushToTalk()
       return
     }
@@ -626,13 +575,13 @@ export const voiceService = {
     useVoiceStore.getState().setAudioProcessing(next)
 
     const current = room
-    if (!current || !state.canSpeak) return
+    if (!current || !now().canSpeak) return
 
     const publication = current.localParticipant.getTrackPublication(Track.Source.Microphone)
     const track = publication?.track
     if (!track) return
 
-    const wasOpen = state.micEnabled
+    const wasOpen = now().micEnabled
     try {
       // Dropped and remade: a live track keeps the constraints it was born
       // with, so re-enabling an existing one would change nothing.
@@ -649,7 +598,6 @@ export const voiceService = {
   reset(): void {
     detachPushToTalk()
     room = null
-    state = IDLE
-    for (const listener of listeners) listener()
+    emit({ ...IDLE })
   },
 }
