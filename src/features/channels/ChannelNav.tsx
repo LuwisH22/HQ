@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { CaretRight, Hash, LockSimple } from '@phosphor-icons/react'
+import { CaretRight, Hash, LockSimple, SpeakerHigh } from '@phosphor-icons/react'
 import { useUiStore } from '@/stores/ui.store'
 import { usePermission } from '@/hooks/use-permission'
 import { cn } from '@/lib/utils'
@@ -55,7 +55,15 @@ function ChannelRow({
               isActive ? 'opacity-100' : 'opacity-0',
             )}
           />
-          {channel.isPrivate ? (
+          {/* A voice channel says so first: it is the difference that changes
+              what clicking does. Private is carried by the label rather than
+              by a second glyph, so the row keeps one icon whatever it is. */}
+          {channel.type === 'voice' ? (
+            <SpeakerHigh
+              className="size-3.5 shrink-0 opacity-70"
+              aria-label={channel.isPrivate ? 'Private voice channel' : 'Voice channel'}
+            />
+          ) : channel.isPrivate ? (
             <LockSimple className="size-3.5 shrink-0 opacity-70" aria-label="Private" />
           ) : (
             <Hash className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />

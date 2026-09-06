@@ -1,82 +1,299 @@
 import { expect, test, type Page } from '@playwright/test'
-import { createChannel, deleteChannel, uniqueName } from './channel-helpers'
+import { closeNav, createChannel, deleteChannel, openNav, uniqueName } from './channel-helpers'
 
 /**
- * Phase 4 · Voice — Step 1, through the real interface.
+ * Phase 4 · Voice — the room, through the real interface.
  *
- * The foundation, not the product: a voice channel is a channel, it opens a
- * voice surface rather than a chat one, and asking to join reaches the server
- * and comes back with an answer. Who is allowed in is proved in the unit
- * suite and against the live database — this session is the organization's
- * owner, who passes every check by design.
+ * These tests talk to LiveKit Cloud for real: a token is minted by the Edge
+ * Function, a room is joined, a microphone is published, and the participant
+ * list is LiveKit's own. Chrome supplies a fake device so there is a
+ * microphone to publish and nobody has to click a permission prompt.
  *
- * Deliberately silent about whether the connection succeeds. That depends on
- * whether LiveKit is configured for this project, and a test that asserted
- * either way would be wrong in one of the two worlds. What it does assert is
- * that the client asks and settles: a request that never leaves, or a state
- * that never resolves, fails here.
+ * Who is allowed in is proved in the unit suite and against the live
+ * database — this session is the organization's owner, who passes every check
+ * by design. What is proved here is the session: that it starts, that the
+ * controls do what they say, that it ends, and that the microphone stops.
+ *
+ * One thing is deliberately not proved: two people hearing each other. There
+ * is one credential in this suite, and LiveKit removes a duplicate identity
+ * from a room rather than seating it twice — so a second real participant
+ * cannot be conjured without a second account, and a faked one would prove
+ * nothing.
  */
 
-test.use({ storageState: '.auth/owner.json' })
+test.use({
+  storageState: '.auth/owner.json',
+  permissions: ['microphone'],
+  launchOptions: {
+    args: [
+      // A microphone that exists and needs no prompt. Without these the join
+      // would wait on a dialog no test can click.
+      '--use-fake-ui-for-media-stream',
+      '--use-fake-device-for-media-stream',
+    ],
+  },
+})
 
-const panel = (page: Page, name: string) => page.getByRole('group', { name: `Voice in ${name}` })
 const status = (page: Page) => page.locator('[data-voice-status]')
+const people = (page: Page, name: string) => page.getByRole('list', { name: `People in ${name}` })
+const controls = (page: Page) => page.getByRole('group', { name: 'Voice controls' })
 
-test('makes a voice channel and opens a voice surface, not a chat one', async ({
+/** Remember every microphone this page opens, so Leave can be checked. */
+async function watchMicrophones(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const opened: MediaStreamTrack[] = []
+    ;(window as unknown as { __micTracks: MediaStreamTrack[] }).__micTracks = opened
+
+    const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+    navigator.mediaDevices.getUserMedia = async (constraints?: MediaStreamConstraints) => {
+      const stream = await real(constraints)
+      opened.push(...stream.getAudioTracks())
+      return stream
+    }
+  })
+}
+
+const liveTracks = (page: Page) =>
+  page.evaluate(
+    () =>
+      (window as unknown as { __micTracks?: MediaStreamTrack[] }).__micTracks?.filter(
+        (track) => track.readyState === 'live',
+      ).length ?? 0,
+  )
+
+async function joinVoice(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name: 'Join voice' }).click()
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected', {
+    timeout: 45_000,
+  })
+  await expect(people(page, name)).toBeVisible()
+}
+
+async function leaveVoice(page: Page): Promise<void> {
+  await controls(page).getByRole('button', { name: 'Leave voice' }).click()
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'idle', { timeout: 20_000 })
+}
+
+test('shows a voice channel as a voice channel, and opens a room rather than a chat', async ({
   page,
 }, testInfo) => {
   const name = uniqueName('voice', testInfo.project.name)
   await page.goto('/#/')
   await createChannel(page, name, { kind: 'Voice' })
 
-  // The heading is the channel, the same as any other.
+  // In the sidebar, among the ordinary channels, with its own icon.
+  await openNav(page)
+  await expect(
+    page.getByRole('link', { name: new RegExp(name) }).getByLabel('Voice channel'),
+  ).toBeVisible()
+  await closeNav(page)
+
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 20_000 })
 
   // What is absent is the point: a voice channel is not a place for messages.
   await expect(page.getByRole('textbox', { name: `Message ${name}` })).toHaveCount(0)
-  // Exact: the sidebar's 'Direct messages' list would match a loose one.
   await expect(page.getByRole('list', { name: 'Messages', exact: true })).toHaveCount(0)
 
-  await expect(panel(page, name)).toBeVisible()
   await expect(status(page)).toHaveAttribute('data-voice-status', 'idle')
   await expect(page.getByRole('button', { name: 'Join voice' })).toBeEnabled()
-  // Not connected, so there is nothing to leave or mute yet.
-  await expect(page.getByRole('button', { name: 'Leave voice' })).toHaveCount(0)
+  // Nothing to control until there is a room, and nothing has asked for a
+  // microphone yet either.
+  await expect(controls(page)).toHaveCount(0)
 
   await deleteChannel(page, name)
 })
 
-test('asks the server to join, and settles on an answer', async ({ page }, testInfo) => {
-  const name = uniqueName('voice', testInfo.project.name)
+test('joins, seats the person who joined, and takes the microphone back on leave', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('voicejoin', testInfo.project.name)
+  await watchMicrophones(page)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+
+  expect(await liveTracks(page)).toBe(0)
+
+  await joinVoice(page, name)
+
+  // The local participant is in the room, named, and marked as you.
+  const rows = people(page, name).getByRole('listitem')
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first()).toHaveAttribute('data-participant-local', 'true')
+  await expect(rows.first()).toHaveAccessibleName(/\(you\)/)
+
+  // The microphone published, and is not muted.
+  await expect.poll(() => liveTracks(page), { timeout: 15_000 }).toBeGreaterThan(0)
+  await expect(rows.first()).toHaveAttribute('data-participant-state', /speaking|listening/)
+  await expect(controls(page).getByRole('button', { name: 'Mute microphone' })).toBeVisible()
+
+  await leaveVoice(page)
+  await expect(controls(page)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Join voice' })).toBeVisible()
+
+  // The thing that actually matters: no microphone is still open.
+  await expect.poll(() => liveTracks(page), { timeout: 15_000 }).toBe(0)
+
+  await deleteChannel(page, name)
+})
+
+test('mutes and unmutes without dropping the room', async ({ page }, testInfo) => {
+  const name = uniqueName('voicemute', testInfo.project.name)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+  await joinVoice(page, name)
+
+  const you = people(page, name).getByRole('listitem').first()
+  const bar = controls(page)
+
+  await bar.getByRole('button', { name: 'Mute microphone' }).click()
+  await expect(bar.getByRole('button', { name: 'Unmute microphone' })).toBeVisible()
+  await expect(you).toHaveAttribute('data-participant-state', 'muted')
+  await expect(you).toHaveAccessibleName(/muted/)
+  // Muting is not leaving: the connection is untouched.
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected')
+
+  await bar.getByRole('button', { name: 'Unmute microphone' }).click()
+  await expect(bar.getByRole('button', { name: 'Mute microphone' })).toBeVisible()
+  await expect(you).toHaveAttribute('data-participant-state', /speaking|listening/)
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected')
+
+  await leaveVoice(page)
+  await deleteChannel(page, name)
+})
+
+test('deafens and undeafens, locally, without leaving', async ({ page }, testInfo) => {
+  const name = uniqueName('voicedeaf', testInfo.project.name)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+  await joinVoice(page, name)
+
+  const bar = controls(page)
+  const deafen = bar.getByRole('button', { name: 'Deafen' })
+  await expect(deafen).toHaveAttribute('aria-pressed', 'false')
+
+  await deafen.click()
+  const undeafen = bar.getByRole('button', { name: 'Undeafen' })
+  await expect(undeafen).toHaveAttribute('aria-pressed', 'true')
+  // Deafen is about what you hear. It says nothing about your microphone and
+  // nothing about the room.
+  await expect(bar.getByRole('button', { name: 'Mute microphone' })).toBeVisible()
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected')
+
+  await undeafen.click()
+  await expect(bar.getByRole('button', { name: 'Deafen' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected')
+
+  await leaveVoice(page)
+  await deleteChannel(page, name)
+})
+
+test('leaves the room when the page does', async ({ page }, testInfo) => {
+  const name = uniqueName('voicenav', testInfo.project.name)
+  await watchMicrophones(page)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+  await joinVoice(page, name)
+  await expect.poll(() => liveTracks(page), { timeout: 15_000 }).toBeGreaterThan(0)
+
+  // Navigating away is not a way to keep a microphone open.
+  await page.goto('/#/')
+  await expect.poll(() => liveTracks(page), { timeout: 20_000 }).toBe(0)
+
+  await deleteChannel(page, name)
+})
+
+test('says so plainly when it cannot connect, and offers another go', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('voicefail', testInfo.project.name)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+
+  // The token endpoint, unavailable. Nothing about the page should be.
+  await page.route('**/functions/v1/voice-token', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Voice is not configured for this workspace' }),
+    }),
+  )
+
+  await page.getByRole('button', { name: 'Join voice' }).click()
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'error', { timeout: 30_000 })
+  await expect(page.getByRole('status')).toContainText(/not configured/i)
+
+  // A failure is a thing to try again, not a dead end.
+  const retry = page.getByRole('button', { name: 'Join voice' })
+  await expect(retry).toBeEnabled()
+  await expect(retry).toContainText('Try again')
+
+  await page.unroute('**/functions/v1/voice-token')
+  await joinVoice(page, name)
+
+  await leaveVoice(page)
+  await deleteChannel(page, name)
+})
+
+test('joins without a microphone when the browser refuses one', async ({ page }, testInfo) => {
+  const name = uniqueName('voicemic', testInfo.project.name)
+
+  // The browser saying no, exactly as it says it.
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = () => {
+      const error = new Error('Permission denied')
+      error.name = 'NotAllowedError'
+      return Promise.reject(error)
+    }
+  })
+
   await page.goto('/#/')
   await createChannel(page, name, { kind: 'Voice' })
 
   await page.getByRole('button', { name: 'Join voice' }).click()
 
-  // Whatever the answer, the client stops being idle: the request left.
-  await expect(status(page)).not.toHaveAttribute('data-voice-status', 'idle', { timeout: 15_000 })
+  // Connected anyway: being unable to speak is not being unable to listen.
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected', {
+    timeout: 45_000,
+  })
+  await expect(page.getByRole('status')).toContainText(/microphone access is required/i)
+  await expect(people(page, name).getByRole('listitem').first()).toHaveAttribute(
+    'data-participant-state',
+    'muted',
+  )
+  // And the way back is the same button it always was.
+  await expect(controls(page).getByRole('button', { name: 'Unmute microphone' })).toBeVisible()
 
-  // And it settles. Connected where LiveKit is configured, an error where it
-  // is not — never stuck mid-flight.
-  await expect
-    .poll(async () => status(page).getAttribute('data-voice-status'), {
-      timeout: 30_000,
-      message: 'the connection never settled',
-    })
-    .toMatch(/^(connected|error)$/)
+  await leaveVoice(page)
+  await deleteChannel(page, name)
+})
 
-  const settled = await status(page).getAttribute('data-voice-status')
-  if (settled === 'connected') {
-    await expect(page.getByRole('button', { name: 'Leave voice' })).toBeVisible()
-    await page.getByRole('button', { name: 'Leave voice' }).click()
-    // Leaving actually leaves: back to where it started, ready to join again.
-    await expect(status(page)).toHaveAttribute('data-voice-status', 'idle', { timeout: 15_000 })
-    await expect(page.getByRole('button', { name: 'Join voice' })).toBeVisible()
-  } else {
-    // A refusal is a sentence, not a spinner.
-    await expect(page.getByRole('status')).not.toBeEmpty()
+test('waits it out when the network goes, rather than giving up', async ({
+  page,
+  context,
+}, testInfo) => {
+  test.slow()
+  const name = uniqueName('voicedrop', testInfo.project.name)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+  await joinVoice(page, name)
+
+  await context.setOffline(true)
+  // LiveKit's own recovery, reported rather than replaced. Nothing here
+  // retries, and nothing asks the server for a second token.
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'reconnecting', {
+    timeout: 60_000,
+  })
+  // The room stays on screen while it tries.
+  await expect(page.getByRole('heading', { name })).toBeVisible()
+
+  await context.setOffline(false)
+  await expect(status(page)).toHaveAttribute('data-voice-status', /connected|idle/, {
+    timeout: 60_000,
+  })
+
+  if ((await status(page).getAttribute('data-voice-status')) === 'connected') {
+    await leaveVoice(page)
   }
-
   await deleteChannel(page, name)
 })
 
@@ -92,21 +309,33 @@ test('leaves text channels exactly as they were', async ({ page }, testInfo) => 
   await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible()
   await expect(page.getByRole('group', { name: /^Voice in / })).toHaveCount(0)
 
+  await openNav(page)
+  await expect(
+    page.getByRole('link', { name: new RegExp(name) }).getByLabel('Voice channel'),
+  ).toHaveCount(0)
+  await closeNav(page)
+
   await deleteChannel(page, name)
 })
 
-test('fits a narrow screen', async ({ page }, testInfo) => {
+test('fits a narrow screen, connected and not', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'about the phone layout')
 
-  const name = uniqueName('voice', testInfo.project.name)
+  const name = uniqueName('voicenarrow', testInfo.project.name)
   await page.goto('/#/')
   await createChannel(page, name, { kind: 'Voice' })
 
-  await expect(panel(page, name)).toBeVisible({ timeout: 20_000 })
-  const overflowing = await page.evaluate(
-    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-  )
-  expect(overflowing).toBe(false)
+  const overflowing = () =>
+    page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
 
+  await expect(page.getByRole('button', { name: 'Join voice' })).toBeVisible({ timeout: 20_000 })
+  expect(await overflowing()).toBe(false)
+
+  await joinVoice(page, name)
+  // Connected is the busier state: a list, a status chip and three controls.
+  expect(await overflowing()).toBe(false)
+  await expect(controls(page).getByRole('button', { name: 'Leave voice' })).toBeInViewport()
+
+  await leaveVoice(page)
   await deleteChannel(page, name)
 })
