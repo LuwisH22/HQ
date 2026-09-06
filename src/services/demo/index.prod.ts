@@ -83,6 +83,8 @@ export const demoChannelService: ChannelService = {
   listChannelMembers: unreachable,
 }
 
+export const demoVoiceService = { roomFor: unreachable }
+
 export const demoMessageService: MessageService = {
   list: unreachable,
   getById: unreachable,

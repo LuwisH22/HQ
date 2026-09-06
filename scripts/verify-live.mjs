@@ -1888,6 +1888,152 @@ console.log('\nC3 · attachments')
     `${String(names.size)} objects under the prefix`)
 }
 
+console.log('\nD1 · voice')
+{
+  const { data: voiceId, error: voiceError } = await supabase.rpc('create_channel', {
+    p_organization_id: org.id,
+    p_name: 'probe voice',
+    p_type: 'voice',
+  })
+  check('a voice channel can be created', !voiceError && Boolean(voiceId), voiceError?.message ?? '')
+
+  const { data: rows } = await supabase
+    .from('channels')
+    .select('type, is_private')
+    .eq('id', voiceId)
+    .maybeSingle()
+  check('and is filed as one', rows?.type === 'voice', String(rows?.type))
+
+  const { error: badType } = await supabase.rpc('create_channel', {
+    p_organization_id: org.id,
+    p_name: 'probe bad',
+    p_type: 'video',
+  })
+  // The column and the routine agree about what a channel can be. Video is
+  // not step 1, and a token could not be issued for it anyway.
+  check('a kind that does not exist is refused', Boolean(badType), badType?.code ?? 'ACCEPTED')
+
+  // --- the room --------------------------------------------------------
+  const { data: room, error: roomError } = await supabase.rpc('voice_room_for', {
+    p_channel_id: voiceId,
+  })
+  const grant = (room ?? [])[0]
+  check('the server names the room', !roomError && Boolean(grant?.room_name), roomError?.message ?? '')
+  check('and derives it from ids rather than words',
+    grant?.room_name === `lfghq:${org.id}:voice:${voiceId}`,
+    String(grant?.room_name))
+  check('so nothing a person typed is in it', !(grant?.room_name ?? '').includes('probe voice'))
+
+  const { error: textAsVoice } = await supabase.rpc('voice_room_for', { p_channel_id: probePublic })
+  check('a text channel cannot be used as a voice room', textAsVoice?.code === '42501',
+    textAsVoice?.code ?? 'ACCEPTED')
+
+  const { error: ghost } = await supabase.rpc('voice_room_for', {
+    p_channel_id: '00000000-0000-4000-8000-000000000000',
+  })
+  check('an id that names nothing is refused', ghost?.code === '42501', ghost?.code ?? 'ACCEPTED')
+  // Identical sentences: a refusal must not say which of the two it was, or
+  // the refusals become a way to map what exists.
+  check('and refused in the same words as one that is not yours',
+    ghost?.message === textAsVoice?.message, String(ghost?.message))
+
+  await supabase.rpc('update_channel', { p_channel_id: voiceId, p_archived: true })
+  const { error: archived } = await supabase.rpc('voice_room_for', { p_channel_id: voiceId })
+  check('an archived voice channel takes nobody', archived?.code === '42501',
+    archived?.code ?? 'ACCEPTED')
+  await supabase.rpc('update_channel', { p_channel_id: voiceId, p_archived: false })
+
+  // --- the token endpoint -------------------------------------------------
+  const endpoint = `${url}/functions/v1/voice-token`
+  const callVoice = async (body, bearer) => {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+      },
+      body: JSON.stringify(body),
+    })
+    let parsed = null
+    try {
+      parsed = await res.json()
+    } catch {
+      parsed = null
+    }
+    return { status: res.status, body: parsed ?? {} }
+  }
+
+  const anonymous = await callVoice({ channelId: voiceId }, null)
+  check('the token endpoint refuses an anonymous caller', anonymous.status === 401,
+    String(anonymous.status))
+
+  const forged = await callVoice({ channelId: voiceId }, 'not.a.token')
+  check('and a bearer token it cannot verify', forged.status === 401, String(forged.status))
+
+  const named = await callVoice({ channelId: `lfghq:${org.id}:voice:anything` }, auth.session.access_token)
+  // A room name is not a channel id and never reaches LiveKit. The client
+  // asks with an id or it is not asking.
+  check('a room name cannot be asked for', named.status === 400, String(named.status))
+
+  const stranger = await callVoice(
+    { channelId: '00000000-0000-4000-8000-000000000000' },
+    auth.session.access_token,
+  )
+  check('an id that is not yours is refused a token', stranger.status === 403,
+    String(stranger.status))
+
+  const textToken = await callVoice({ channelId: probePublic }, auth.session.access_token)
+  check('and so is a text channel', textToken.status === 403, String(textToken.status))
+
+  const mine = await callVoice({ channelId: voiceId }, auth.session.access_token)
+  if (mine.status === 503) {
+    console.log(
+      '  SKIP  a token is issued for a channel that is yours       ' +
+        'LiveKit is not configured — set LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET',
+    )
+  } else {
+    check('a token is issued for a channel that is yours', mine.status === 200,
+      String(mine.status))
+
+    const claims = (() => {
+      try {
+        const [, payload] = String(mine.body.token).split('.')
+        return JSON.parse(Buffer.from(payload, 'base64url').toString())
+      } catch {
+        return null
+      }
+    })()
+
+    check('scoped to that one room', claims?.video?.room === grant?.room_name,
+      String(claims?.video?.room))
+    check('and to this one person', claims?.sub === userId, String(claims?.sub))
+    check('it may join, speak and listen', claims?.video?.roomJoin === true &&
+      claims?.video?.canPublish === true && claims?.video?.canSubscribe === true)
+    // The grants that are absent are the point: a voice token that could
+    // already carry a camera or a screen would be a decision made by accident.
+    check('a microphone and nothing else',
+      JSON.stringify(claims?.video?.canPublishSources ?? []) === '["microphone"]',
+      JSON.stringify(claims?.video?.canPublishSources))
+    check('no room administration', !claims?.video?.roomAdmin && !claims?.video?.roomCreate &&
+      !claims?.video?.roomList && !claims?.video?.roomRecord)
+    check('no data channel', claims?.video?.canPublishData === false)
+
+    const life = Number(claims?.exp ?? 0) - Number(claims?.nbf ?? 0)
+    check('and it expires', life > 0 && life <= 900, `${String(life)}s`)
+
+    // Whatever else comes back, none of it is the key that signed it.
+    const serialised = JSON.stringify(mine.body)
+    check('the response carries no signing key',
+      !/api_?secret|apiSecret|LIVEKIT_API_SECRET/i.test(serialised))
+    check('and no service-role key', !/service_role/i.test(serialised))
+  }
+
+  await supabase.rpc('delete_channel', { p_channel_id: voiceId })
+  const { data: leftOver } = await supabase.from('channels').select('id').eq('id', voiceId)
+  check('the probe voice channel is removed', (leftOver ?? []).length === 0)
+}
+
 console.log('\nB3 · a channel and its category in one call')
 
 const comboName = `probe-combo-${String(Date.now() % 100000)}`

@@ -199,13 +199,53 @@ const HELPERS = [
   ['can_join_conversation_topic', { p_topic: 'dm:' + ORG }],
   ['start_direct_message', { p_organization_id: ORG, p_user_id: ORG }],
   ['conversation_unread_counts', {}],
+  // Phase 4 · Voice.
+  ['voice_room_for', { p_channel_id: ORG }],
 ]
 for (const [fn, args] of HELPERS) {
   const { error } = await supabase.rpc(fn, args)
   check(fn, Boolean(error), error ? `blocked (${error.code ?? 'error'})` : 'REACHABLE')
 }
 
-// --- 6. the attachment bucket is private and closed ------------------------
+// --- 6. the voice token endpoint ------------------------------------------
+console.log('\nvoice (a token is a credential; nobody unauthenticated gets one)')
+{
+  const endpoint = `${url}/functions/v1/voice-token`
+  const ask = async (headers) => {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: key, ...headers },
+      body: JSON.stringify({ channelId: ORG }),
+    })
+    let body = null
+    try {
+      body = await res.text()
+    } catch {
+      body = ''
+    }
+    return { status: res.status, body: body ?? '' }
+  }
+
+  const bare = await ask({})
+  check('a token is refused without a bearer', bare.status === 401, `HTTP ${String(bare.status)}`)
+
+  // The anon key is public by design. It is not a person, and it must not be
+  // mistaken for one.
+  const anonAsBearer = await ask({ Authorization: `Bearer ${key}` })
+  check('the anon key is not a signed-in caller', anonAsBearer.status !== 200,
+    `HTTP ${String(anonAsBearer.status)}`)
+
+  const forged = await ask({ Authorization: 'Bearer not.a.real.token' })
+  check('a forged bearer is refused', forged.status === 401, `HTTP ${String(forged.status)}`)
+
+  // Whatever it says, it never says the key that would let somebody mint
+  // their own.
+  const said = [bare.body, anonAsBearer.body, forged.body].join(' ')
+  check('and nothing it says is a signing key',
+    !/api_?secret|apiSecret|service_role|eyJhbGciOi.*service/i.test(said))
+}
+
+// --- 7. the attachment bucket is private and closed ------------------------
 console.log('\nstorage (the bucket must be private and shut to anonymous callers)')
 {
   const BUCKET = 'message-attachments'

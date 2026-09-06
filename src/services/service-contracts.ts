@@ -1,5 +1,5 @@
 import type { PermissionSet } from '@/lib/permissions'
-import type { InvitationStatus, MemberStatus } from '@/types/database.types'
+import type { ChannelType, InvitationStatus, MemberStatus } from '@/types/database.types'
 
 /**
  * The contract between the application and whatever is behind it.
@@ -264,6 +264,13 @@ export interface Channel {
   position: number
   /** Private channels are allow-lists: invisible without an explicit ALLOW. */
   isPrivate: boolean
+  /**
+   * A room for words or a room for voices. Decides which surface the client
+   * opens and nothing else: both kinds answer to the same channel
+   * authorization, sit in the same categories, and obey the same
+   * private/public rule.
+   */
+  type: ChannelType
   archivedAt: string | null
 }
 
@@ -272,6 +279,8 @@ export interface ChannelInput {
   topic: string | null
   categoryId: string | null
   isPrivate: boolean
+  /** Defaults to text where a caller does not say. */
+  type?: ChannelType
 }
 
 /** Every field optional: null means "leave this alone". */
@@ -313,7 +322,7 @@ export interface ChannelService {
    */
   createChannelInCategory(
     organizationId: string,
-    input: { name: string; categoryName: string | null; isPrivate: boolean },
+    input: { name: string; categoryName: string | null; isPrivate: boolean; type?: ChannelType },
   ): Promise<string>
   updateChannel(channelId: string, patch: ChannelPatch): Promise<void>
   /** Permanent. Archiving via updateChannel is the reversible alternative. */

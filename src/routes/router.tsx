@@ -49,8 +49,10 @@ const ChannelsPage = lazy(() =>
   import('@/features/channels/ChannelsPage').then((m) => ({ default: m.ChannelsPage })),
 )
 
-const ChannelChatPage = lazy(() =>
-  import('@/features/channels/ChannelChatPage').then((m) => ({ default: m.ChannelChatPage })),
+// One address, two kinds of room: the channel's type decides which surface
+// opens, not the URL.
+const ChannelRoute = lazy(() =>
+  import('@/features/channels/ChannelRoute').then((m) => ({ default: m.ChannelRoute })),
 )
 const ConversationChatPage = lazy(() =>
   import('@/features/channels/ConversationChatPage').then((m) => ({
@@ -107,7 +109,7 @@ export const router = createHashRouter([
           { index: true, element: <DashboardPage /> },
           { path: 'messages', element: <MessagesPage /> },
           { path: 'channels', element: <ChannelsPage /> },
-          { path: 'channels/:channelKey', element: <ChannelChatPage /> },
+          { path: 'channels/:channelKey', element: <ChannelRoute /> },
           // Its own route, beside the channels rather than under them: a
           // conversation is not a channel and its id is not a channel key.
           { path: 'dm/:conversationId', element: <ConversationChatPage /> },

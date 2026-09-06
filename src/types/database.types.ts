@@ -15,6 +15,8 @@ export type MemberStatus = 'active' | 'suspended' | 'banned'
 export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
 /** A channel override either allows or denies. An absent row means inherit. */
 export type OverrideEffect = 'allow' | 'deny'
+/** A channel is a room for words or a room for voices. */
+export type ChannelType = 'text' | 'voice'
 
 export interface Database {
   public: {
@@ -387,7 +389,7 @@ export interface Database {
           key: string
           name: string
           topic: string | null
-          type: string
+          type: ChannelType
           position: number
           is_private: boolean
           archived_at: string | null
@@ -757,8 +759,18 @@ export interface Database {
           p_topic?: string | null
           p_category_id?: string | null
           p_is_private?: boolean
+          p_type?: ChannelType
         }
         Returns: string
+      }
+      voice_room_for: {
+        Args: { p_channel_id: string }
+        Returns: {
+          room_name: string
+          channel_id: string
+          channel_name: string
+          organization_id: string
+        }[]
       }
       unread_counts: {
         Args: Record<string, never>
@@ -811,6 +823,7 @@ export interface Database {
           p_name: string
           p_category_name?: string | null
           p_is_private?: boolean
+          p_type?: ChannelType
         }
         Returns: string
       }

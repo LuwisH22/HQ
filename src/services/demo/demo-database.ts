@@ -1,5 +1,5 @@
 import { PERMISSIONS, type Permission } from '@/lib/permissions'
-import type { InvitationStatus, MemberStatus } from '@/types/database.types'
+import type { ChannelType, InvitationStatus, MemberStatus } from '@/types/database.types'
 
 /**
  * The demo mode data store.
@@ -16,7 +16,7 @@ import type { InvitationStatus, MemberStatus } from '@/types/database.types'
 const STORAGE_KEY = 'lfg-hq-demo-db'
 // Bumped when the seed shape changes, so a stale store is discarded rather
 // than half-migrated.
-const SCHEMA_VERSION = 10
+const SCHEMA_VERSION = 11
 
 // --- Row shapes (camelCase; the demo layer sits above the SQL naming) -------
 
@@ -138,6 +138,7 @@ export interface DemoChannel {
   topic: string | null
   position: number
   isPrivate: boolean
+  type: ChannelType
   archivedAt: string | null
 }
 
@@ -695,6 +696,7 @@ function buildSeed(): DemoDatabase {
         topic: 'Org-wide notices',
         position: 0,
         isPrivate: false,
+        type: 'text',
         archivedAt: null,
       },
       {
@@ -706,6 +708,7 @@ function buildSeed(): DemoDatabase {
         topic: 'Everything else',
         position: 1,
         isPrivate: false,
+        type: 'text',
         archivedAt: null,
       },
       {
@@ -718,6 +721,7 @@ function buildSeed(): DemoDatabase {
         position: 2,
         // Private: invisible without an explicit ALLOW, not merely hidden.
         isPrivate: true,
+        type: 'text',
         archivedAt: null,
       },
     ],

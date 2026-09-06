@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Hash, LockSimple, Plus, ListDashes } from '@phosphor-icons/react'
+import { Hash, LockSimple, Plus, ListDashes, SpeakerHigh } from '@phosphor-icons/react'
+import type { ChannelType } from '@/types/database.types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -65,6 +66,7 @@ function CreateChannelDialog({
   const [categoryId, setCategoryId] = useState<string>(NO_CATEGORY)
   const [newCategory, setNewCategory] = useState('')
   const [isPrivate, setIsPrivate] = useState(false)
+  const [type, setType] = useState<ChannelType>('text')
 
   // Reset on open, so a cancelled attempt never leaks into the next one.
   useEffect(() => {
@@ -73,6 +75,7 @@ function CreateChannelDialog({
     setCategoryId(NO_CATEGORY)
     setNewCategory('')
     setIsPrivate(false)
+    setType('text')
   }, [open])
 
   const duplicateCategory =
@@ -93,6 +96,7 @@ function CreateChannelDialog({
               name: trimmed,
               categoryName: wanted,
               isPrivate,
+              type,
             })
           : await channelService.createChannel(organizationId, {
               name: trimmed,
@@ -100,6 +104,7 @@ function CreateChannelDialog({
               categoryId:
                 categoryId === NO_CATEGORY || categoryId === NEW_CATEGORY ? null : categoryId,
               isPrivate,
+              type,
             })
 
       // The routine returns an id; the address bar needs the slug it made.
@@ -205,6 +210,42 @@ function CreateChannelDialog({
                 )}
               </FormField>
             ) : null}
+
+            <fieldset className="min-w-0 border-0 p-0">
+              <legend className="text-foreground mb-1.5 text-xs font-medium">Kind</legend>
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { label: 'Text', value: 'text', icon: Hash },
+                    { label: 'Voice', value: 'voice', icon: SpeakerHigh },
+                  ] as const
+                ).map((option) => {
+                  const selected = type === option.value
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setType(option.value)}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-sm border px-[11px] py-[5px] text-xs transition-all duration-[140ms]',
+                        selected
+                          ? 'border-primary bg-primary/14 text-foreground font-medium'
+                          : 'border-border text-muted-foreground hover:bg-foreground/7',
+                      )}
+                    >
+                      <option.icon className="size-3.5" aria-hidden="true" />
+                      {option.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-muted-foreground text-2xs mt-2 mb-4 leading-relaxed">
+                {type === 'voice'
+                  ? 'A room to talk in. The same categories and the same permissions as a text channel.'
+                  : 'A room for messages, files and threads.'}
+              </p>
+            </fieldset>
 
             <fieldset className="min-w-0 border-0 p-0">
               <legend className="text-foreground mb-1.5 text-xs font-medium">Visibility</legend>

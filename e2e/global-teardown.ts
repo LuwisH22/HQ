@@ -61,6 +61,8 @@ const PREFIXES = [
   'inlinegone-',
   'inlinenarrow-',
   'inline-',
+  'voicetext-',
+  'voice-',
   'composer-',
 ]
 

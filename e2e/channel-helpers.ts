@@ -58,6 +58,8 @@ export async function closeNav(page: Page): Promise<void> {
 
 export interface CreateChannelOptions {
   visibility?: 'Public' | 'Private'
+  /** Text unless said otherwise, which is what the dialog defaults to. */
+  kind?: 'Text' | 'Voice'
   /** Pick a category that already exists, by name. */
   category?: string
   /** Name a category that does not exist yet; it is created with the channel. */
@@ -92,6 +94,10 @@ export async function createChannel(
     if (options.newCategory) {
       await page.getByLabel('New category name').fill(options.newCategory)
     }
+  }
+
+  if (options.kind === 'Voice') {
+    await page.getByRole('button', { name: 'Voice', exact: true }).click()
   }
 
   if (options.visibility === 'Private') {

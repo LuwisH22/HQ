@@ -1093,6 +1093,7 @@ function toChannel(c: DemoChannel): Channel {
     topic: c.topic,
     position: c.position,
     isPrivate: c.isPrivate,
+    type: c.type,
     archivedAt: c.archivedAt,
   }
 }
@@ -1199,6 +1200,7 @@ export const demoChannelService: ChannelService = {
       topic: input.topic?.trim() || null,
       position: store.channels.length,
       isPrivate: input.isPrivate,
+      type: input.type ?? 'text',
       archivedAt: null,
     })
     recordAudit('channel.created', 'channel', id, `Channel ${input.name.trim()} created`)
@@ -1238,6 +1240,7 @@ export const demoChannelService: ChannelService = {
         topic: null,
         categoryId,
         isPrivate: input.isPrivate,
+        type: input.type,
       })
     } catch (error) {
       store.channelCategories = snapshot.categories
@@ -1554,6 +1557,52 @@ function recountThread(rootId: string): void {
   root.replyCount = live.length
   root.lastReplyAt =
     live.length === 0 ? null : live.map((m) => m.createdAt).sort((a, b) => b.localeCompare(a))[0]!
+}
+
+/**
+ * The port of voice_room_for().
+ *
+ * A voice channel is a channel, so this is the same canInChannel that decides
+ * every other one — the effective-active gate, ownership from the
+ * organization, DENY > ALLOW > INHERIT, and the private-channel allow-list —
+ * with no rule of its own. Membership is resolved against the channel's own
+ * organization, which is what makes a channel id from somewhere else refuse
+ * itself.
+ *
+ * One refusal for every reason. "No such channel", "not a voice channel" and
+ * "not yours" read identically, so nobody can map the id space by asking.
+ */
+export const demoVoiceService = {
+  async roomFor(channelId: string): Promise<{ roomName: string; channelName: string }> {
+    await latency()
+
+    const refuse = (): never => {
+      throw new AppError('forbidden', 'You do not have access to that voice channel')
+    }
+
+    const store = db()
+    const channel = store.channels.find((c) => c.id === channelId)
+    if (!channel || channel.type !== 'voice' || channel.archivedAt !== null) refuse()
+
+    const userId = store.currentUserId
+    if (!userId) refuse()
+
+    // Against the channel's organization, never the caller's idea of one.
+    const member = store.members.find(
+      (m) => m.userId === userId && channel!.organizationId === store.organization.id,
+    )
+    if (!member || !canInChannel(channel!, member, 'channels.view')) refuse()
+
+    recordAudit('voice.join', 'channel', channel!.id, `Joined voice in ${channel!.name}`)
+    persist()
+
+    return {
+      // Derived from two ids this store issued, exactly as the routine derives
+      // it from two the database issued.
+      roomName: `lfghq:${channel!.organizationId}:voice:${channel!.id}`,
+      channelName: channel!.name,
+    }
+  },
 }
 
 export const demoMessageService: MessageService = {

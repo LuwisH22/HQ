@@ -3,6 +3,7 @@ import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
 import { demoChannelService } from '@/services/demo'
 import { firstOf } from './postgrest'
+import type { ChannelType } from '@/types/database.types'
 import type {
   Channel,
   ChannelCategory,
@@ -47,6 +48,7 @@ function toChannel(row: {
   topic: string | null
   position: number
   is_private: boolean
+  type?: string | null
   archived_at: string | null
 }): Channel {
   return {
@@ -58,6 +60,9 @@ function toChannel(row: {
     topic: row.topic,
     position: row.position,
     isPrivate: row.is_private,
+    // An older row, or one from a narrower select, is text: that is what the
+    // column defaults to and what every row was before voice existed.
+    type: row.type === 'voice' ? 'voice' : 'text',
     archivedAt: row.archived_at,
   }
 }
@@ -130,6 +135,7 @@ export const supabaseChannelService: ChannelService = {
       p_topic: input.topic,
       p_category_id: input.categoryId,
       p_is_private: input.isPrivate,
+      p_type: input.type ?? 'text',
     })
     if (error) throw toAppError(error)
     if (typeof data !== 'string') {
@@ -140,13 +146,14 @@ export const supabaseChannelService: ChannelService = {
 
   async createChannelInCategory(
     organizationId: string,
-    input: { name: string; categoryName: string | null; isPrivate: boolean },
+    input: { name: string; categoryName: string | null; isPrivate: boolean; type?: ChannelType },
   ): Promise<string> {
     const { data, error } = await getSupabase().rpc('create_channel_in_category', {
       p_organization_id: organizationId,
       p_name: input.name,
       p_category_name: input.categoryName,
       p_is_private: input.isPrivate,
+      p_type: input.type ?? 'text',
     })
     if (error) throw toAppError(error)
     if (typeof data !== 'string') {
