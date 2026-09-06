@@ -3,6 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { initialsFor } from '@/services/profile.service'
 import type { VoiceParticipant } from '@/services/voice.service'
 import { cn } from '@/lib/utils'
+import { ParticipantVolume } from './ParticipantVolume'
 
 /**
  * One person in the room.
@@ -27,7 +28,7 @@ export function VoiceParticipantRow({
     <li
       data-participant-state={state}
       data-participant-local={isLocal || undefined}
-      className="flex items-center gap-2.5 rounded-sm px-2 py-1.5"
+      className="group/participant hover:bg-foreground/4 flex h-10 items-center gap-2.5 rounded-sm px-2 transition-colors"
       aria-label={`${name}${isLocal ? ' (you)' : ''}, ${
         muted ? 'muted' : speaking ? 'speaking' : 'not speaking'
       }`}
@@ -54,6 +55,10 @@ export function VoiceParticipantRow({
       {muted ? (
         <MicrophoneSlash className="text-muted-foreground/70 size-4 shrink-0" aria-hidden="true" />
       ) : null}
+
+      {/* Yours to set for other people, and meaningless for yourself: turning
+          your own playback down would silence nothing you can hear. */}
+      {isLocal ? null : <ParticipantVolume identity={participant.identity} name={name} />}
     </li>
   )
 }

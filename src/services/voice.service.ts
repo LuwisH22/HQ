@@ -1,8 +1,10 @@
 import {
   ConnectionState,
+  RemoteAudioTrack,
   Room,
   RoomEvent,
   Track,
+  type AudioCaptureOptions,
   type Participant,
   type RemoteTrackPublication,
   type RoomOptions,
@@ -11,6 +13,12 @@ import { getSupabase } from '@/lib/supabase'
 import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
 import { demoVoiceService } from '@/services/demo'
+import {
+  clampVolume,
+  useVoiceStore,
+  type AudioProcessing,
+  type InputMode,
+} from '@/stores/voice.store'
 
 /**
  * Voice, from the client's side.
@@ -32,6 +40,20 @@ import { demoVoiceService } from '@/services/demo'
  * is the only thing React sees. Nothing about a session is written to
  * Postgres: who is in a room and who is talking is true only while the room
  * lasts, and LiveKit is where that lives.
+ *
+ * KNOWN LIMITATION — authorization is checked when a token is issued, and a
+ * token already spent is not reconsidered. Suspending somebody, banning them,
+ * removing their access to a private voice channel or taking away
+ * `voice.speak` all take effect immediately everywhere Postgres is asked:
+ * every read they make returns nothing, and their next join is refused. It
+ * does not reach a call already in progress, because LiveKit has never heard
+ * of Supabase and refreshes a connected participant's token itself.
+ *
+ * Ending a live session from the server needs LiveKit's own room API —
+ * `removeParticipant`, called from a trusted context — driven either by a
+ * moderation action or by a webhook. That is server work this step does not
+ * do, and pretending otherwise with a client-side check would be a boundary
+ * that anybody could edit out. It is written down here rather than implied.
  */
 
 export type VoiceStatus =
@@ -61,6 +83,16 @@ export interface VoiceState {
    * not a failure to join.
    */
   micBlocked: boolean
+  /**
+   * Whether the token permits a microphone at all.
+   *
+   * The server's answer, read from the grant rather than asked for. False
+   * means listen-only: the interface says so and offers no microphone, and
+   * the media server would refuse the track even if it did.
+   */
+  canSpeak: boolean
+  /** Holding a key to talk, rather than being open by default. */
+  pushToTalk: boolean
   error: string | null
 }
 
@@ -71,6 +103,8 @@ interface VoiceGrant {
   room: string
   identity: string
   channelName: string
+  /** Derived from the caller's permissions, in Postgres. Never asked for. */
+  canSpeak: boolean
   expiresInSeconds: number
 }
 
@@ -81,6 +115,8 @@ const IDLE: VoiceState = {
   micEnabled: false,
   deafened: false,
   micBlocked: false,
+  canSpeak: false,
+  pushToTalk: false,
   error: null,
 }
 
@@ -131,6 +167,39 @@ function remoteAudio(current: Room): RemoteTrackPublication[] {
       (publication): publication is RemoteTrackPublication => publication.kind === Track.Kind.Audio,
     ),
   )
+}
+
+/**
+ * Put the listener's own volume on a track that has just arrived.
+ *
+ * LiveKit's `setVolume` writes the volume of the audio elements it attached,
+ * so this is playback on this machine and nothing else: the person being
+ * turned down is not told, their microphone is untouched, and everybody else
+ * hears them exactly as before.
+ */
+function applyVolume(publication: RemoteTrackPublication, identity: string): void {
+  const track = publication.track
+  if (!(track instanceof RemoteAudioTrack)) return
+
+  const stored = useVoiceStore.getState().volumes[identity]
+  track.setVolume(stored === undefined ? 1 : clampVolume(stored))
+}
+
+function applyAllVolumes(current: Room): void {
+  for (const participant of current.remoteParticipants.values()) {
+    for (const publication of participant.trackPublications.values()) {
+      if (publication.kind === Track.Kind.Audio) {
+        applyVolume(publication, participant.identity)
+      }
+    }
+  }
+}
+
+/** The microphone constraints this browser is currently asked for. */
+function captureOptions(): AudioCaptureOptions {
+  const { echoCancellation, noiseSuppression, autoGainControl } =
+    useVoiceStore.getState().audioProcessing
+  return { echoCancellation, noiseSuppression, autoGainControl }
 }
 
 /**
@@ -185,12 +254,9 @@ function roomOptions(): RoomOptions {
     adaptiveStream: false,
     dynacast: false,
     // The SDK's own voice path — Opus, with the three processors a browser
-    // offers. Nothing custom, and no music mode: this is people talking.
-    audioCaptureDefaults: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
+    // offers, as the listener has them set. Nothing custom, no music mode, and
+    // no analysis of anybody's audio: this is people talking.
+    audioCaptureDefaults: captureOptions(),
   }
 }
 
@@ -227,7 +293,12 @@ function wire(next: Room): void {
       refresh()
     })
     .on(RoomEvent.TrackUnpublished, refresh)
-    .on(RoomEvent.TrackSubscribed, refresh)
+    .on(RoomEvent.TrackSubscribed, (_track, publication, participant) => {
+      // A track that has just arrived plays at whatever this listener last
+      // set them to, which is the only place that preference is applied.
+      applyVolume(publication, participant.identity)
+      refresh()
+    })
     .on(RoomEvent.TrackUnsubscribed, refresh)
     .on(RoomEvent.TrackMuted, refresh)
     .on(RoomEvent.TrackUnmuted, refresh)
@@ -256,6 +327,98 @@ function wire(next: Room): void {
       room = null
       emit({ ...IDLE })
     })
+}
+
+/**
+ * Push-to-talk.
+ *
+ * The listeners belong to the session rather than to a component: a page that
+ * remounts must not be able to leave two of them attached, or to leave one
+ * attached after the room has gone. They are added when a room opens in
+ * push-to-talk and removed on disconnect, on a change of mode, and on the
+ * events that mean the key can no longer be observed being released.
+ *
+ * The key is only taken while it can be acted on: typing a space into a
+ * message is a space, and the default is never prevented unless the key is
+ * actually being used to talk.
+ *
+ * When it is being used to talk it is taken in the capture phase and stopped
+ * there, because otherwise the button that happens to have focus opens a menu
+ * or presses itself before the microphone hears about it. The cost is that
+ * Space stops activating buttons while push-to-talk is on and you are in a
+ * room — Enter still does, everywhere — and that is the trade a reserved key
+ * is. Somebody who wants Space back can bind push-to-talk elsewhere.
+ */
+let pttAttached = false
+
+/**
+ * Whether a key press belongs to whatever the person is typing into.
+ *
+ * Exported because it is the rule that keeps push-to-talk from eating a space
+ * out of a message, and it is worth being able to state that in a test without
+ * a media server. `closest` rather than a tag check, so a key pressed inside a
+ * contenteditable's own child still counts as typing.
+ */
+export function isTypingTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  if (!element || typeof element.closest !== 'function') return false
+  return Boolean(
+    element.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'),
+  )
+}
+
+function pttKeyDown(event: KeyboardEvent): void {
+  if (event.repeat || event.altKey || event.ctrlKey || event.metaKey) return
+  if (event.code !== useVoiceStore.getState().pushToTalkKey) return
+  if (isTypingTarget(event.target)) return
+  if (!room || !state.canSpeak) return
+
+  // Only now, and only for this key: Space keeps scrolling the page, and
+  // pressing buttons, everywhere it is not being used to talk.
+  event.preventDefault()
+  event.stopPropagation()
+  if (!state.micEnabled) void voiceService.setMicrophoneEnabled(true)
+}
+
+function pttKeyUp(event: KeyboardEvent): void {
+  if (event.code !== useVoiceStore.getState().pushToTalkKey) return
+  if (!room) return
+  event.preventDefault()
+  event.stopPropagation()
+  if (state.micEnabled) void voiceService.setMicrophoneEnabled(false)
+}
+
+/**
+ * Anything that means the key-up may never arrive.
+ *
+ * A window that loses focus mid-press, a tab that goes to the background, a
+ * page being torn down: in each of them the browser stops delivering key
+ * events, and a microphone left open because nobody saw the release is the
+ * one failure a push-to-talk must not have.
+ */
+function pttRelease(): void {
+  if (!room) return
+  if (state.micEnabled) void voiceService.setMicrophoneEnabled(false)
+}
+
+function attachPushToTalk(): void {
+  if (pttAttached) return
+  pttAttached = true
+  // Capture, so the key reaches the microphone before it reaches whatever
+  // has focus.
+  window.addEventListener('keydown', pttKeyDown, true)
+  window.addEventListener('keyup', pttKeyUp, true)
+  window.addEventListener('blur', pttRelease)
+  document.addEventListener('visibilitychange', pttRelease)
+}
+
+function detachPushToTalk(): void {
+  if (!pttAttached) return
+  pttAttached = false
+  window.removeEventListener('keydown', pttKeyDown, true)
+  window.removeEventListener('keyup', pttKeyUp, true)
+  window.removeEventListener('blur', pttRelease)
+  document.removeEventListener('visibilitychange', pttRelease)
 }
 
 export const voiceService = {
@@ -310,13 +473,35 @@ export const voiceService = {
       throw error
     }
 
-    emit({ status: 'connected', participants: snapshotParticipants(next) })
+    applyAllVolumes(next)
+    emit({
+      status: 'connected',
+      canSpeak: grant.canSpeak === true,
+      participants: snapshotParticipants(next),
+    })
+
+    // Listen-only. The token refuses a microphone, so asking the browser for
+    // one would be a permission prompt in aid of nothing.
+    if (grant.canSpeak !== true) return
+
+    const pushToTalk = useVoiceStore.getState().inputMode === 'push-to-talk'
+    emit({ pushToTalk })
 
     // Only now, and only because somebody pressed Join. Opening the page
     // never reaches this line.
     try {
-      await next.localParticipant.setMicrophoneEnabled(true)
-      emit({ micEnabled: true, micBlocked: false, participants: snapshotParticipants(next) })
+      await next.localParticipant.setMicrophoneEnabled(true, captureOptions())
+      if (pushToTalk) {
+        // Published, then closed. The track exists, so holding the key is
+        // instant and never asks for permission again.
+        await next.localParticipant.setMicrophoneEnabled(false)
+        attachPushToTalk()
+      }
+      emit({
+        micEnabled: !pushToTalk,
+        micBlocked: false,
+        participants: snapshotParticipants(next),
+      })
     } catch (error) {
       emit({
         micEnabled: false,
@@ -330,6 +515,9 @@ export const voiceService = {
   async disconnect(): Promise<void> {
     const current = room
     room = null
+    // Before anything awaits: a key pressed during teardown must find no room
+    // to talk into.
+    detachPushToTalk()
     // LiveKit stops and unpublishes the local tracks as part of this, which is
     // what actually turns the microphone light off.
     if (current) await current.disconnect().catch(() => undefined)
@@ -374,8 +562,92 @@ export const voiceService = {
     emit({ deafened })
   },
 
+  /**
+   * How loud somebody else is, here.
+   *
+   * Local playback only. It is remembered per identity in this browser, and
+   * the person it applies to is neither told nor affected — their microphone,
+   * and what everybody else hears, are untouched.
+   */
+  setParticipantVolume(identity: string, volume: number): void {
+    const clamped = clampVolume(volume)
+    useVoiceStore.getState().setVolume(identity, clamped)
+
+    const current = room
+    if (!current) return
+    const participant = current.remoteParticipants.get(identity)
+    if (!participant) return
+
+    for (const publication of participant.trackPublications.values()) {
+      const track = publication.track
+      if (track instanceof RemoteAudioTrack) track.setVolume(clamped)
+    }
+  },
+
+  /**
+   * Switch between talking freely and holding a key.
+   *
+   * Neither touches the room. Going to push-to-talk closes the microphone
+   * that is already published; coming back opens it again.
+   */
+  async setInputMode(mode: InputMode): Promise<void> {
+    useVoiceStore.getState().setInputMode(mode)
+    const pushToTalk = mode === 'push-to-talk'
+    emit({ pushToTalk })
+
+    if (!room || !state.canSpeak) {
+      detachPushToTalk()
+      return
+    }
+
+    if (pushToTalk) {
+      attachPushToTalk()
+      await voiceService.setMicrophoneEnabled(false)
+    } else {
+      detachPushToTalk()
+      await voiceService.setMicrophoneEnabled(true)
+    }
+  },
+
+  /**
+   * Echo cancellation, noise suppression and gain control.
+   *
+   * These are constraints on the capture, so they take effect when a track is
+   * made rather than while one is running. Changing them replaces the
+   * microphone track and leaves the room alone: nobody is disconnected and
+   * nobody else notices.
+   *
+   * There is deliberately no input-sensitivity control. LiveKit's browser SDK
+   * exposes no publish-side voice-activity threshold, and the only way to
+   * offer one would be to analyse the microphone here — which is exactly the
+   * custom DSP this project does not want.
+   */
+  async setAudioProcessing(next: Partial<AudioProcessing>): Promise<void> {
+    useVoiceStore.getState().setAudioProcessing(next)
+
+    const current = room
+    if (!current || !state.canSpeak) return
+
+    const publication = current.localParticipant.getTrackPublication(Track.Source.Microphone)
+    const track = publication?.track
+    if (!track) return
+
+    const wasOpen = state.micEnabled
+    try {
+      // Dropped and remade: a live track keeps the constraints it was born
+      // with, so re-enabling an existing one would change nothing.
+      await current.localParticipant.unpublishTrack(track, true)
+      await current.localParticipant.setMicrophoneEnabled(true, captureOptions())
+      if (!wasOpen) await current.localParticipant.setMicrophoneEnabled(false)
+      emit({ micEnabled: wasOpen, participants: snapshotParticipants(current) })
+    } catch (error) {
+      emit({ micEnabled: false, micBlocked: true, error: micRefusal(error) })
+    }
+  },
+
   /** For tests and teardown: forget everything without touching a network. */
   reset(): void {
+    detachPushToTalk()
     room = null
     state = IDLE
     for (const listener of listeners) listener()

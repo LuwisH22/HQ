@@ -885,7 +885,13 @@ export const demoProfileService: ProfileService = {
 // --- Channels (Phase 1.5 · B3) ---------------------------------------------
 
 /** The safe subset, mirroring the CHECK constraint on the override table. */
-const OVERRIDABLE = ['channels.view', 'messages.send', 'messages.pin', 'messages.moderate']
+const OVERRIDABLE = [
+  'channels.view',
+  'messages.send',
+  'messages.pin',
+  'messages.moderate',
+  'voice.speak',
+]
 
 /**
  * Faithful port of `can_in_channel()`.
@@ -1573,7 +1579,9 @@ function recountThread(rootId: string): void {
  * "not yours" read identically, so nobody can map the id space by asking.
  */
 export const demoVoiceService = {
-  async roomFor(channelId: string): Promise<{ roomName: string; channelName: string }> {
+  async roomFor(
+    channelId: string,
+  ): Promise<{ roomName: string; channelName: string; canSpeak: boolean }> {
     await latency()
 
     const refuse = (): never => {
@@ -1593,6 +1601,11 @@ export const demoVoiceService = {
     )
     if (!member || !canInChannel(channel!, member, 'channels.view')) refuse()
 
+    // Being heard is a second question, asked of the same helper. A member
+    // without it is in the room and listening, which is a different answer
+    // from being refused.
+    const canSpeak = canInChannel(channel!, member!, 'voice.speak')
+
     recordAudit('voice.join', 'channel', channel!.id, `Joined voice in ${channel!.name}`)
     persist()
 
@@ -1601,6 +1614,7 @@ export const demoVoiceService = {
       // it from two the database issued.
       roomName: `lfghq:${channel!.organizationId}:voice:${channel!.id}`,
       channelName: channel!.name,
+      canSpeak,
     }
   },
 }

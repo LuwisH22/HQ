@@ -138,6 +138,13 @@ export const PERMISSION_CATALOG: readonly PermissionCatalogEntry[] = [
     description: 'Post messages and attachments.',
   },
   {
+    key: 'voice.speak',
+    category: 'Chat',
+    label: 'Speak in voice',
+    description:
+      'Publish a microphone in voice channels. Without it a member can still join and listen.',
+  },
+  {
     key: 'messages.pin',
     category: 'Chat',
     label: 'Pin messages',

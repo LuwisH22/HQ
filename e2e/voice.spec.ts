@@ -297,6 +297,118 @@ test('waits it out when the network goes, rather than giving up', async ({
   await deleteChannel(page, name)
 })
 
+test('holds a key to talk, and only where it should', async ({ page }, testInfo) => {
+  const name = uniqueName('voiceptt', testInfo.project.name)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+  await joinVoice(page, name)
+
+  const bar = controls(page)
+  const you = people(page, name).getByRole('listitem').first()
+
+  // Voice activity to begin with: nobody is surprised by a closed microphone.
+  await expect(bar.getByRole('button', { name: 'Mute microphone' })).toBeVisible()
+
+  await bar.getByRole('button', { name: 'Voice settings' }).click()
+  await page.getByRole('menuitemradio', { name: /Push to talk/ }).click()
+  await expect(page.getByRole('menu', { name: 'Voice settings' })).toHaveCount(0)
+
+  // Turning it on closes the microphone rather than leaving it open.
+  await expect(you).toHaveAttribute('data-participant-state', 'muted')
+  await expect(bar.getByRole('button', { name: /Push to talk is on/ })).toBeDisabled()
+
+  // Held: open. Released: closed. The room is not touched either way.
+  await page.keyboard.down('Space')
+  await expect(you).toHaveAttribute('data-participant-state', /speaking|listening/)
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected')
+
+  await page.keyboard.up('Space')
+  await expect(you).toHaveAttribute('data-participant-state', 'muted')
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected')
+
+  // A window that loses focus mid-press must not leave it open. The listener
+  // is what is being exercised here; a real alt-tab reaches it the same way.
+  await page.keyboard.down('Space')
+  await expect(you).toHaveAttribute('data-participant-state', /speaking|listening/)
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('blur'))
+  })
+  await expect(you).toHaveAttribute('data-participant-state', 'muted')
+  await page.keyboard.up('Space')
+
+  // Back to talking freely, and the microphone opens again.
+  await bar.getByRole('button', { name: 'Voice settings' }).click()
+  await page.getByRole('menuitemradio', { name: /Voice activity/ }).click()
+  await expect(page.getByRole('menu', { name: 'Voice settings' })).toHaveCount(0)
+  await expect(you).toHaveAttribute('data-participant-state', /speaking|listening/)
+  await expect(bar.getByRole('button', { name: 'Mute microphone' })).toBeEnabled()
+
+  await leaveVoice(page)
+
+  // The listeners went with the room: a key pressed afterwards reaches
+  // nothing and reconnects nothing.
+  await page.keyboard.down('Space')
+  await page.keyboard.up('Space')
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'idle')
+
+  await deleteChannel(page, name)
+})
+
+test('remembers how you like to talk, and offers no microphone settings you cannot use', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('voiceset', testInfo.project.name)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+  await joinVoice(page, name)
+
+  await controls(page).getByRole('button', { name: 'Voice settings' }).click()
+
+  // The three the browser actually offers, and no invented fourth.
+  const suppression = page.getByRole('switch', { name: /Noise suppression/ })
+  await expect(suppression).toBeVisible()
+  await expect(page.getByRole('switch', { name: /Echo cancellation/ })).toBeVisible()
+  await expect(page.getByRole('switch', { name: /Automatic gain/ })).toBeVisible()
+  await expect(page.getByText(/sensitivity|threshold/i)).toHaveCount(0)
+
+  await expect(suppression).toBeChecked()
+  await suppression.click()
+  await expect(suppression).not.toBeChecked()
+  // Replacing the microphone track is not leaving the room.
+  await expect(status(page)).toHaveAttribute('data-voice-status', 'connected')
+  await page.keyboard.press('Escape')
+
+  // Kept across a reload, because it is a fact about this headset.
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Join voice' })).toBeVisible({ timeout: 20_000 })
+  await joinVoice(page, name)
+  await controls(page).getByRole('button', { name: 'Voice settings' }).click()
+  await expect(page.getByRole('switch', { name: /Noise suppression/ })).not.toBeChecked()
+
+  // Put back, so the next run starts where this one did.
+  await page.getByRole('switch', { name: /Noise suppression/ }).click()
+  await page.keyboard.press('Escape')
+
+  await leaveVoice(page)
+  await deleteChannel(page, name)
+})
+
+test('offers no volume control for yourself', async ({ page }, testInfo) => {
+  const name = uniqueName('voicevol', testInfo.project.name)
+  await page.goto('/#/')
+  await createChannel(page, name, { kind: 'Voice' })
+  await joinVoice(page, name)
+
+  // Turning your own playback down would silence nothing you can hear. The
+  // control belongs to other people's rows, and there are none here — a
+  // second participant needs a second account.
+  const you = people(page, name).getByRole('listitem').first()
+  await expect(you.getByRole('button', { name: /^Volume for / })).toHaveCount(0)
+
+  await leaveVoice(page)
+  await deleteChannel(page, name)
+})
+
 test('leaves text channels exactly as they were', async ({ page }, testInfo) => {
   const name = uniqueName('voicetext', testInfo.project.name)
   await page.goto('/#/')

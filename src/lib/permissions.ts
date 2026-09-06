@@ -32,6 +32,7 @@ export const PERMISSIONS = [
   'messages.send',
   'messages.pin',
   'messages.moderate',
+  'voice.speak',
 
   'projects.view',
   'projects.create',

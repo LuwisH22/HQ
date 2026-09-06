@@ -2009,6 +2009,41 @@ console.log('\nD1 · voice')
   const textToken = await callVoice({ channelId: probePublic }, auth.session.access_token)
   check('and so is a text channel', textToken.status === 403, String(textToken.status))
 
+  // --- being heard is a second question -----------------------------------
+  //
+  // Only the positive can be posed from here: this session is the owner, who
+  // holds every key by construction, and there is no way to be somebody else.
+  // "A member without voice.speak is seated and given no microphone" lives in
+  // the unit suite, against the port of this same routine.
+  check('the room says whether the caller may speak', typeof grant?.can_speak === 'boolean',
+    String(grant?.can_speak))
+  check('and the owner may', grant?.can_speak === true)
+
+  const { error: overridable } = await supabase.rpc('set_channel_override', {
+    p_channel_id: voiceId,
+    p_role_id: (roles ?? [])[0]?.id,
+    p_permission_key: 'voice.speak',
+    p_effect: 'deny',
+  })
+  // Listen-only is a per-channel decision, the way "may write here" is.
+  check('voice.speak can be denied on one channel', !overridable, overridable?.message ?? '')
+
+  const { error: notOverridable } = await supabase.rpc('set_channel_override', {
+    p_channel_id: voiceId,
+    p_role_id: (roles ?? [])[0]?.id,
+    p_permission_key: 'members.ban',
+    p_effect: 'allow',
+  })
+  // And the subset is still a subset: a channel does not decide who runs the
+  // organization.
+  check('but a permission outside the subset still cannot be',
+    Boolean(notOverridable), notOverridable ? 'refused' : 'ACCEPTED')
+
+  // The owner speaks anyway, because organizations.owner_id says so and no
+  // override reaches that.
+  const { data: afterDeny } = await supabase.rpc('voice_room_for', { p_channel_id: voiceId })
+  check('an override does not reach the owner', (afterDeny ?? [])[0]?.can_speak === true)
+
   const mine = await callVoice({ channelId: voiceId }, auth.session.access_token)
   if (mine.status === 503) {
     console.log(
@@ -2041,6 +2076,31 @@ console.log('\nD1 · voice')
     check('no room administration', !claims?.video?.roomAdmin && !claims?.video?.roomCreate &&
       !claims?.video?.roomList && !claims?.video?.roomRecord)
     check('no data channel', claims?.video?.canPublishData === false)
+    // The grant follows the database, not the request. A caller who says they
+    // may speak is not evidence of anything.
+    check('publishing follows what the database said',
+      claims?.video?.canPublish === (grant?.can_speak === true))
+
+    const injected = await callVoice(
+      {
+        channelId: voiceId,
+        canSpeak: true,
+        canPublish: true,
+        room: 'lfghq:anything:voice:anything',
+        video: { roomAdmin: true },
+      },
+      auth.session.access_token,
+    )
+    const injectedClaims = (() => {
+      try {
+        const [, payload] = String(injected.body.token).split('.')
+        return JSON.parse(Buffer.from(payload, 'base64url').toString())
+      } catch {
+        return null
+      }
+    })()
+    check('and nothing else in the body reaches the token',
+      JSON.stringify(injectedClaims?.video) === JSON.stringify(claims?.video))
 
     const life = Number(claims?.exp ?? 0) - Number(claims?.nbf ?? 0)
     check('and it expires', life > 0 && life <= 900, `${String(life)}s`)

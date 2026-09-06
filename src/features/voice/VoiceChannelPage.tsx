@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Microphone, SpeakerHigh, Users, WarningCircle } from '@phosphor-icons/react'
+import { Ear, Microphone, SpeakerHigh, Users, WarningCircle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/common/states'
@@ -171,6 +171,19 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
 
       {inRoom ? (
         <div className="shrink-0">
+          {!voice.canSpeak ? (
+            <p
+              role="status"
+              className="border-border text-2xs text-muted-foreground flex items-start gap-1.5 border-t px-4 py-2 leading-relaxed"
+            >
+              <Ear className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+              <span>
+                You are listening only. Speaking in this channel needs the “Speak in voice”
+                permission.
+              </span>
+            </p>
+          ) : null}
+
           {voice.micBlocked && voice.error ? (
             <p
               role="status"
@@ -187,6 +200,8 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
           <VoiceControlBar
             micEnabled={voice.micEnabled}
             deafened={voice.deafened}
+            canSpeak={voice.canSpeak}
+            pushToTalk={voice.pushToTalk}
             onToggleMic={() => void voiceService.setMicrophoneEnabled(!voice.micEnabled)}
             onToggleDeafen={() => {
               voiceService.setDeafened(!voice.deafened)

@@ -27,6 +27,7 @@ const OVERRIDABLE: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'messages.send', label: 'Send messages' },
   { key: 'messages.pin', label: 'Pin messages' },
   { key: 'messages.moderate', label: 'Moderate messages' },
+  { key: 'voice.speak', label: 'Speak in voice' },
 ]
 
 const CHOICES: ReadonlyArray<{ value: OverrideEffect | null; label: string }> = [

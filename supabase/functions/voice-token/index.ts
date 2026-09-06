@@ -30,10 +30,15 @@
  * exist.
  *
  * The grant is the smallest one that carries a conversation: join this one
- * room, publish a microphone, subscribe. No room administration, no
- * participant administration, no data channel, no camera, no screen share —
+ * room, subscribe, and — only for somebody the database says may be heard —
+ * publish a microphone. No room administration, no participant
+ * administration, no data channel, no camera, no screen share;
  * `canPublishSources: ['microphone']` is what makes the last two true rather
  * than merely unused by the current client.
+ *
+ * Listen-only is a token that says `canPublish: false`. Not a hidden button:
+ * the media server refuses the track, so a client that has been edited, or
+ * replaced altogether, gets exactly as far as one that has not.
  *
  * TTL is ten minutes. A token is fetched fresh on every connect, so the
  * window in which a leaked one is worth anything is about as long as it takes
@@ -108,6 +113,8 @@ interface VoiceRoom {
   channel_id: string
   channel_name: string
   organization_id: string
+  /** Derived from the caller's own permissions. Never sent by the client. */
+  can_speak: boolean
 }
 
 Deno.serve(async (req: Request) => {
@@ -208,15 +215,19 @@ Deno.serve(async (req: Request) => {
     ttl: TOKEN_TTL_SECONDS,
   })
 
+  // The database's answer, not the caller's. Nothing in the request body
+  // reaches this line.
+  const canSpeak = room.can_speak === true
+
   accessToken.addGrant({
     roomJoin: true,
     // This room. Not a pattern, not a prefix, not a list.
     room: room.room_name,
-    canPublish: true,
+    canPublish: canSpeak,
     canSubscribe: true,
-    // Everything below is off on purpose. Voice is step 1; a token that could
-    // already carry a camera or a screen would be a decision made by accident.
-    canPublishSources: [TrackSource.MICROPHONE],
+    // A microphone or nothing. Never a camera, never a screen — not even for
+    // somebody who may speak.
+    canPublishSources: canSpeak ? [TrackSource.MICROPHONE] : [],
     canPublishData: false,
     canUpdateOwnMetadata: false,
     roomCreate: false,
@@ -235,6 +246,9 @@ Deno.serve(async (req: Request) => {
       room: room.room_name,
       identity: user.id,
       channelName: room.channel_name,
+      // So the interface can say why the microphone is not there. The token is
+      // what enforces it; this is what explains it.
+      canSpeak,
       expiresInSeconds: TOKEN_TTL_SECONDS,
     },
     200,

@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { VoiceSettingsMenu } from './VoiceSettingsMenu'
 
 /**
  * Microphone, deafen, leave.
@@ -27,6 +28,7 @@ function ControlButton({
   label,
   active,
   destructive,
+  disabled,
   onClick,
   children,
 }: {
@@ -34,6 +36,7 @@ function ControlButton({
   /** On, in the sense of "this state is doing something to you". */
   active?: boolean
   destructive?: boolean
+  disabled?: boolean
   onClick: () => void
   children: React.ReactNode
 }) {
@@ -45,6 +48,7 @@ function ControlButton({
           variant={destructive ? 'destructive' : 'ghost'}
           aria-label={label}
           aria-pressed={destructive ? undefined : Boolean(active)}
+          disabled={disabled}
           onClick={onClick}
           className={cn(
             ACTION,
@@ -66,12 +70,17 @@ function ControlButton({
 export function VoiceControlBar({
   micEnabled,
   deafened,
+  canSpeak,
+  pushToTalk,
   onToggleMic,
   onToggleDeafen,
   onLeave,
 }: {
   micEnabled: boolean
   deafened: boolean
+  /** The server's answer. False draws no microphone, because there is none. */
+  canSpeak: boolean
+  pushToTalk: boolean
   onToggleMic: () => void
   onToggleDeafen: () => void
   onLeave: () => void
@@ -82,13 +91,22 @@ export function VoiceControlBar({
       role="group"
       aria-label="Voice controls"
     >
-      <ControlButton
-        label={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
-        active={!micEnabled}
-        onClick={onToggleMic}
-      >
-        {micEnabled ? <Microphone aria-hidden="true" /> : <MicrophoneSlash aria-hidden="true" />}
-      </ControlButton>
+      {canSpeak ? (
+        <ControlButton
+          label={
+            pushToTalk
+              ? 'Push to talk is on — hold the key to speak'
+              : micEnabled
+                ? 'Mute microphone'
+                : 'Unmute microphone'
+          }
+          active={!micEnabled}
+          disabled={pushToTalk}
+          onClick={onToggleMic}
+        >
+          {micEnabled ? <Microphone aria-hidden="true" /> : <MicrophoneSlash aria-hidden="true" />}
+        </ControlButton>
+      ) : null}
 
       <ControlButton
         label={deafened ? 'Undeafen' : 'Deafen'}
@@ -97,6 +115,8 @@ export function VoiceControlBar({
       >
         {deafened ? <SpeakerSlash aria-hidden="true" /> : <SpeakerHigh aria-hidden="true" />}
       </ControlButton>
+
+      <VoiceSettingsMenu canSpeak={canSpeak} />
 
       <div className="flex-1" />
 

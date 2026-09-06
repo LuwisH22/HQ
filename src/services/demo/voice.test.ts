@@ -175,6 +175,80 @@ describe('who is let in', () => {
   })
 })
 
+describe('being heard, which is a second question', () => {
+  it('lets a member with the key speak', async () => {
+    const id = await asOwner(voiceChannel)
+    await actAsNonOwner()
+    await expect(demoVoiceService.roomFor(id)).resolves.toMatchObject({ canSpeak: true })
+  })
+
+  it('lets the owner speak, from the organization and not from a role', async () => {
+    const id = await voiceChannel()
+    await expect(demoVoiceService.roomFor(id)).resolves.toMatchObject({ canSpeak: true })
+  })
+
+  it('seats a member without it, and gives them no microphone', async () => {
+    const id = await asOwner(voiceChannel)
+    const target = await actAsNonOwner()
+
+    await asOwner(() => demoChannelService.setOverride(id, target.role.id, 'voice.speak', 'deny'))
+
+    db().currentUserId = target.userId
+    // Still in the room. That is the point: listen-only is a way of being
+    // present, not a refusal.
+    await expect(demoVoiceService.roomFor(id)).resolves.toMatchObject({
+      canSpeak: false,
+      channelName: 'team voice',
+    })
+  })
+
+  it('is decided per channel, so one room can be listen-only and another not', async () => {
+    const quiet = await asOwner(voiceChannel)
+    const loud = await asOwner(() =>
+      demoChannelService.createChannel(ORG, {
+        name: 'second voice',
+        topic: null,
+        categoryId: null,
+        isPrivate: false,
+        type: 'voice',
+      }),
+    )
+    const target = await actAsNonOwner()
+
+    await asOwner(() =>
+      demoChannelService.setOverride(quiet, target.role.id, 'voice.speak', 'deny'),
+    )
+
+    db().currentUserId = target.userId
+    await expect(demoVoiceService.roomFor(quiet)).resolves.toMatchObject({ canSpeak: false })
+    await expect(demoVoiceService.roomFor(loud)).resolves.toMatchObject({ canSpeak: true })
+  })
+
+  it('does not read it from the name of a role', async () => {
+    // Two roles, the same permissions, different names. A rule that consulted
+    // the name would answer differently for one of them.
+    const id = await asOwner(voiceChannel)
+    const asPlayer = await actAsNonOwner('Player')
+    const player = (await demoVoiceService.roomFor(id)).canSpeak
+
+    await asOwner(() => actAsNonOwner('Coach'))
+    db().currentUserId = asPlayer.userId
+    const coach = (await demoVoiceService.roomFor(id)).canSpeak
+
+    expect(player).toBe(true)
+    expect(coach).toBe(true)
+  })
+
+  it('refuses a suspended member the room, never mind the microphone', async () => {
+    const id = await asOwner(voiceChannel)
+    const target = await actAsNonOwner()
+    await asOwner(() => demoOrganizationService.suspendMember(target.id, 'Testing', 7))
+
+    db().currentUserId = target.userId
+    await expect(demoVoiceService.roomFor(id)).rejects.toThrow(REFUSED)
+  })
+})
+
 describe('what cannot be asked for', () => {
   it('refuses a channel that does not exist', async () => {
     await expect(demoVoiceService.roomFor('00000000-0000-4000-8000-000000000000')).rejects.toThrow(
