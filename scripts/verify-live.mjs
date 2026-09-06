@@ -1498,12 +1498,24 @@ console.log('\nC3 · a direct message is not a channel')
     check('nor removed', (stillThere ?? []).length === 2,
       `${String((stillThere ?? []).length)} rows`)
 
+    // Everything this probe writes into the conversation, so that cleanup
+    // can be about what it made rather than about what it finds.
+    //
+    // The conversation is a REAL one: there is one other member, a direct
+    // conversation is unique per pair, and start_direct_message is idempotent
+    // — so the probe cannot help but land in the correspondence those two
+    // people actually use. Sweeping it by conversation_id deleted their
+    // messages, and left the ones it had no right to delete standing as a
+    // failure.
+    const probeMessageIds = new Set()
+
     // --- exactly one context ------------------------------------------------
     const { data: sent, error: sendError } = await supabase
       .from('messages')
       .insert({ conversation_id: first, author_id: userId, body: 'verify-live direct probe' })
       .select('id, channel_id, conversation_id')
       .single()
+    if (sent?.id) probeMessageIds.add(sent.id)
     check('a direct message can be sent', !sendError, sendError?.message ?? '')
     check('and carries no channel', sent?.channel_id === null, String(sent?.channel_id))
 
@@ -1603,6 +1615,7 @@ console.log('\nC3 · a direct message is not a channel')
         .insert({ conversation_id: first, author_id: userId, body: `@${handle} probe` })
         .select('id')
         .single()
+      if (named2?.id) probeMessageIds.add(named2.id)
 
       const { data: mentions } = await supabase
         .from('message_mentions').select('user_id').eq('message_id', named2?.id)
@@ -1625,10 +1638,17 @@ console.log('\nC3 · a direct message is not a channel')
       .insert({ conversation_id: first, author_id: userId, body: 'verify-live root' })
       .select('id')
       .single()
-    await supabase.from('messages').insert({
-      conversation_id: first, author_id: userId,
-      body: 'verify-live reply', parent_message_id: root?.id,
-    })
+    if (root?.id) probeMessageIds.add(root.id)
+
+    const { data: threadReply } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: first, author_id: userId,
+        body: 'verify-live reply', parent_message_id: root?.id,
+      })
+      .select('id')
+      .single()
+    if (threadReply?.id) probeMessageIds.add(threadReply.id)
 
     await supabase.rpc('delete_message', { p_message_id: root?.id })
     const { data: keptRoot } = await supabase
@@ -1652,14 +1672,17 @@ console.log('\nC3 · a direct message is not a channel')
       goneCheck ? 'a placeholder was left behind' : '')
 
     // --- cleanup ------------------------------------------------------------
-    const { data: leftovers } = await supabase
-      .from('messages').select('id').eq('conversation_id', first)
-    for (const row of leftovers ?? []) {
-      await supabase.rpc('delete_message', { p_message_id: row.id })
+    //
+    // By id, never by conversation. A direct conversation belongs to the two
+    // people in it, and most of what is in this one was said by them.
+    for (const id of probeMessageIds) {
+      await supabase.rpc('delete_message', { p_message_id: id })
     }
     const { data: after } = await supabase
-      .from('messages').select('id').eq('conversation_id', first)
-    check('the probe leaves no messages behind', (after ?? []).length === 0,
+      .from('messages')
+      .select('id')
+      .in('id', [...probeMessageIds])
+    check('the probe takes back everything it said', (after ?? []).length === 0,
       `${String((after ?? []).length)} left`)
   }
 }
