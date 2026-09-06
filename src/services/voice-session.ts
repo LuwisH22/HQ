@@ -57,6 +57,15 @@ export interface VoiceState {
   canSpeak: boolean
   /** Holding a key to talk, rather than being open by default. */
   pushToTalk: boolean
+  /**
+   * The browser is refusing to play the room.
+   *
+   * Autoplay policy: a tab that has had no interaction may not make noise.
+   * Joining is a click, so this is normally false — but a session restored
+   * into a background tab, or a browser with stricter rules, can land here,
+   * and silence with no explanation is the worst version of it.
+   */
+  audioBlocked: boolean
   error: string | null
 }
 
@@ -70,6 +79,7 @@ export const IDLE_VOICE: VoiceState = {
   micBlocked: false,
   canSpeak: false,
   pushToTalk: false,
+  audioBlocked: false,
   error: null,
 }
 
@@ -123,6 +133,8 @@ export const voiceCommands = {
     noiseSuppression?: boolean
     autoGainControl?: boolean
   }): Promise<void> => (await media()).setAudioProcessing(next),
+  /** Ask the browser again, from a click, to let the room be heard. */
+  unblockAudio: async (): Promise<void> => (await media()).unblockAudio(),
 
   /**
    * End a call because the account did, not because a page did.

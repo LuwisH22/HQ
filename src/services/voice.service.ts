@@ -6,6 +6,7 @@ import {
   Track,
   type AudioCaptureOptions,
   type Participant,
+  type RemoteTrack,
   type RemoteTrackPublication,
   type RoomOptions,
 } from 'livekit-client'
@@ -13,6 +14,7 @@ import { getSupabase } from '@/lib/supabase'
 import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
 import { demoVoiceService } from '@/services/demo'
+import { clearAudioSink, isPlaying, playRemoteAudio, stopRemoteAudio } from './voice-audio'
 import {
   emitVoice,
   IDLE_VOICE,
@@ -126,26 +128,44 @@ function remoteAudio(current: Room): RemoteTrackPublication[] {
 }
 
 /**
- * Put the listener's own volume on a track that has just arrived.
+ * How loud this listener has set somebody, if they have.
  *
- * LiveKit's `setVolume` writes the volume of the audio elements it attached,
- * so this is playback on this machine and nothing else: the person being
- * turned down is not told, their microphone is untouched, and everybody else
- * hears them exactly as before.
+ * Absent means untouched, which is unity. A stored zero is a deliberate mute
+ * and is left alone.
  */
-function applyVolume(publication: RemoteTrackPublication, identity: string): void {
-  const track = publication.track
-  if (!(track instanceof RemoteAudioTrack)) return
-
+function volumeFor(identity: string): number {
   const stored = useVoiceStore.getState().volumes[identity]
-  track.setVolume(stored === undefined ? 1 : clampVolume(stored))
+  return stored === undefined ? 1 : clampVolume(stored)
 }
 
-function applyAllVolumes(current: Room): void {
+/** Give a track an element to come out of. This is what makes it audible. */
+function playRemote(track: RemoteTrack, identity: string): void {
+  if (!(track instanceof RemoteAudioTrack)) return
+  // Once, however many ways the event arrives: a second element on the same
+  // track is the same voice played twice.
+  if (isPlaying(track)) return
+  playRemoteAudio(track, identity, volumeFor(identity))
+}
+
+function stopRemote(track: RemoteTrack): void {
+  if (!(track instanceof RemoteAudioTrack)) return
+  stopRemoteAudio(track)
+}
+
+/**
+ * Attach everything already being published when you arrive.
+ *
+ * LiveKit fires TrackSubscribed for tracks that existed before you joined, so
+ * this is belt and braces — but a room that is silent for the person who
+ * walked into it late is exactly the failure this path is for.
+ */
+function playEverything(current: Room): void {
   for (const participant of current.remoteParticipants.values()) {
     for (const publication of participant.trackPublications.values()) {
-      if (publication.kind === Track.Kind.Audio) {
-        applyVolume(publication, participant.identity)
+      if (publication.kind !== Track.Kind.Audio) continue
+      const track = publication.track
+      if (track instanceof RemoteAudioTrack && !isPlaying(track)) {
+        playRemoteAudio(track, participant.identity, volumeFor(participant.identity))
       }
     }
   }
@@ -249,13 +269,21 @@ function wire(next: Room): void {
       refresh()
     })
     .on(RoomEvent.TrackUnpublished, refresh)
-    .on(RoomEvent.TrackSubscribed, (_track, publication, participant) => {
-      // A track that has just arrived plays at whatever this listener last
-      // set them to, which is the only place that preference is applied.
-      applyVolume(publication, participant.identity)
+    .on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
+      // The moment sound becomes audible. Subscribing gets the bytes; this
+      // gets them out of a speaker.
+      playRemote(track, participant.identity)
       refresh()
     })
-    .on(RoomEvent.TrackUnsubscribed, refresh)
+    .on(RoomEvent.TrackUnsubscribed, (track) => {
+      // Which is also how deafen goes quiet: unsubscribing fires this.
+      stopRemote(track)
+      refresh()
+    })
+    .on(RoomEvent.AudioPlaybackStatusChanged, () => {
+      // The browser deciding whether this tab may make noise.
+      emit({ audioBlocked: !next.canPlaybackAudio })
+    })
     .on(RoomEvent.TrackMuted, refresh)
     .on(RoomEvent.TrackUnmuted, refresh)
     .on(RoomEvent.LocalTrackPublished, refresh)
@@ -278,9 +306,10 @@ function wire(next: Room): void {
     })
     .on(RoomEvent.Disconnected, () => {
       // Whatever ended it — a click, a dropped network, a server giving up —
-      // the state says idle and the room object goes.
+      // the state says idle, and the room and its sound both go.
       if (room !== next) return
       room = null
+      clearAudioSink()
       emit({ ...IDLE })
     })
 }
@@ -426,8 +455,20 @@ export const voiceService = {
       throw error
     }
 
-    applyAllVolumes(next)
-    emit({ status: 'connected', participants: snapshotParticipants(next) })
+    // Anyone already talking when you walked in.
+    playEverything(next)
+    emit({
+      status: 'connected',
+      audioBlocked: !next.canPlaybackAudio,
+      participants: snapshotParticipants(next),
+    })
+
+    // Joining was a click, which is the gesture browsers want before a page
+    // may make noise. Spending it here is what keeps the room audible.
+    if (!next.canPlaybackAudio) {
+      await next.startAudio().catch(() => undefined)
+      emit({ audioBlocked: !next.canPlaybackAudio })
+    }
 
     // Listen-only. The token refuses a microphone, so asking the browser for
     // one would be a permission prompt in aid of nothing.
@@ -470,6 +511,8 @@ export const voiceService = {
     // LiveKit stops and unpublishes the local tracks as part of this, which is
     // what actually turns the microphone light off.
     if (current) await current.disconnect().catch(() => undefined)
+    // And the elements it was coming out of.
+    clearAudioSink()
     emit({ ...IDLE })
   },
 
@@ -594,9 +637,23 @@ export const voiceService = {
     }
   },
 
+  /**
+   * Ask the browser again, from a click, to let the room be heard.
+   *
+   * Autoplay is granted to a gesture, so this exists to be wired to a button
+   * rather than called on a timer.
+   */
+  async unblockAudio(): Promise<void> {
+    const current = room
+    if (!current) return
+    await current.startAudio().catch(() => undefined)
+    emit({ audioBlocked: !current.canPlaybackAudio })
+  },
+
   /** For tests and teardown: forget everything without touching a network. */
   reset(): void {
     detachPushToTalk()
+    clearAudioSink()
     room = null
     emit({ ...IDLE })
   },

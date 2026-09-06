@@ -560,9 +560,13 @@ console.log('\n8 · the direct message topic')
     if (dmMessage?.id) {
       await author.rpc('delete_message', { p_message_id: dmMessage.id })
     }
+    // By id, never by conversation. This is a real conversation between two
+    // real people, and most of what is in it was said by them — counting the
+    // room to decide whether the probe tidied up reports their messages as
+    // its own litter, and would delete the ones it had the right to.
     const { data: left } = await author
-      .from('messages').select('id').eq('conversation_id', conversationId)
-    check('the probe leaves no direct messages behind', (left ?? []).length === 0,
+      .from('messages').select('id').in('id', [dmMessage?.id ?? ''])
+    check('the probe takes back everything it said', (left ?? []).length === 0,
       `${String((left ?? []).length)} left`)
   }
 }

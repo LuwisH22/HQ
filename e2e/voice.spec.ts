@@ -132,6 +132,12 @@ test('joins, seats the person who joined, and takes the microphone back on leave
   await expect(rows.first()).toHaveAttribute('data-participant-local', 'true')
   await expect(rows.first()).toHaveAccessibleName(/\(you\)/)
 
+  // The browser is letting this tab make noise. Joining was a click, which is
+  // the gesture autoplay wants; if it were not, the room would be silent and
+  // the only clue would be this affordance.
+  await expect(controls(page).getByRole('button', { name: 'Enable audio' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Enable audio/ })).toHaveCount(0)
+
   // The microphone published, and is not muted.
   await expect.poll(() => liveTracks(page), { timeout: 15_000 }).toBeGreaterThan(0)
   await expect(rows.first()).toHaveAttribute('data-participant-state', /speaking|listening/)

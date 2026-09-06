@@ -1,6 +1,13 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Ear, Microphone, SpeakerHigh, Users, WarningCircle } from '@phosphor-icons/react'
+import {
+  Ear,
+  Microphone,
+  SpeakerHigh,
+  SpeakerSlash,
+  Users,
+  WarningCircle,
+} from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/common/states'
@@ -179,6 +186,24 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
                 permission.
               </span>
             </p>
+          ) : null}
+
+          {voice.audioBlocked ? (
+            <div
+              role="status"
+              className="border-border text-2xs text-muted-foreground flex items-center gap-2 border-t px-4 py-2 leading-relaxed"
+            >
+              <SpeakerSlash className="text-destructive size-3.5 shrink-0" aria-hidden="true" />
+              <span className="flex-1">Your browser is not letting this tab play sound yet.</span>
+              <Button
+                size="sm"
+                variant="secondary"
+                aria-label="Enable audio"
+                onClick={() => void voiceCommands.unblockAudio()}
+              >
+                Enable audio
+              </Button>
+            </div>
           ) : null}
 
           {voice.micBlocked && voice.error ? (

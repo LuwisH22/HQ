@@ -6,6 +6,7 @@ import {
   MicrophoneSlash,
   PhoneDisconnect,
   SpeakerHigh,
+  SpeakerSimpleX,
   SpeakerSlash,
 } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
@@ -141,6 +142,15 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
           )}
         </BarButton>
       )}
+
+      {voice.audioBlocked ? (
+        <BarButton
+          label="Enable audio — your browser is not letting this tab play sound"
+          onClick={() => void voiceCommands.unblockAudio()}
+        >
+          <SpeakerSimpleX aria-hidden="true" />
+        </BarButton>
+      ) : null}
 
       <BarButton label="Leave voice" destructive onClick={() => void voiceCommands.disconnect()}>
         <PhoneDisconnect aria-hidden="true" />

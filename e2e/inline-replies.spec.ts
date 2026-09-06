@@ -34,7 +34,10 @@ const rowFor = (page: Page, body: string) =>
 async function send(page: Page, place: string, body: string): Promise<void> {
   await page.getByRole('textbox', { name: `Message ${place}` }).fill(body)
   await page.getByRole('button', { name: 'Send message' }).click()
-  await expect(page.getByText(body, { exact: true })).toBeVisible({ timeout: 20_000 })
+  // On the row rather than on the text: once anything replies to this
+  // message, its words appear a second time inside the quote above the reply,
+  // and a bare text match cannot tell the two apart.
+  await expect(rowFor(page, body).first()).toBeVisible({ timeout: 20_000 })
 }
 
 /** Start a reply on the message with this body. */
@@ -49,7 +52,7 @@ async function replyTo(page: Page, place: string, target: string, body: string):
   await startReply(page, target)
   await page.getByRole('textbox', { name: `Message ${place}` }).fill(body)
   await page.getByRole('button', { name: 'Send message' }).click()
-  await expect(page.getByText(body, { exact: true })).toBeVisible({ timeout: 20_000 })
+  await expect(rowFor(page, body).first()).toBeVisible({ timeout: 20_000 })
 }
 
 test('replies in the room and never opens the thread panel', async ({ page }, testInfo) => {

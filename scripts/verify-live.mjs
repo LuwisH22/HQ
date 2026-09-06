@@ -1350,9 +1350,29 @@ console.log('\nC3 · mentions are recorded, and only for people who could read t
     .select('user_id, profile:profiles!organization_members_user_id_fkey ( display_name, email )')
     .neq('user_id', userId)
 
-  const other = (roster ?? [])[0]
-  const otherProfile = Array.isArray(other?.profile) ? other?.profile[0] : other?.profile
-  const handle = otherProfile?.display_name ?? (otherProfile?.email ?? '').split('@')[0] ?? ''
+  // A handle the database can actually resolve.
+  //
+  // tg_message_mentions matches `@([A-Za-z0-9._-]{2,40})`, so a display name
+  // with a space in it — "Adit si keren" — is not one, and the email's local
+  // part is. Picking the first member and hoping made this section fail the
+  // day somebody joined with a two-word name, which is a fact about the probe
+  // rather than about mentions.
+  const mentionable = (profile) => {
+    const display = profile?.display_name ?? ''
+    if (/^[A-Za-z0-9._-]{2,40}$/.test(display)) return display
+    const local = (profile?.email ?? '').split('@')[0] ?? ''
+    return /^[A-Za-z0-9._-]{2,40}$/.test(local) ? local : ''
+  }
+
+  const withHandle = (roster ?? [])
+    .map((member) => ({
+      member,
+      handle: mentionable(Array.isArray(member.profile) ? member.profile[0] : member.profile),
+    }))
+    .find((candidate) => candidate.handle !== '')
+
+  const other = withHandle?.member
+  const handle = withHandle?.handle ?? ''
 
   check('a second member exists to be mentioned', Boolean(other) && handle !== '',
     handle === '' ? 'ADD A SECOND MEMBER — this section proves nothing alone' : handle)
