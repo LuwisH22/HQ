@@ -165,7 +165,9 @@ function CategorySection({
 /** Section heading with an optional trailing action. */
 function SectionHeading({ label, action }: { label: string; action?: React.ReactNode }) {
   return (
-    <div className="flex h-6 items-center gap-1 px-2 pt-5">
+    // 20 above, 8 below: a section boundary is a bigger gap than the one
+    // between an eyebrow and the rows it names.
+    <div className="mt-5 mb-2 flex h-5 items-center gap-1 px-2">
       <p className="display-eyebrow text-3xs text-muted-foreground flex-1">{label}</p>
       {action}
     </div>

@@ -101,7 +101,7 @@ export function DirectMessageNav({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <>
-      <div className="flex h-6 items-center gap-1 px-2 pt-5">
+      <div className="mt-5 mb-2 flex h-5 items-center gap-1 px-2">
         <p className="display-eyebrow text-3xs text-muted-foreground flex-1">Direct messages</p>
         <StartDirectMessage onNavigate={onNavigate} />
       </div>

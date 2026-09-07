@@ -158,7 +158,7 @@ export function MobileNavDrawer() {
 
             <ChannelNav onNavigate={() => setOpen(false)} />
 
-            <p className="display-eyebrow text-3xs text-muted-foreground px-1 pt-4 pb-1">
+            <p className="display-eyebrow text-3xs text-muted-foreground mt-5 mb-2 flex h-5 items-center px-1">
               Organization
             </p>
             <ul className="space-y-0.5">

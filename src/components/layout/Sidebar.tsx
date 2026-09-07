@@ -131,7 +131,7 @@ export function Sidebar() {
         {organizationItems.length > 0 ? (
           <>
             {!collapsed ? (
-              <p className="display-eyebrow text-3xs text-muted-foreground flex h-6 items-center px-2 pt-5">
+              <p className="display-eyebrow text-3xs text-muted-foreground mt-5 mb-2 flex h-5 items-center px-2">
                 Organization
               </p>
             ) : (
