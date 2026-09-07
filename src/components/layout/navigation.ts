@@ -96,7 +96,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: CalendarBlank,
     requires: ['calendar.view'],
     phase: 4,
-    shipped: false,
+    shipped: true,
     group: 'organization',
   },
   {

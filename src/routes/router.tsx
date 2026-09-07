@@ -63,7 +63,7 @@ const ProjectsPage = lazy(() =>
   import('@/features/placeholder/pages').then((m) => ({ default: m.ProjectsPage })),
 )
 const CalendarPage = lazy(() =>
-  import('@/features/placeholder/pages').then((m) => ({ default: m.CalendarPage })),
+  import('@/features/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })),
 )
 const TeamsPage = lazy(() =>
   import('@/features/placeholder/pages').then((m) => ({ default: m.TeamsPage })),
