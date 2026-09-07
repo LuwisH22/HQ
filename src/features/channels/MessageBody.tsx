@@ -81,7 +81,9 @@ export function MessageBody({
       // The words themselves, as against the line above them quoting somebody
       // else: a row can hold both, and they are not the same text.
       data-message-body=""
-      className="text-foreground/92 text-sm leading-relaxed break-words whitespace-pre-wrap"
+      // Chat is the app's main reading surface, so it gets the highest
+      // contrast and a step more size than the rest of the interface.
+      className="text-foreground text-base break-words whitespace-pre-wrap"
     >
       {segments.map((part, index) =>
         part.mentioned ? (
@@ -89,13 +91,10 @@ export function MessageBody({
             key={index}
             // Recorded, not guessed: the attribute says a row backs this span.
             data-mention={part.isMe ? 'self' : 'other'}
-            // Being named yourself is worth noticing across a room; naming
-            // somebody else is worth reading as a name and nothing louder.
-            className={
-              part.isMe
-                ? 'bg-primary/22 text-foreground rounded-xs px-0.5 font-medium'
-                : 'text-accent-text font-medium'
-            }
+            // One chip, whoever is named: tint behind it, the accent's light
+            // tone on it. Being named yourself is said by the row instead — a
+            // blade in the gutter — rather than by a louder word in the line.
+            className="bg-primary/14 text-accent-text rounded-xs px-1 font-medium"
           >
             {part.text}
           </span>
@@ -103,7 +102,7 @@ export function MessageBody({
           <span key={index}>{part.text}</span>
         ),
       )}
-      {edited ? <span className="text-3xs text-muted-foreground/60"> (edited)</span> : null}
+      {edited ? <span className="text-2xs text-muted-foreground font-mono"> (edited)</span> : null}
     </p>
   )
 }

@@ -8,11 +8,12 @@ import {
   CaretDoubleRight,
   ChatTeardropText,
   MagnifyingGlass,
+  PushPin,
   X,
 } from '@phosphor-icons/react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage, AvatarStatus } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/common/states'
@@ -30,6 +31,7 @@ import { useWorkspace } from '@/hooks/use-workspace'
 import { useIsDesktop } from '@/hooks/use-media-query'
 import { useUiStore } from '@/stores/ui.store'
 import { cn } from '@/lib/utils'
+import { presenceFrom, presenceLabel } from '@/utils/presence'
 import { useConversation } from './use-conversations'
 import { useConversationRealtime } from './use-conversation-realtime'
 import { TypingIndicator } from './TypingIndicator'
@@ -142,6 +144,18 @@ export function ConversationChatPage() {
         .map((profile) => profile.displayName ?? profile.fullName ?? profile.email)
     )
   }, [realtime.typingUserIds, membersQuery.data])
+
+  // The header's presence and title come out of the roster this page has
+  // already fetched for the typing indicator — no second request, and nothing
+  // invented: a member the roster does not carry simply has neither.
+  const other = useMemo(
+    () =>
+      conversation?.otherUserId
+        ? (membersQuery.data ?? []).find((m) => m.userId === conversation.otherUserId)
+        : undefined,
+    [membersQuery.data, conversation?.otherUserId],
+  )
+  const otherPresence = other ? presenceFrom(other.profile.lastSeenAt) : null
 
   const messages = useMemo(() => messagesQuery.data?.messages ?? [], [messagesQuery.data])
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages])
@@ -380,37 +394,63 @@ export function ConversationChatPage() {
   return (
     <div className="flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-border bg-surface/40 flex shrink-0 items-center gap-3 border-b px-4 py-2.5 sm:px-6">
+        {/* The channel header's sibling: one line, 48 tall, the same
+            controls. A tile with presence stands where the hash would be. */}
+        <header className="border-border-subtle flex h-12 shrink-0 items-center gap-2 border-b px-4 sm:px-5">
           <Button asChild size="icon-sm" variant="ghost" className="-ml-1 md:hidden">
             <Link to="/channels" aria-label="Back to channels">
-              <ArrowLeft className="size-4" aria-hidden="true" />
+              <ArrowLeft aria-hidden="true" />
             </Link>
           </Button>
 
-          <Avatar className="size-7 shrink-0">
-            {conversation.otherAvatarUrl ? (
-              <AvatarImage src={conversation.otherAvatarUrl} alt="" />
+          <span className="relative shrink-0">
+            <Avatar className="size-6 rounded-sm">
+              {conversation.otherAvatarUrl ? (
+                <AvatarImage src={conversation.otherAvatarUrl} alt="" />
+              ) : null}
+              <AvatarFallback className="rounded-sm">
+                {initialsFor({ displayName: name })}
+              </AvatarFallback>
+            </Avatar>
+            {otherPresence ? (
+              <AvatarStatus status={otherPresence} className="size-2 border-[1.5px]" />
             ) : null}
-            <AvatarFallback>{initialsFor({ displayName: name })}</AvatarFallback>
-          </Avatar>
+          </span>
 
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm leading-tight font-semibold">{name}</h1>
-            <p className="text-2xs text-muted-foreground mt-0.5 truncate">Direct message</p>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h1 className="min-w-0 shrink-0 truncate text-[15px] leading-none font-semibold">
+              {name}
+            </h1>
+            <span className="text-muted-foreground/50 shrink-0" aria-hidden="true">
+              ·
+            </span>
+            <p className="text-muted-foreground hidden truncate text-sm sm:block">
+              {other?.profile.title ??
+                (otherPresence ? presenceLabel(otherPresence) : 'Direct message')}
+            </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-0.5">
+            {pinnedQuery.data && pinnedQuery.data.length > 0 ? (
+              <span
+                className="text-2xs text-muted-foreground mr-1 flex items-center gap-1 font-mono tabular-nums"
+                aria-label={`${String(pinnedQuery.data.length)} pinned`}
+              >
+                <PushPin weight="fill" className="text-brass size-3" aria-hidden="true" />
+                {pinnedQuery.data.length}
+              </span>
+            ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  size="icon"
+                  size="icon-sm"
                   variant="ghost"
                   onClick={() => setSearchOpen((open) => !open)}
                   aria-label="Search this conversation"
                   aria-expanded={searchOpen}
-                  className="text-muted-foreground hover:text-foreground size-8"
+                  className="text-muted-foreground hover:text-foreground"
                 >
-                  <MagnifyingGlass className="size-[18px]" aria-hidden="true" />
+                  <MagnifyingGlass aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Search messages</TooltipContent>
@@ -419,17 +459,17 @@ export function ConversationChatPage() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  size="icon"
+                  size="icon-sm"
                   variant="ghost"
                   onClick={toggleDetails}
                   aria-label={detailsOpen ? 'Close panel' : 'Open panel'}
                   aria-expanded={detailsOpen}
-                  className="text-muted-foreground hover:text-foreground size-8"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   {detailsOpen ? (
-                    <CaretDoubleRight className="size-[18px]" aria-hidden="true" />
+                    <CaretDoubleRight aria-hidden="true" />
                   ) : (
-                    <CaretDoubleLeft className="size-[18px]" aria-hidden="true" />
+                    <CaretDoubleLeft aria-hidden="true" />
                   )}
                 </Button>
               </TooltipTrigger>
@@ -455,18 +495,18 @@ export function ConversationChatPage() {
               own padding. See ChannelChatPage. */}
           <div className="flex min-h-full w-full flex-col justify-end py-4">
             {messagesQuery.isPending ? (
-              <div className="px-4">
+              <div className="px-4 sm:px-5">
                 <CardSkeleton lines={6} />
               </div>
             ) : messagesQuery.isError ? (
-              <div className="px-4">
+              <div className="px-4 sm:px-5">
                 <ErrorState
                   error={messagesQuery.error}
                   onRetry={() => void messagesQuery.refetch()}
                 />
               </div>
             ) : messages.length === 0 ? (
-              <div className="px-4">
+              <div className="px-4 sm:px-5">
                 <EmptyState
                   icon={ChatTeardropText}
                   title="No messages yet"

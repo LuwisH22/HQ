@@ -32,11 +32,11 @@ export function MentionAutocomplete({
 
   return (
     <div
-      className="border-border bg-popover absolute bottom-full left-0 z-30 mb-1 w-[min(320px,100%)] overflow-hidden rounded-md border shadow-md"
+      className="border-border bg-popover absolute bottom-full left-0 z-30 mb-1 w-[min(320px,100%)] overflow-hidden rounded-md border shadow-lg"
       role="listbox"
       aria-label="Mention a member"
     >
-      <p className="text-3xs text-foreground/42 border-border border-b px-3 py-1.5 font-semibold tracking-[0.1em] uppercase">
+      <p className="display-eyebrow text-3xs text-muted-foreground border-border-subtle border-b px-3 py-1.5">
         {term === '' ? 'Members' : `Matching “${term}”`}
       </p>
       <ul className="max-h-56 overflow-y-auto py-1">
@@ -59,17 +59,17 @@ export function MentionAutocomplete({
               onMouseEnter={() => onHover(index)}
               className={cn(
                 'flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors',
-                index === activeIndex ? 'bg-primary/14' : 'hover:bg-foreground/7',
+                index === activeIndex ? 'bg-surface-active' : 'hover:bg-accent',
               )}
             >
-              <Avatar className="size-6 shrink-0" aria-hidden="true">
+              <Avatar className="size-6 shrink-0 rounded-sm" aria-hidden="true">
                 {candidate.avatarUrl ? <AvatarImage src={candidate.avatarUrl} alt="" /> : null}
-                <AvatarFallback>
+                <AvatarFallback className="rounded-sm">
                   {initialsFor({ displayName: candidate.displayName })}
                 </AvatarFallback>
               </Avatar>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs leading-tight font-medium">
+                <span className="block truncate font-mono text-xs leading-tight font-medium">
                   {candidate.handle}
                 </span>
                 <span className="text-2xs text-muted-foreground block truncate">

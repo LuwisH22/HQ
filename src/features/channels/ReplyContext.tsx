@@ -29,7 +29,9 @@ export function ReplyContextLine({
   return (
     <span
       className={cn(
-        'text-2xs text-muted-foreground/75 flex min-w-0 items-center gap-1 leading-4',
+        // A hairline connector rather than an outline: the quote hangs off the
+        // line above it, which is where the message it answers is.
+        'text-muted-foreground border-border-subtle flex min-w-0 items-center gap-1.5 border-l pl-2 text-xs leading-4',
         className,
       )}
     >
@@ -39,7 +41,9 @@ export function ReplyContextLine({
         <span className="truncate italic">Message unavailable</span>
       ) : (
         <>
-          <span className="text-foreground/70 shrink-0 font-medium">{context.authorName}</span>
+          <span className="text-secondary-foreground shrink-0 font-medium">
+            {context.authorName}
+          </span>
           <span className="shrink-0 opacity-50" aria-hidden="true">
             ·
           </span>

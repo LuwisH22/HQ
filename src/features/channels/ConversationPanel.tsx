@@ -18,11 +18,9 @@ import type { Message } from '@/services/message.service'
 function SectionHeading({ label, count }: { label: string; count?: number }) {
   return (
     <div className="flex items-baseline gap-2 px-4 pt-5 pb-2">
-      <h2 className="text-3xs text-foreground/42 font-semibold tracking-[0.1em] uppercase">
-        {label}
-      </h2>
+      <h2 className="display-eyebrow text-3xs text-muted-foreground">{label}</h2>
       {count === undefined ? null : (
-        <span className="text-3xs text-foreground/30 tabular-nums">{count}</span>
+        <span className="text-2xs text-muted-foreground/70 font-mono tabular-nums">{count}</span>
       )}
     </div>
   )
@@ -39,10 +37,10 @@ function ActivityRow({
 }) {
   return (
     <div className="flex items-start gap-2.5 px-4 py-1.5">
-      <Icon className="text-muted-foreground/60 mt-px size-4 shrink-0" aria-hidden="true" />
+      <Icon className="text-muted-foreground mt-px size-4 shrink-0" aria-hidden="true" />
       <div className="min-w-0">
-        <p className="text-xs leading-tight font-medium">{label}</p>
-        <p className="text-2xs text-muted-foreground/70 mt-0.5 leading-relaxed">{detail}</p>
+        <p className="text-xs font-medium">{label}</p>
+        <p className="text-2xs text-muted-foreground mt-0.5">{detail}</p>
       </div>
     </div>
   )
@@ -79,17 +77,21 @@ export function ConversationPanelContent({
           <Skeleton className="h-8 w-full rounded-md" />
         </div>
       ) : pinned.length === 0 ? (
-        <p className="text-muted-foreground/70 text-2xs px-4 leading-relaxed">
-          Nothing pinned yet.
-        </p>
+        <p className="text-muted-foreground text-2xs px-4">Nothing pinned yet.</p>
       ) : (
         <ul aria-label="Pinned messages" className="px-2">
           {pinned.map((message) => (
-            <li key={message.id} className="flex items-start gap-2 rounded-md px-2 py-1.5">
-              <PushPin className="text-accent-text mt-px size-3.5 shrink-0" aria-hidden="true" />
+            <li key={message.id} className="flex items-start gap-2 rounded-sm px-2 py-1.5">
+              <PushPin
+                weight="fill"
+                className="text-brass mt-0.5 size-3 shrink-0"
+                aria-hidden="true"
+              />
               <div className="min-w-0">
-                <p className="text-xs leading-relaxed break-words">{message.body}</p>
-                <p className="text-2xs text-muted-foreground/70 truncate">{message.authorName}</p>
+                <p className="text-secondary-foreground line-clamp-2 text-xs break-words">
+                  {message.body}
+                </p>
+                <p className="text-2xs text-muted-foreground truncate">{message.authorName}</p>
               </div>
             </li>
           ))}
@@ -98,17 +100,17 @@ export function ConversationPanelContent({
 
       <SectionHeading label="Members" count={2} />
       <ul aria-label="Conversation members" className="px-2">
-        <li className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
-          <Avatar className="size-7 shrink-0">
+        <li className="flex h-8 items-center gap-2.5 rounded-sm px-2">
+          <Avatar className="size-6 shrink-0 rounded-sm">
             {conversation.otherAvatarUrl ? (
               <AvatarImage src={conversation.otherAvatarUrl} alt="" />
             ) : null}
-            <AvatarFallback>{initialsFor({ displayName: conversation.otherName })}</AvatarFallback>
+            <AvatarFallback className="rounded-sm">
+              {initialsFor({ displayName: conversation.otherName })}
+            </AvatarFallback>
           </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs leading-tight font-medium">{conversation.otherName}</p>
-            <p className="text-2xs text-muted-foreground truncate">Direct message</p>
-          </div>
+          <p className="min-w-0 flex-1 truncate text-xs font-medium">{conversation.otherName}</p>
+          <span className="text-2xs text-muted-foreground shrink-0">Direct message</span>
         </li>
       </ul>
 

@@ -42,12 +42,12 @@ interface Pending {
 }
 
 /**
- * The three actions are one size: 36px, a step above the system's 32px button
- * so a thumb can find them, and short of the 40px that would make a compact
- * composer look like a toolbar. The icon is sized on the button because the
- * variant's own `[&_svg]` rule outranks a class on the icon itself.
+ * The three actions are one size: Blackout's 28px icon button on a wide
+ * screen, kept at 32 on a phone where the same control is a thumb target. The
+ * icon is sized on the button because the variant's own `[&_svg]` rule
+ * outranks a class on the icon itself.
  */
-const ACTION_BUTTON = 'size-9 [&_svg]:size-[18px]'
+const ACTION_BUTTON = 'size-8 sm:size-7 [&_svg]:size-[18px]'
 
 const MAX_LENGTH = 4000
 /** Roughly seven lines. Past that the field scrolls instead of growing. */
@@ -229,7 +229,7 @@ export function Composer({
 
   if (disabled) {
     return (
-      <div className="px-4 pb-4" role="group" aria-label={`Composer for ${placeName}`}>
+      <div className="px-4 pb-4 sm:px-5" role="group" aria-label={`Composer for ${placeName}`}>
         <p className="border-border text-muted-foreground text-2xs rounded-md border border-dashed px-3 py-2.5 text-center">
           {disabledReason ?? 'You do not have permission to send messages here.'}
         </p>
@@ -238,9 +238,13 @@ export function Composer({
   }
 
   return (
-    <div className="relative px-4 pb-3" role="group" aria-label={`Composer for ${placeName}`}>
+    <div
+      className="@container relative px-4 pb-3 sm:px-5 sm:pb-4"
+      role="group"
+      aria-label={`Composer for ${placeName}`}
+    >
       {menuOpen ? (
-        <div className="absolute inset-x-4 bottom-full">
+        <div className="absolute inset-x-4 bottom-full sm:inset-x-5">
           <MentionAutocomplete
             candidates={menu.matches}
             term={query.term}
@@ -251,14 +255,19 @@ export function Composer({
         </div>
       ) : null}
       <div
+        // The bordered box, which is what a reader sees as the composer.
+        data-composer-box=""
         className={cn(
-          'border-input bg-background @container rounded-md border transition-[border-color] duration-[140ms]',
-          'focus-within:border-primary',
+          // L1 with a default border, and the border is the ring: focus moves
+          // it to the accent's light tone rather than drawing a second line
+          // outside it.
+          'border-border bg-surface @container min-h-11 rounded-md border transition-[border-color] duration-[120ms]',
+          'focus-within:border-accent-text',
         )}
       >
         {replyingTo && onCancelReply ? (
           <div
-            className="border-border flex items-center gap-2 border-b px-2.5 py-1.5"
+            className="border-border-subtle flex items-center gap-2 border-b px-2.5 py-1.5"
             aria-label="Replying to"
           >
             <ReplyContextLine context={replyingTo} className="min-w-0 flex-1" />
@@ -276,14 +285,14 @@ export function Composer({
 
         {pending.length > 0 ? (
           <ul
-            className="border-border flex flex-wrap gap-1.5 border-b px-2 py-2"
+            className="border-border-subtle flex flex-wrap gap-1.5 border-b px-2 py-2"
             aria-label="Attachments to send"
           >
             {pending.map((file) => (
               <li
                 key={file.key}
                 className={cn(
-                  'border-border bg-surface/60 flex max-w-[240px] items-center gap-2 rounded-sm border px-2 py-1',
+                  'border-border-subtle bg-elevated flex max-w-[240px] items-center gap-2 rounded-sm border px-2 py-1',
                   file.status === 'failed' && 'border-destructive/60',
                 )}
               >
@@ -300,7 +309,7 @@ export function Composer({
                 )}
                 <span className="min-w-0">
                   <span className="block truncate text-xs leading-tight">{file.name}</span>
-                  <span className="text-3xs text-muted-foreground block">
+                  <span className="text-2xs text-muted-foreground block font-mono">
                     {file.status === 'uploading'
                       ? 'Uploading…'
                       : file.status === 'failed'
@@ -329,7 +338,7 @@ export function Composer({
           maxLength={MAX_LENGTH}
           placeholder={placeKind === 'channel' ? `Message #${placeName}` : `Message ${placeName}`}
           aria-label={`Message ${placeName}`}
-          className="max-h-[168px] min-h-[38px] border-0 bg-transparent px-3 py-2.5 focus-visible:border-0"
+          className="max-h-[168px] min-h-[38px] border-0 bg-transparent px-3 py-2.5 text-base focus-visible:border-0"
           onChange={(event) => {
             setDraft(event.target.value)
             setCaret(event.target.selectionStart)
@@ -375,18 +384,9 @@ export function Composer({
           }}
         />
 
-        <div className="flex items-center gap-2 px-2 pb-2">
-          {/* The hint is a courtesy, and it stops being one the moment it
-              wraps: the thread panel is 320px and cannot hold both it and the
-              actions on one line. Measured against the composer itself rather
-              than the window, because the same composer is wide in the channel
-              and narrow in the panel beside it. */}
-          <p className="text-3xs text-muted-foreground/60 min-w-0 flex-1 pl-1 @max-[320px]:hidden">
-            <kbd className="font-sans font-medium">Enter</kbd> to send ·{' '}
-            <kbd className="font-sans font-medium">Shift + Enter</kbd> for a new line
-          </p>
+        <div className="flex items-center justify-end gap-2 px-2 pb-2">
           {draft.length > MAX_LENGTH - 200 ? (
-            <span className="text-3xs text-muted-foreground shrink-0 tabular-nums">
+            <span className="text-2xs text-muted-foreground shrink-0 font-mono tabular-nums">
               {String(MAX_LENGTH - draft.length)}
             </span>
           ) : null}
@@ -431,11 +431,21 @@ export function Composer({
             ) : null}
 
             <Button
+              variant="ghost"
               loading={sending}
               // Nothing said, or a file still on its way up.
               disabled={draft.trim().length === 0 || uploading}
               aria-label="Send message"
-              className={cn(ACTION_BUTTON, 'px-0')}
+              // Ghost until there is something to send, and then the accent's
+              // light tone — the only colour in the composer, and only when
+              // pressing it would do something.
+              className={cn(
+                ACTION_BUTTON,
+                'px-0',
+                draft.trim().length === 0
+                  ? 'text-muted-foreground'
+                  : 'text-accent-text hover:text-accent-glow',
+              )}
               onClick={submit}
             >
               {/* The spinner takes the icon's place rather than sitting beside
@@ -445,6 +455,15 @@ export function Composer({
           </div>
         </div>
       </div>
+
+      {/* Under the composer rather than inside it: the box holds the message
+          and its actions, and the courtesy sits below them. It hides itself
+          where the box is too narrow to spare the line — the thread panel is
+          288px and cannot hold both this and the actions. */}
+      <p className="text-2xs text-muted-foreground/70 mt-1 px-1 font-mono @max-[320px]:hidden">
+        <kbd className="font-mono">Enter</kbd> to send ·{' '}
+        <kbd className="font-mono">Shift + Enter</kbd> for a new line
+      </p>
     </div>
   )
 }

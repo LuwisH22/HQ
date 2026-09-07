@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
 import { Hash, LockSimple, Microphone, MonitorPlay, PushPin } from '@phosphor-icons/react'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage, AvatarStatus } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { initialsFor } from '@/services/profile.service'
 import type { Channel } from '@/services/channel.service'
 import type { Message } from '@/services/message.service'
 import type { OrganizationMember } from '@/services/organization.service'
 import { cn } from '@/lib/utils'
+import { presenceFrom } from '@/utils/presence'
 import { VoiceActivity } from '@/features/voice/VoiceActivity'
 
 /**
@@ -21,17 +22,15 @@ import { VoiceActivity } from '@/features/voice/VoiceActivity'
  * arrives if RLS allowed it. Nothing here re-decides that.
  */
 
-const PANEL_WIDTH = 'w-[320px]'
+const PANEL_WIDTH = 'w-72'
 
 /** Uppercase eyebrow with an optional count beside it. */
 function SectionHeading({ label, count }: { label: string; count?: number }) {
   return (
     <div className="flex items-baseline gap-2 px-4 pt-5 pb-2">
-      <h2 className="text-3xs text-foreground/42 font-semibold tracking-[0.1em] uppercase">
-        {label}
-      </h2>
+      <h2 className="display-eyebrow text-3xs text-muted-foreground">{label}</h2>
       {count === undefined ? null : (
-        <span className="text-3xs text-foreground/30 tabular-nums">{count}</span>
+        <span className="text-2xs text-muted-foreground/70 font-mono tabular-nums">{count}</span>
       )}
     </div>
   )
@@ -49,10 +48,10 @@ function ActivityRow({
 }) {
   return (
     <div className="flex items-start gap-2.5 px-4 py-1.5">
-      <Icon className="text-muted-foreground/60 mt-px size-4 shrink-0" aria-hidden="true" />
+      <Icon className="text-muted-foreground mt-px size-4 shrink-0" aria-hidden="true" />
       <div className="min-w-0">
-        <p className="text-xs leading-tight font-medium">{label}</p>
-        <p className="text-2xs text-muted-foreground/70 mt-0.5 leading-relaxed">{detail}</p>
+        <p className="text-xs font-medium">{label}</p>
+        <p className="text-2xs text-muted-foreground mt-0.5">{detail}</p>
       </div>
     </div>
   )
@@ -72,6 +71,19 @@ export function ChannelPanelContent({
   pinned: Message[]
   pinnedPending: boolean
 }) {
+  // Online first, then the rest in the order they arrived. Presence is the
+  // only thing the panel re-orders by; who is in the channel was decided in
+  // Postgres and is not re-decided here.
+  const roster = useMemo(
+    () =>
+      [...members].sort((a, b) => {
+        const rank = (member: OrganizationMember) =>
+          presenceFrom(member.profile.lastSeenAt) === 'offline' ? 1 : 0
+        return rank(a) - rank(b)
+      }),
+    [members],
+  )
+
   // The roster this panel already loaded, keyed by user id: a voice
   // participant is an identity, and this is what puts a face on one.
   const avatars = useMemo(() => {
@@ -86,9 +98,9 @@ export function ChannelPanelContent({
       <div className="px-4">
         <p className="flex items-center gap-1.5 text-sm leading-tight font-semibold">
           {channel.isPrivate ? (
-            <LockSimple className="text-muted-foreground size-3.5 shrink-0" aria-label="Private" />
+            <LockSimple className="text-accent-text size-3.5 shrink-0" aria-label="Private" />
           ) : (
-            <Hash className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
+            <Hash className="text-accent-text size-3.5 shrink-0" aria-hidden="true" />
           )}
           <span className="truncate">{channel.name}</span>
         </p>
@@ -103,17 +115,21 @@ export function ChannelPanelContent({
           <Skeleton className="h-8 w-full rounded-md" />
         </div>
       ) : pinned.length === 0 ? (
-        <p className="text-muted-foreground/70 text-2xs px-4 leading-relaxed">
-          Nothing pinned yet.
-        </p>
+        <p className="text-muted-foreground text-2xs px-4">Nothing pinned yet.</p>
       ) : (
         <ul aria-label="Pinned messages" className="px-2">
           {pinned.map((message) => (
-            <li key={message.id} className="flex items-start gap-2 rounded-md px-2 py-1.5">
-              <PushPin className="text-accent-text mt-px size-3.5 shrink-0" aria-hidden="true" />
+            <li key={message.id} className="flex items-start gap-2 rounded-sm px-2 py-1.5">
+              <PushPin
+                weight="fill"
+                className="text-brass mt-0.5 size-3 shrink-0"
+                aria-hidden="true"
+              />
               <div className="min-w-0">
-                <p className="text-xs leading-relaxed break-words">{message.body}</p>
-                <p className="text-2xs text-muted-foreground/70 truncate">{message.authorName}</p>
+                <p className="text-secondary-foreground line-clamp-2 text-xs break-words">
+                  {message.body}
+                </p>
+                <p className="text-2xs text-muted-foreground truncate">{message.authorName}</p>
               </div>
             </li>
           ))}
@@ -124,7 +140,7 @@ export function ChannelPanelContent({
       {channel.isPrivate ? (
         // Now the truth rather than a caveat: channel_member_ids resolves this
         // list through the same rules that govern the channel itself.
-        <p className="text-2xs text-muted-foreground/70 px-4 pb-1 leading-relaxed">
+        <p className="text-2xs text-muted-foreground px-4 pb-1">
           Private channel. Only the roles allowed in are listed.
         </p>
       ) : null}
@@ -137,20 +153,28 @@ export function ChannelPanelContent({
         </div>
       ) : (
         <ul aria-label="Channel members" className="px-2">
-          {members.map((member) => (
-            <li key={member.id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
-              <Avatar className="size-7 shrink-0">
-                {member.profile.avatarUrl ? (
-                  <AvatarImage src={member.profile.avatarUrl} alt="" />
-                ) : null}
-                <AvatarFallback>{initialsFor(member.profile)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs leading-tight font-medium">
-                  {member.profile.displayName ?? member.profile.fullName ?? member.profile.email}
-                </p>
-                <p className="text-2xs text-muted-foreground truncate">{member.role.name}</p>
-              </div>
+          {roster.map((member) => (
+            <li key={member.id} className="flex h-8 items-center gap-2.5 rounded-sm px-2">
+              <span className="relative shrink-0">
+                <Avatar className="size-6 rounded-sm">
+                  {member.profile.avatarUrl ? (
+                    <AvatarImage src={member.profile.avatarUrl} alt="" />
+                  ) : null}
+                  <AvatarFallback className="rounded-sm">
+                    {initialsFor(member.profile)}
+                  </AvatarFallback>
+                </Avatar>
+                <AvatarStatus
+                  status={presenceFrom(member.profile.lastSeenAt)}
+                  className="size-2 border-[1.5px]"
+                />
+              </span>
+              <p className="min-w-0 flex-1 truncate text-xs font-medium">
+                {member.profile.displayName ?? member.profile.fullName ?? member.profile.email}
+              </p>
+              <span className="text-2xs text-muted-foreground shrink-0 truncate">
+                {member.role.name}
+              </span>
             </li>
           ))}
         </ul>
@@ -201,7 +225,7 @@ export function ChannelPanelColumn({
     >
       <aside
         aria-label="Channel details"
-        className={cn('border-border bg-surface/40 h-full border-l', PANEL_WIDTH)}
+        className={cn('border-border bg-background h-full border-l', PANEL_WIDTH)}
       >
         {children}
       </aside>

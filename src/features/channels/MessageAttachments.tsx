@@ -48,10 +48,10 @@ function AttachmentCard({
     <>
       <Icon className="text-muted-foreground size-5 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs leading-tight font-medium">
+        <span className="block truncate text-sm leading-tight font-medium">
           {attachment.fileName}
         </span>
-        <span className="text-2xs text-muted-foreground block">
+        <span className="text-2xs text-muted-foreground block font-mono">
           {formatBytes(attachment.byteSize)}
         </span>
       </span>
@@ -60,8 +60,8 @@ function AttachmentCard({
   )
 
   const className = cn(
-    'border-border bg-surface/60 flex w-full max-w-sm items-center gap-2.5 rounded-md border px-3 py-2',
-    'transition-colors duration-[140ms]',
+    'border-border-subtle bg-elevated flex h-10 w-full max-w-sm items-center gap-2.5 rounded-md border px-2.5',
+    'transition-colors duration-[120ms]',
     href
       ? 'hover:bg-elevated focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none'
       : 'opacity-60',
@@ -140,7 +140,7 @@ export function MessageAttachments({ attachments }: { attachments: readonly Mess
                   src={preview}
                   alt={attachment.fileName}
                   loading="lazy"
-                  className="border-border max-h-80 max-w-full rounded-md border object-contain"
+                  className="border-border-subtle max-h-80 w-auto max-w-[min(400px,100%)] rounded-md border object-contain"
                 />
               </a>
             ) : (

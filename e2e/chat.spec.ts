@@ -295,7 +295,7 @@ test('keeps a run of messages compact and a long one intact', async ({ page }, t
 
     const line = (li: HTMLElement) => {
       const body = li.querySelector<HTMLElement>('p.whitespace-pre-wrap')
-      const gutter = li.querySelector<HTMLElement>('div.w-8 > span')
+      const gutter = li.querySelector<HTMLElement>('[data-message-gutter] > span')
       const lineHeight = body ? Number.parseFloat(getComputedStyle(body).lineHeight) : 0
       return {
         text: li.innerText,
@@ -384,8 +384,8 @@ test('keeps the hover timestamp in the gutter, clear of the words', async ({ pag
   await row.hover()
 
   const measured = await row.evaluate((li) => {
-    const stamp = li.querySelector<HTMLElement>('div.w-8 > span')
-    const gutter = li.querySelector<HTMLElement>('div.w-8')
+    const stamp = li.querySelector<HTMLElement>('[data-message-gutter] > span')
+    const gutter = li.querySelector<HTMLElement>('[data-message-gutter]')
     const body = li.querySelector<HTMLElement>('p.whitespace-pre-wrap')
     if (!stamp || !gutter || !body) return null
 
@@ -454,7 +454,7 @@ test('gives the conversation the whole width of the column it is in', async ({
       // The bordered box, which is what a reader sees as the composer; the
       // group around it spans the column and carries the gutter as padding,
       // exactly as the message row does.
-      const composer = group?.querySelector('div.border-input') ?? null
+      const composer = group?.querySelector('[data-composer-box]') ?? null
       if (!column || !row || !composer) return null
 
       const columnBox = column.getBoundingClientRect()
@@ -468,8 +468,10 @@ test('gives the conversation the whole width of the column it is in', async ({
         row: Math.round(rowBox.width),
         rowLeftGap: Math.round(rowBox.left - columnBox.left),
         rowRightGap: Math.round(columnBox.right - rowBox.right),
-        // Inside the row, which is where the words actually start.
-        textGutter: Number.parseFloat(rowStyle.paddingLeft),
+        // Inside the row, which is where the words actually start. The band is
+        // inset from the column, so the gutter is that inset plus the padding.
+        textGutter:
+          Number.parseFloat(rowStyle.marginLeft) + Number.parseFloat(rowStyle.paddingLeft),
         composerLeftGap: Math.round(composerBox.left - columnBox.left),
         composerRightGap: Math.round(columnBox.right - composerBox.right),
       }
@@ -478,15 +480,17 @@ test('gives the conversation the whole width of the column it is in', async ({
   const before = await layout()
   if (!before) throw new Error('the conversation was not on screen')
 
-  // The row is the column: no centred box, no dead margin either side. This is
-  // what a `max-width` on the wrapper would break, and it broke it silently —
-  // at 1440px the clamp does not bite, so only a wide window showed it.
-  expect(before.row).toBe(before.column)
-  expect(before.rowLeftGap).toBe(0)
-  expect(before.rowRightGap).toBe(0)
+  // The row tracks the column: no centred box, no dead margin either side.
+  // This is what a `max-width` on the wrapper would break, and it broke it
+  // silently — at 1440px the clamp does not bite, so only a wide window showed
+  // it. The hover band is inset a token from each edge and nothing more, so
+  // the two gaps are equal and small.
+  expect(before.rowLeftGap).toBe(before.rowRightGap)
+  expect(before.rowLeftGap).toBeLessThanOrEqual(8)
+  expect(before.row).toBe(before.column - before.rowLeftGap - before.rowRightGap)
 
   // A gutter, though: the words must not touch the edges.
-  expect(before.textGutter).toBeGreaterThanOrEqual(12)
+  expect(before.textGutter).toBeGreaterThanOrEqual(16)
   expect(before.textGutter).toBeLessThanOrEqual(20)
 
   // And the composer keeps the same gutter as the rows above it, on both sides.
@@ -504,7 +508,8 @@ test('gives the conversation the whole width of the column it is in', async ({
     if (!wide) throw new Error('the conversation was not on screen')
 
     expect(wide.column).toBeGreaterThan(before.column)
-    expect(wide.row).toBe(wide.column)
+    expect(wide.row).toBe(wide.column - wide.rowLeftGap - wide.rowRightGap)
+    expect(wide.rowLeftGap).toBe(wide.rowRightGap)
     expect(wide.composerLeftGap).toBe(wide.composerRightGap)
     expect(wide.composerLeftGap).toBeLessThanOrEqual(20)
 

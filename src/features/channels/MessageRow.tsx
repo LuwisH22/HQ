@@ -110,21 +110,41 @@ export function MessageRow({
     !removed &&
     (actions.canEdit || actions.canPin || actions.canDelete || actions.canReact || canReply)
 
+  // Read off the rows the database recorded, the same ones the body highlights
+  // from. Nothing here parses the text, so a message can only look like it
+  // names you if `message_mentions` says it does.
+  const mentionsMe = currentUserId !== null && mentions.some((m) => m.userId === currentUserId)
+
   return (
     <li
       data-message-id={message.id}
       data-highlighted={highlighted || undefined}
       className={cn(
-        'group relative flex gap-3 px-4 transition-colors duration-[120ms]',
-        'hover:bg-foreground/4',
-        grouped ? 'py-0.5' : 'mt-3 py-1 first:mt-0',
-        message.pinnedAt ? 'bg-primary/6 hover:bg-primary/9' : null,
+        // The band is the row, inset 8px from the column's edges: text lands
+        // at 20 on a wide screen and 16 on a phone, and the hover fill is the
+        // width of the conversation rather than a card floating in it.
+        'group relative mx-2 flex gap-3 rounded-md pr-2 pl-2 transition-colors duration-[120ms] sm:pl-3',
+        'hover:bg-surface',
+        grouped ? 'py-0.5' : 'mt-2.5 py-0.5 first:mt-0',
+        // Being named is worth noticing across a room: a blade in the gutter
+        // and the quietest possible tint behind the words.
+        mentionsMe && !removed ? 'bg-primary/6 hover:bg-primary/10' : null,
+        message.pinnedAt ? 'bg-brass/5 hover:bg-brass/8' : null,
         // Where a jump landed. It fades on its own; nothing has to be pressed
         // to dismiss it.
-        highlighted ? 'bg-primary/12 hover:bg-primary/12' : null,
+        highlighted ? 'bg-primary/14 hover:bg-primary/14' : null,
       )}
     >
-      <div className="relative w-8 shrink-0">
+      {mentionsMe && !removed ? (
+        <span
+          aria-hidden="true"
+          className="bg-accent-text absolute top-1/2 -left-0.5 h-4 w-0.5 -translate-y-1/2 rounded-full"
+        />
+      ) : null}
+      {/* The avatar column, and the hover timestamp's home. Named, because
+          measuring it by its width class made a spacing change a test
+          failure. */}
+      <div data-message-gutter="" className="relative w-9 shrink-0">
         {grouped ? (
           // Out of flow, never wrapped, and anchored by its right edge only.
           //
@@ -137,29 +157,35 @@ export function MessageRow({
           // With only `right` set the box sizes to its text and grows the
           // other way, into the padding the row already has — away from the
           // words rather than over them, whatever the locale writes.
-          <span className="text-3xs text-muted-foreground/0 group-hover:text-muted-foreground/60 absolute top-[3px] right-0 text-right leading-5 whitespace-nowrap tabular-nums transition-colors">
+          <span className="text-2xs text-muted-foreground/0 group-hover:text-muted-foreground absolute top-px right-0 text-right font-mono leading-[22px] whitespace-nowrap tabular-nums transition-colors">
             {shortTime(message.createdAt)}
           </span>
         ) : (
-          <Avatar className="size-8">
+          <Avatar className="size-9 rounded-md">
             {message.authorAvatarUrl ? <AvatarImage src={message.authorAvatarUrl} alt="" /> : null}
-            <AvatarFallback>{initialsFor({ displayName: message.authorName })}</AvatarFallback>
+            <AvatarFallback className="rounded-md">
+              {initialsFor({ displayName: message.authorName })}
+            </AvatarFallback>
           </Avatar>
         )}
       </div>
 
       <div className="min-w-0 flex-1">
         {grouped ? null : (
-          <p className="flex items-baseline gap-2">
-            <span className="text-foreground text-sm leading-5 font-semibold">
+          <p className="flex items-baseline gap-2 leading-[18px]">
+            <span className="text-foreground text-base leading-[18px] font-semibold">
               {message.authorName}
             </span>
-            <span className="text-3xs text-muted-foreground/70 tabular-nums">
+            {message.pinnedAt ? (
+              <PushPin
+                weight="fill"
+                className="text-brass size-3 self-center"
+                aria-label="Pinned"
+              />
+            ) : null}
+            <span className="text-2xs text-muted-foreground font-mono tabular-nums">
               {shortTime(message.createdAt)}
             </span>
-            {message.pinnedAt ? (
-              <PushPin className="text-accent-text size-3" aria-label="Pinned" />
-            ) : null}
           </p>
         )}
 
@@ -170,7 +196,7 @@ export function MessageRow({
             <button
               type="button"
               onClick={onJumpToParent}
-              className="hover:bg-foreground/7 focus-visible:ring-ring -mx-1 mb-0.5 flex w-full min-w-0 rounded-sm px-1 py-px text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              className="hover:bg-accent mb-0.5 flex w-full min-w-0 rounded-sm py-px text-left transition-colors duration-[120ms]"
               aria-label={
                 replyContext === null
                   ? 'Go to the message this replies to'
@@ -186,9 +212,7 @@ export function MessageRow({
 
         {removed ? (
           <>
-            <p className="text-muted-foreground/60 text-sm leading-relaxed italic">
-              This message was deleted.
-            </p>
+            <p className="text-muted-foreground text-base italic">This message was deleted.</p>
             {onOpenThread ? <ThreadSummary message={message} onOpen={onOpenThread} /> : null}
           </>
         ) : editing ? (
@@ -242,7 +266,7 @@ export function MessageRow({
       {showActions && !editing ? (
         <div
           className={cn(
-            'border-border bg-surface absolute -top-3 right-3 flex items-center gap-0.5 rounded-md border p-0.5',
+            'border-border bg-popover absolute -top-3.5 right-2 flex items-center gap-0.5 rounded-sm border p-0.5 shadow-lg',
             'opacity-0 transition-opacity duration-[120ms]',
             'group-focus-within:opacity-100 group-hover:opacity-100',
           )}
@@ -253,11 +277,11 @@ export function MessageRow({
             <Button
               size="icon-sm"
               variant="ghost"
-              className="text-muted-foreground hover:text-foreground size-6"
+              className="text-muted-foreground hover:text-foreground"
               aria-label={`Reply to ${message.authorName}`}
               onClick={onReply}
             >
-              <ArrowBendUpLeft className="size-3.5" aria-hidden="true" />
+              <ArrowBendUpLeft aria-hidden="true" />
             </Button>
           ) : null}
 
@@ -265,11 +289,11 @@ export function MessageRow({
             <Button
               size="icon-sm"
               variant="ghost"
-              className="text-muted-foreground hover:text-foreground size-6"
+              className="text-muted-foreground hover:text-foreground"
               aria-label={message.pinnedAt ? 'Unpin message' : 'Pin message'}
               onClick={onTogglePin}
             >
-              <PushPin className="size-3.5" aria-hidden="true" />
+              <PushPin aria-hidden="true" />
             </Button>
           ) : null}
 
@@ -278,10 +302,10 @@ export function MessageRow({
               <Button
                 size="icon-sm"
                 variant="ghost"
-                className="text-muted-foreground hover:text-foreground size-6"
+                className="text-muted-foreground hover:text-foreground"
                 aria-label={`Actions for message from ${message.authorName}`}
               >
-                <DotsThree className="size-4" aria-hidden="true" />
+                <DotsThree aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
@@ -332,10 +356,10 @@ export function DayDivider({ date }: { date: string }) {
       : day.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
-    <li className="flex items-center gap-3 px-4 pt-5 pb-1" aria-hidden="true">
-      <span className="border-border flex-1 border-t" />
-      <span className="text-3xs text-muted-foreground/70 font-medium tracking-wide">{label}</span>
-      <span className="border-border flex-1 border-t" />
+    <li className="mx-2 flex items-center gap-3 px-2 pt-5 pb-5 sm:px-3" aria-hidden="true">
+      <span className="border-border-subtle flex-1 border-t" />
+      <span className="text-2xs text-muted-foreground font-mono">{label}</span>
+      <span className="border-border-subtle flex-1 border-t" />
     </li>
   )
 }

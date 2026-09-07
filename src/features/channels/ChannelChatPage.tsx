@@ -10,6 +10,7 @@ import {
   Hash,
   LockSimple,
   MagnifyingGlass,
+  PushPin,
   X,
 } from '@phosphor-icons/react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
@@ -383,54 +384,70 @@ export function ChannelChatPage() {
   return (
     <div className="flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Two lines, not one: the topic is what the channel is for, and
-            squeezing it beside the name meant it was usually truncated away. */}
-        <header className="border-border bg-surface/40 flex shrink-0 items-center gap-3 border-b px-4 py-2.5 sm:px-6">
+        {/* One line, 48 tall: the name, then the topic after a dot in muted.
+            The hash is the only accent in the header, and it is what says
+            which channel this is. */}
+        <header className="border-border-subtle flex h-12 shrink-0 items-center gap-2 border-b px-4 sm:px-5">
           <Button asChild size="icon-sm" variant="ghost" className="-ml-1 md:hidden">
             <Link to="/channels" aria-label="Back to channels">
-              <ArrowLeft className="size-4" aria-hidden="true" />
+              <ArrowLeft aria-hidden="true" />
             </Link>
           </Button>
 
-          <div className="min-w-0 flex-1">
-            <h1 className="flex items-center gap-1.5 text-sm leading-tight font-semibold">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h1 className="flex min-w-0 shrink-0 items-center gap-1.5 text-[15px] leading-none font-semibold">
               {channel.isPrivate ? (
-                <LockSimple
-                  className="text-muted-foreground size-3.5 shrink-0"
-                  aria-label="Private"
-                />
+                <LockSimple className="text-accent-text size-4 shrink-0" aria-label="Private" />
               ) : (
-                <Hash className="text-muted-foreground size-3.5 shrink-0" aria-hidden="true" />
+                <Hash className="text-accent-text size-4 shrink-0" aria-hidden="true" />
               )}
               <span className="truncate">{channel.name}</span>
-              {channel.archivedAt ? <Badge variant="warning">Archived</Badge> : null}
             </h1>
+            {channel.archivedAt ? <Badge variant="warning">Archived</Badge> : null}
             {channel.topic ? (
-              <p className="text-2xs text-muted-foreground mt-0.5 truncate">{channel.topic}</p>
+              <>
+                <span className="text-muted-foreground/50 shrink-0" aria-hidden="true">
+                  ·
+                </span>
+                <p className="text-muted-foreground hidden truncate text-sm sm:block">
+                  {channel.topic}
+                </p>
+              </>
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-0.5">
+            {/* What the panel holds, said in the header: a count, not a
+                control. Pinning is still done from the message itself. */}
+            {pinnedQuery.data && pinnedQuery.data.length > 0 ? (
+              <span
+                className="text-2xs text-muted-foreground mr-1 flex items-center gap-1 font-mono tabular-nums"
+                aria-label={`${String(pinnedQuery.data.length)} pinned`}
+              >
+                <PushPin weight="fill" className="text-brass size-3" aria-hidden="true" />
+                {pinnedQuery.data.length}
+              </span>
+            ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  size="icon"
+                  size="icon-sm"
                   variant="ghost"
                   onClick={() => setSearchOpen((open) => !open)}
                   aria-label="Search this channel"
                   aria-expanded={searchOpen}
-                  className="text-muted-foreground hover:text-foreground size-8"
+                  className="text-muted-foreground hover:text-foreground"
                 >
-                  <MagnifyingGlass className="size-[18px]" aria-hidden="true" />
+                  <MagnifyingGlass aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Search messages</TooltipContent>
             </Tooltip>
 
             {canManage ? (
-              <Button asChild size="icon" variant="ghost" className="text-muted-foreground size-8">
+              <Button asChild size="icon-sm" variant="ghost" className="text-muted-foreground">
                 <Link to="/settings/channels" aria-label="Channel settings">
-                  <Gear className="size-[18px]" aria-hidden="true" />
+                  <Gear aria-hidden="true" />
                 </Link>
               </Button>
             ) : null}
@@ -438,17 +455,17 @@ export function ChannelChatPage() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  size="icon"
+                  size="icon-sm"
                   variant="ghost"
                   onClick={toggleDetails}
                   aria-label={detailsOpen ? 'Close panel' : 'Open panel'}
                   aria-expanded={detailsOpen}
-                  className="text-muted-foreground hover:text-foreground size-8"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   {detailsOpen ? (
-                    <CaretDoubleRight className="size-[18px]" aria-hidden="true" />
+                    <CaretDoubleRight aria-hidden="true" />
                   ) : (
-                    <CaretDoubleLeft className="size-[18px]" aria-hidden="true" />
+                    <CaretDoubleLeft aria-hidden="true" />
                   )}
                 </Button>
               </TooltipTrigger>
@@ -477,18 +494,18 @@ export function ChannelChatPage() {
               `justify-end` keeps a short conversation on the composer. */}
           <div className="flex min-h-full w-full flex-col justify-end py-4">
             {messagesQuery.isPending ? (
-              <div className="px-4">
+              <div className="px-4 sm:px-5">
                 <CardSkeleton lines={6} />
               </div>
             ) : messagesQuery.isError ? (
-              <div className="px-4">
+              <div className="px-4 sm:px-5">
                 <ErrorState
                   error={messagesQuery.error}
                   onRetry={() => void messagesQuery.refetch()}
                 />
               </div>
             ) : messages.length === 0 ? (
-              <div className="px-4">
+              <div className="px-4 sm:px-5">
                 <EmptyState
                   icon={channel.isPrivate ? LockSimple : Hash}
                   title="No messages yet"

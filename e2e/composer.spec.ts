@@ -49,10 +49,13 @@ test('lays the three actions out on one row inside the field', async ({ page }, 
     boxOf(field),
   ])
 
-  // A comfortable target, and not a toolbar button.
+  // Blackout's 28px icon button on a wide screen, 32 on a phone where the
+  // same control is a thumb target. Square either way, and never a toolbar
+  // button.
+  const floor = testInfo.project.name === 'mobile' ? 32 : 28
   for (const box of [emojiBox, attachBox, sendBox]) {
-    expect(box.width).toBeGreaterThanOrEqual(32)
-    expect(box.height).toBeGreaterThanOrEqual(32)
+    expect(box.width).toBeGreaterThanOrEqual(floor)
+    expect(box.height).toBeGreaterThanOrEqual(floor)
     expect(box.height).toBeLessThanOrEqual(44)
   }
 

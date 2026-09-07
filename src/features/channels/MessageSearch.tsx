@@ -48,8 +48,8 @@ export function MessageSearch({ place, onClose }: { place: SearchPlace; onClose:
   })
 
   return (
-    <div className="border-border bg-background flex h-full min-h-0 flex-col border-b">
-      <div className="flex items-center gap-2 px-4 py-2.5 sm:px-6">
+    <div className="border-border-subtle bg-background flex h-full min-h-0 flex-col border-b">
+      <div className="flex items-center gap-2 px-4 py-2.5 sm:px-5">
         <div className="relative min-w-0 flex-1">
           <MagnifyingGlass
             className="text-muted-foreground/70 pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
@@ -83,14 +83,20 @@ export function MessageSearch({ place, onClose }: { place: SearchPlace; onClose:
           </Button>
         ) : null}
 
-        <Button size="icon-sm" variant="ghost" aria-label="Close search" onClick={onClose}>
-          <X className="size-4" aria-hidden="true" />
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Close search"
+          onClick={onClose}
+        >
+          <X aria-hidden="true" />
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-5">
         {debounced.length <= 1 ? (
-          <p className="text-muted-foreground text-2xs px-1 py-2 leading-relaxed">
+          <p className="text-muted-foreground text-2xs px-1 py-2">
             Type at least two characters.{' '}
             {inChannel
               ? 'Only channels you can see are searched.'
@@ -121,11 +127,10 @@ export function MessageSearch({ place, onClose }: { place: SearchPlace; onClose:
                   }
                   onClick={onClose}
                   className={cn(
-                    'hover:bg-elevated block rounded-md px-2 py-2 transition-colors duration-[140ms]',
-                    'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+                    'hover:bg-surface block rounded-md px-2 py-2 transition-colors duration-[120ms]',
                   )}
                 >
-                  <p className="text-3xs text-muted-foreground flex items-center gap-1.5">
+                  <p className="text-2xs text-muted-foreground flex items-center gap-1.5 font-mono">
                     <span className="font-medium">
                       {result.conversationId ? place.name : `#${result.channelName}`}
                     </span>
@@ -140,7 +145,7 @@ export function MessageSearch({ place, onClose }: { place: SearchPlace; onClose:
                     <span aria-hidden="true">·</span>
                     <span>{new Date(result.createdAt).toLocaleDateString()}</span>
                   </p>
-                  <p className="text-foreground/92 mt-0.5 text-xs leading-relaxed break-words">
+                  <p className="text-secondary-foreground mt-0.5 text-sm break-words">
                     {result.body}
                   </p>
                 </Link>

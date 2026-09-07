@@ -60,9 +60,9 @@ export function ReactionPicker({
           size="icon-sm"
           variant="ghost"
           aria-label={label}
-          className={cn('text-muted-foreground hover:text-foreground size-6', className)}
+          className={cn('text-muted-foreground hover:text-foreground', className)}
         >
-          <Smiley className="size-3.5" aria-hidden="true" />
+          <Smiley aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -89,7 +89,7 @@ export function ReactionPicker({
                 setOpen(false)
               }}
               className={cn(
-                'hover:bg-foreground/9 flex size-8 items-center justify-center rounded-sm text-base transition-colors',
+                'hover:bg-accent flex size-8 items-center justify-center rounded-sm text-base transition-colors',
                 'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
               )}
             >
@@ -126,20 +126,20 @@ export function MessageReactions({
           aria-label={`${reaction.emoji} ${String(reaction.count)}${reaction.mine ? ', including you' : ''}`}
           onClick={() => onToggle(reaction.emoji, reaction.mine)}
           className={cn(
-            'flex h-6 items-center gap-1 rounded-full border px-2 text-xs transition-colors duration-[140ms]',
+            'flex h-6 items-center gap-1.5 rounded-sm border px-1.5 text-xs transition-colors duration-[120ms]',
             'disabled:cursor-not-allowed disabled:opacity-60',
             reaction.mine
-              ? 'border-primary bg-primary/14 text-foreground'
-              : 'border-border text-muted-foreground hover:bg-foreground/7 hover:text-foreground',
+              ? 'border-primary/30 bg-primary/14 text-foreground'
+              : 'bg-elevated border-border-subtle text-secondary-foreground hover:border-border hover:text-foreground',
           )}
         >
           <span aria-hidden="true">{reaction.emoji}</span>
-          <span className="tabular-nums">{reaction.count}</span>
+          <span className="text-2xs font-mono tabular-nums">{reaction.count}</span>
         </button>
       ))}
 
       {canReact ? (
-        <ReactionPicker onPick={onPick} label="Add a reaction" className="size-6 rounded-full" />
+        <ReactionPicker onPick={onPick} label="Add a reaction" className="size-6 rounded-sm" />
       ) : null}
     </div>
   )

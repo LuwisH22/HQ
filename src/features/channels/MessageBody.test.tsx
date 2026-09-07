@@ -41,10 +41,10 @@ describe('a body that is nothing but a mention', () => {
 
   it('adds nothing around it', () => {
     // No wrapper, no separator, nothing that `whitespace-pre-wrap` would show
-    // as an extra line or an extra space.
-    expect(body('@AGER', [AGER]).html).toBe(
-      '<span data-mention="other" class="text-accent-text font-medium">@AGER</span>',
-    )
+    // as an extra line or an extra space. Asserted as structure rather than as
+    // markup: what the chip is styled with is the design system's business.
+    const rendered = body('@AGER', [AGER])
+    expect(rendered.html).toMatch(/^<span data-mention="other"[^>]*>@AGER<\/span>$/)
   })
 })
 

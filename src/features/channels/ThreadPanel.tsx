@@ -173,20 +173,19 @@ export function ThreadPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-border flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+      <header className="border-border-subtle flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <Button
           size="icon-sm"
           variant="ghost"
+          className="text-muted-foreground hover:text-foreground -ml-1"
           aria-label="Back to channel details"
           onClick={onClose}
         >
-          <ArrowLeft className="size-4" aria-hidden="true" />
+          <ArrowLeft aria-hidden="true" />
         </Button>
         <div className="min-w-0">
-          <h2 className="text-3xs text-foreground/42 font-semibold tracking-[0.1em] uppercase">
-            Thread
-          </h2>
-          <p className="text-2xs text-muted-foreground truncate">
+          <h2 className="display-eyebrow text-3xs text-muted-foreground">Thread</h2>
+          <p className="text-2xs text-secondary-foreground truncate font-mono">
             {inConversation ? placeName : `#${placeName}`}
           </p>
         </div>
@@ -206,22 +205,22 @@ export function ThreadPanel({
           />
         </ul>
 
-        <div className="flex items-center gap-2 px-4 py-2" aria-hidden="true">
-          <span className="border-border flex-1 border-t" />
-          <span className="text-3xs text-muted-foreground/70">
+        <div className="mx-2 flex items-center gap-2 px-2 py-3" aria-hidden="true">
+          <span className="border-border-subtle flex-1 border-t" />
+          <span className="text-2xs text-muted-foreground font-mono">
             {replies.length === 0
               ? 'No replies yet'
               : `${String(replies.length)} ${replies.length === 1 ? 'reply' : 'replies'}`}
           </span>
-          <span className="border-border flex-1 border-t" />
+          <span className="border-border-subtle flex-1 border-t" />
         </div>
 
         {repliesQuery.isPending ? (
-          <div className="px-4">
+          <div className="px-4 sm:px-5">
             <CardSkeleton lines={3} />
           </div>
         ) : repliesQuery.isError ? (
-          <div className="px-4">
+          <div className="px-4 sm:px-5">
             <ErrorState error={repliesQuery.error} onRetry={() => void repliesQuery.refetch()} />
           </div>
         ) : (
@@ -285,11 +284,11 @@ export function ThreadSummary({ message, onOpen }: { message: Message; onOpen: (
     <button
       type="button"
       onClick={onOpen}
-      className="text-accent-text hover:bg-foreground/7 focus-visible:ring-ring mt-1 flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className="text-accent-text hover:bg-accent mt-1 -ml-1.5 flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-xs font-medium transition-colors duration-[120ms]"
     >
       {message.replyCount} {message.replyCount === 1 ? 'reply' : 'replies'}
       {when ? (
-        <span className="text-muted-foreground/70 font-normal">
+        <span className="text-muted-foreground font-mono font-normal">
           · {when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       ) : null}
