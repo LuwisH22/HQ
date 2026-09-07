@@ -17,6 +17,14 @@ export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
 export type OverrideEffect = 'allow' | 'deny'
 /** A channel is a room for words or a room for voices. */
 export type ChannelType = 'text' | 'voice'
+/**
+ * What kind of thing is in the diary.
+ *
+ * A category and nothing else: no policy, routine or client check reads it to
+ * decide what anybody may do.
+ */
+export type CalendarEventType =
+  'match' | 'scrim' | 'practice' | 'meeting' | 'content' | 'event' | 'other'
 
 export interface Database {
   public: {
@@ -405,6 +413,36 @@ export interface Database {
             columns: ['category_id']
             isOneToOne: false
             referencedRelation: 'channel_categories'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      calendar_events: {
+        Row: {
+          id: string
+          organization_id: string
+          title: string
+          description: string | null
+          location: string | null
+          /** An instant. The zone below is what it was meant in. */
+          starts_at: string
+          /** Exclusive for all-day events. */
+          ends_at: string
+          all_day: boolean
+          timezone: string
+          event_type: CalendarEventType
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'calendar_events_organization_id_fkey'
+            columns: ['organization_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
             referencedColumns: ['id']
           },
         ]
@@ -843,6 +881,35 @@ export interface Database {
         Args: { p_organization_id: string; p_ids: string[] }
         Returns: undefined
       }
+      create_calendar_event: {
+        Args: {
+          p_organization_id: string
+          p_title: string
+          p_starts_at: string
+          p_ends_at: string
+          p_all_day?: boolean
+          p_timezone?: string | null
+          p_description?: string | null
+          p_location?: string | null
+          p_event_type?: CalendarEventType
+        }
+        Returns: string
+      }
+      update_calendar_event: {
+        Args: {
+          p_event_id: string
+          p_title?: string | null
+          p_starts_at?: string | null
+          p_ends_at?: string | null
+          p_all_day?: boolean | null
+          p_timezone?: string | null
+          p_description?: string | null
+          p_location?: string | null
+          p_event_type?: CalendarEventType | null
+        }
+        Returns: undefined
+      }
+      delete_calendar_event: { Args: { p_event_id: string }; Returns: undefined }
       delete_message: {
         Args: { p_message_id: string; p_reason?: string | null }
         Returns: undefined

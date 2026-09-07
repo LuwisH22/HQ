@@ -94,4 +94,12 @@ export const queryKeys = {
     recent: (organizationId: string, limit: number) =>
       ['audit', organizationId, 'recent', limit] as const,
   },
+
+  calendar: {
+    /** One window of one organization's diary. The range is part of the key. */
+    range: (organizationId: string, from: string, to: string) =>
+      ['calendar', organizationId, 'range', from, to] as const,
+    /** Everything calendar for an organization, for invalidation after a write. */
+    all: (organizationId: string) => ['calendar', organizationId] as const,
+  },
 } as const

@@ -1,5 +1,10 @@
 import type { PermissionSet } from '@/lib/permissions'
-import type { ChannelType, InvitationStatus, MemberStatus } from '@/types/database.types'
+import type {
+  CalendarEventType,
+  ChannelType,
+  InvitationStatus,
+  MemberStatus,
+} from '@/types/database.types'
 
 /**
  * The contract between the application and whatever is behind it.
@@ -150,6 +155,56 @@ export interface CreateInvitationInput {
   email: string
   roleId: string
   expiresInDays?: number
+}
+
+/**
+ * One event in the organization's diary.
+ *
+ * `startsAt` and `endsAt` are instants, so a viewer in any zone reads the same
+ * moment. `timezone` is the zone it was written in, kept so an edit made
+ * somewhere else does not silently move it, and so an all-day event's
+ * boundaries stay the days their author meant.
+ *
+ * All-day events run from local midnight to local midnight, end exclusive: a
+ * single day ends at the following midnight.
+ */
+export interface CalendarEvent {
+  id: string
+  organizationId: string
+  title: string
+  description: string | null
+  location: string | null
+  startsAt: string
+  endsAt: string
+  allDay: boolean
+  timezone: string
+  eventType: CalendarEventType
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** What a caller supplies to schedule something. */
+export interface CalendarEventInput {
+  organizationId: string
+  title: string
+  startsAt: string
+  endsAt: string
+  allDay?: boolean
+  /** IANA zone. Absent means the organization's own. */
+  timezone?: string | null
+  description?: string | null
+  location?: string | null
+  eventType?: CalendarEventType
+}
+
+/** The window a calendar screen is showing. Both ends are instants. */
+export interface CalendarRange {
+  organizationId: string
+  /** Inclusive lower bound: an event ending after this is in the window. */
+  from: string
+  /** Exclusive upper bound: an event starting before this is in the window. */
+  to: string
 }
 
 export interface AuditEntry {
@@ -670,4 +725,17 @@ export interface InvitationService {
 
 export interface AuditService {
   listRecent(organizationId: string, limit?: number): Promise<AuditEntry[]>
+}
+
+export interface CalendarService {
+  /**
+   * Every event overlapping a window, oldest first.
+   *
+   * A range rather than a whole calendar: the month on screen is the query,
+   * and an organization's diary is not something to download.
+   */
+  listRange(input: CalendarRange): Promise<CalendarEvent[]>
+  create(input: CalendarEventInput): Promise<string>
+  update(eventId: string, input: Partial<CalendarEventInput>): Promise<void>
+  remove(eventId: string): Promise<void>
 }

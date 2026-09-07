@@ -68,6 +68,7 @@ const TABLES = [
   'conversation_members',
   'conversation_reads',
   'message_attachments',
+  'calendar_events',
 ]
 
 /** Functions that must never be callable without a session. */
