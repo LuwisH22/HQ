@@ -28,7 +28,6 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       className={({ isActive }) =>
         cn(
           'group relative flex h-[30px] items-center gap-2 rounded-sm px-2 text-sm font-medium transition-colors duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)]',
-          'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
           collapsed && 'justify-center px-0',
           isActive
             ? 'bg-surface-active text-foreground'
@@ -132,7 +131,7 @@ export function Sidebar() {
         {organizationItems.length > 0 ? (
           <>
             {!collapsed ? (
-              <p className="display-eyebrow text-3xs text-muted-foreground flex h-6 items-center px-2 pt-4">
+              <p className="display-eyebrow text-3xs text-muted-foreground flex h-6 items-center px-2 pt-5">
                 Organization
               </p>
             ) : (

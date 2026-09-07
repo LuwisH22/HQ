@@ -19,6 +19,21 @@ import { StartDirectMessage } from './StartDirectMessage'
  * name it has.
  */
 
+/**
+ * What to call the person on the other side.
+ *
+ * A conversation is named by whoever is in it, and that name falls back
+ * through display name, full name and finally the address they signed up
+ * with. An address is not a name: in a 240px column it is the longest thing
+ * on screen and the least readable, so the sidebar shows the part before the
+ * @ and leaves the whole of it to the screen reader and to the conversation's
+ * own header.
+ */
+function labelFor(name: string): string {
+  const at = name.indexOf('@')
+  return at > 0 ? name.slice(0, at) : name
+}
+
 function ConversationRow({
   conversation,
   onNavigate,
@@ -27,6 +42,7 @@ function ConversationRow({
   onNavigate?: () => void
 }) {
   const unread = conversation.unread
+  const label = labelFor(conversation.otherName)
 
   return (
     <NavLink
@@ -35,7 +51,6 @@ function ConversationRow({
       className={({ isActive }) =>
         cn(
           'group relative flex h-[30px] items-center gap-2 rounded-sm px-2 text-sm transition-colors duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)]',
-          'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
           isActive
             ? 'bg-surface-active text-foreground font-medium'
             : unread > 0
@@ -51,15 +66,21 @@ function ConversationRow({
               what makes the row read as one. Hidden from the accessible name:
               read aloud, the initials are the name again with the letters
               removed — the row announced "AGAGER". */}
-          <Avatar className="size-5 shrink-0 rounded-xs" aria-hidden="true">
+          <Avatar className="size-5 shrink-0 rounded-sm" aria-hidden="true">
             {conversation.otherAvatarUrl ? (
               <AvatarImage src={conversation.otherAvatarUrl} alt="" />
             ) : null}
-            <AvatarFallback className="rounded-xs text-[8px]">
+            <AvatarFallback className="rounded-sm text-[9px]">
               {initialsFor({ displayName: conversation.otherName })}
             </AvatarFallback>
           </Avatar>
-          <span className="truncate">{conversation.otherName}</span>
+          <span className="truncate">{label}</span>
+          {/* The whole address, for anyone who cannot see the row: two people
+              can share a local part, and the sidebar's shortening must not
+              make them the same person to a screen reader. */}
+          {label === conversation.otherName ? null : (
+            <span className="sr-only">{conversation.otherName}</span>
+          )}
           {unread > 0 ? (
             <span
               className="text-2xs text-foreground ml-auto font-mono tabular-nums"
@@ -80,7 +101,7 @@ export function DirectMessageNav({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <>
-      <div className="flex h-6 items-center gap-1 px-2 pt-4">
+      <div className="flex h-6 items-center gap-1 px-2 pt-5">
         <p className="display-eyebrow text-3xs text-muted-foreground flex-1">Direct messages</p>
         <StartDirectMessage onNavigate={onNavigate} />
       </div>

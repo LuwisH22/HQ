@@ -66,7 +66,6 @@ function ChannelRow({
       className={({ isActive }) =>
         cn(
           'group relative flex h-[30px] items-center gap-2 rounded-sm px-2 text-sm transition-colors duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)]',
-          'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
           isActive
             ? 'bg-surface-active text-foreground font-medium'
             : unread > 0
@@ -121,8 +120,7 @@ function CategorySection({
         onClick={() => toggleCategory(group.id)}
         aria-expanded={!collapsed}
         className={cn(
-          'display-eyebrow text-3xs text-muted-foreground hover:text-secondary-foreground flex h-6 w-full items-center gap-1 px-2 transition-colors duration-[120ms]',
-          'focus-visible:ring-ring rounded-xs focus-visible:ring-2 focus-visible:outline-none',
+          'display-eyebrow text-3xs text-muted-foreground hover:text-secondary-foreground flex h-6 w-full items-center gap-1 rounded-xs px-2 transition-colors duration-[120ms]',
         )}
       >
         <CaretRight
@@ -167,7 +165,7 @@ function CategorySection({
 /** Section heading with an optional trailing action. */
 function SectionHeading({ label, action }: { label: string; action?: React.ReactNode }) {
   return (
-    <div className="flex h-6 items-center gap-1 px-2 pt-4">
+    <div className="flex h-6 items-center gap-1 px-2 pt-5">
       <p className="display-eyebrow text-3xs text-muted-foreground flex-1">{label}</p>
       {action}
     </div>
@@ -206,15 +204,17 @@ export function ChannelNav({ onNavigate }: { onNavigate?: () => void }) {
         </ul>
       )}
 
-      <div className="pt-1.5">
+      {/* The last row of the Channels group rather than a note under it: at
+          the same height and indent as a channel, so the space below it reads
+          as the end of the section instead of a gap around a stray line. */}
+      <div className="mt-1 pl-1.5">
         <NavLink
           to="/channels"
           end
           onClick={onNavigate}
           className={({ isActive }) =>
             cn(
-              'text-2xs flex items-center gap-2 rounded-sm px-2 py-1 transition-colors',
-              'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+              'flex h-[30px] items-center gap-2 rounded-sm px-2 text-sm font-medium transition-colors duration-[120ms]',
               isActive
                 ? 'text-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground',
