@@ -150,12 +150,14 @@ test('names the channel and its members inside the panel', async ({ page }, test
   await expect(roster).toBeVisible({ timeout: 15_000 })
   await expect(roster.getByRole('listitem').first()).toBeVisible()
 
-  // The sections are present and honest. Voice now says where it lives —
-  // this is a text channel, and there is no call to be had in one — rather
-  // than reporting an empty session that could never be full.
+  // The sections are present and honest. Voice says where it lives — this is
+  // a text channel, and there is no call to be had in one — rather than
+  // reporting an empty session that could never be full. Streaming used to
+  // sit beside it saying "No active stream", which reported the state of
+  // something that does not exist; the row is gone rather than fictional.
   await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
   await expect(page.getByText('Voice lives in voice channels.')).toBeVisible()
-  await expect(page.getByText('No active stream.')).toBeVisible()
+  await expect(page.getByText('No active stream.')).toHaveCount(0)
 
   await deleteChannel(page, name)
 })

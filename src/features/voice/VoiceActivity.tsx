@@ -1,11 +1,13 @@
-import { Microphone, MicrophoneSlash, SpeakerHigh } from '@phosphor-icons/react'
+import { Microphone, MicrophoneSlash, SignIn, SignOut, SpeakerHigh } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { initialsFor } from '@/services/profile.service'
 import { voiceCommands } from '@/services/voice-session'
 import type { Channel } from '@/services/channel.service'
 import { cn } from '@/lib/utils'
+import { formatClock } from '@/utils/datetime'
 import { useVoiceRoom } from './use-voice-room'
+import { useVoiceActivity } from './use-voice-activity'
 
 /**
  * Voice, in the channel panel's Activity section.
@@ -25,6 +27,54 @@ import { useVoiceRoom } from './use-voice-room'
  * and the server refuses a channel that is not yours in the same words it uses
  * for one that does not exist.
  */
+/**
+ * Who came and went, while the call lasted.
+ *
+ * LiveKit's word for it and nothing else: the room says a participant
+ * connected or disconnected, and this shows the last few of those. It is
+ * scoped to the room it belongs to — another channel's panel says nothing
+ * about a call you are in somewhere else — and it is empty until something
+ * actually happens, because an activity feed with no activity is a heading.
+ */
+export function VoiceActivityFeed({
+  channelId,
+  channelName,
+  className,
+}: {
+  channelId: string
+  channelName: string
+  className?: string
+}) {
+  const events = useVoiceActivity().filter((event) => event.channelId === channelId)
+  if (events.length === 0) return null
+
+  return (
+    <ul className={cn('space-y-1', className)} aria-label={`Voice activity in ${channelName}`}>
+      {events.map((event) => (
+        <li key={event.id} className="flex items-baseline gap-2">
+          {event.kind === 'join' ? (
+            <SignIn className="text-muted-foreground size-3 shrink-0" aria-hidden="true" />
+          ) : (
+            <SignOut className="text-muted-foreground size-3 shrink-0" aria-hidden="true" />
+          )}
+          <p className="text-2xs text-secondary-foreground min-w-0 flex-1 truncate">
+            <span className="text-foreground font-medium">
+              {event.isLocal ? 'You' : event.name}
+            </span>{' '}
+            {event.kind === 'join' ? 'joined' : 'left'}
+          </p>
+          <time
+            dateTime={event.at}
+            className="text-2xs text-muted-foreground shrink-0 font-mono tabular-nums"
+          >
+            {formatClock(event.at)}
+          </time>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function VoiceActivity({
   channel,
   avatars,
@@ -110,6 +160,9 @@ export function VoiceActivity({
           Join
         </Button>
       )}
+
+      {/* Who came and went while you were in the room. */}
+      <VoiceActivityFeed channelId={channel.id} channelName={channel.name} className="mt-3" />
     </div>
   )
 }

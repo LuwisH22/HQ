@@ -60,6 +60,8 @@ export function VoiceSettingsMenu({ canSpeak }: { canSpeak: boolean }) {
   const inputMode = useVoiceStore((state) => state.inputMode)
   const pushToTalkKey = useVoiceStore((state) => state.pushToTalkKey)
   const processing = useVoiceStore((state) => state.audioProcessing)
+  const activitySounds = useVoiceStore((state) => state.voiceActivitySoundsEnabled)
+  const setActivitySounds = useVoiceStore((state) => state.setVoiceActivitySounds)
 
   return (
     <DropdownMenu>
@@ -148,6 +150,21 @@ export function VoiceSettingsMenu({ canSpeak }: { canSpeak: boolean }) {
             You are listening only, so there is no microphone to set up.
           </p>
         )}
+
+        <div className="border-border-subtle my-3 border-t" />
+
+        {/* Outside the microphone fieldset on purpose: somebody who may only
+            listen still hears people arrive, and the switch is theirs too. */}
+        <fieldset className="border-0 p-0">
+          <legend className="display-eyebrow text-3xs text-muted-foreground mb-1">Sounds</legend>
+
+          <Toggle
+            label="Join and leave chimes"
+            hint="A short tone when somebody else enters or leaves the room."
+            checked={activitySounds}
+            onChange={setActivitySounds}
+          />
+        </fieldset>
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -6,6 +6,7 @@ import {
   Track,
   type AudioCaptureOptions,
   type Participant,
+  type RemoteParticipant,
   type RemoteTrack,
   type RemoteTrackPublication,
   type RoomOptions,
@@ -15,6 +16,7 @@ import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
 import { demoVoiceService } from '@/services/demo'
 import { clearAudioSink, isPlaying, playRemoteAudio, stopRemoteAudio } from './voice-audio'
+import { beginVoiceActivity, recordVoiceActivity } from './voice-activity'
 import {
   emitVoice,
   IDLE_VOICE,
@@ -254,14 +256,36 @@ function wire(next: Room): void {
   }
 
   next
-    .on(RoomEvent.ParticipantConnected, () => {
+    .on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
       // Somebody arriving while you are deafened does not get to be heard.
       if (now().deafened) {
         for (const publication of remoteAudio(next)) publication.setSubscribed(false)
       }
+      // The room's own word for it, and the only source of this: a page that
+      // mounts, a channel that is opened and a reconnect that re-announces
+      // everybody all reach the log through the same presence rule, which
+      // drops anything that does not actually change who is here.
+      if (room === next) {
+        recordVoiceActivity({
+          kind: 'join',
+          identity: participant.identity,
+          name: participant.name || participant.identity,
+          isLocal: false,
+        })
+      }
       refresh()
     })
-    .on(RoomEvent.ParticipantDisconnected, refresh)
+    .on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
+      if (room === next) {
+        recordVoiceActivity({
+          kind: 'leave',
+          identity: participant.identity,
+          name: participant.name || participant.identity,
+          isLocal: false,
+        })
+      }
+      refresh()
+    })
     .on(RoomEvent.TrackPublished, (publication: RemoteTrackPublication) => {
       if (now().deafened && publication.kind === Track.Kind.Audio) {
         publication.setSubscribed(false)
@@ -308,6 +332,15 @@ function wire(next: Room): void {
       // Whatever ended it — a click, a dropped network, a server giving up —
       // the state says idle, and the room and its sound both go.
       if (room !== next) return
+      // Your own departure, once. A reconnect never reaches this: LiveKit
+      // recovers without leaving the room, and `Disconnected` is the end of
+      // one rather than a stage in it.
+      recordVoiceActivity({
+        kind: 'leave',
+        identity: next.localParticipant.identity,
+        name: next.localParticipant.name || next.localParticipant.identity,
+        isLocal: true,
+      })
       room = null
       clearAudioSink()
       emit({ ...IDLE })
@@ -455,6 +488,17 @@ export const voiceService = {
       throw error
     }
 
+    // A fresh log for a fresh room, seeded with whoever was already in it:
+    // they did not arrive, you did, and saying otherwise would put four join
+    // events on screen for walking into a busy channel.
+    beginVoiceActivity(channelId, [...next.remoteParticipants.values()])
+    recordVoiceActivity({
+      kind: 'join',
+      identity: next.localParticipant.identity,
+      name: next.localParticipant.name || next.localParticipant.identity,
+      isLocal: true,
+    })
+
     // Anyone already talking when you walked in.
     playEverything(next)
     emit({
@@ -504,6 +548,19 @@ export const voiceService = {
 
   async disconnect(): Promise<void> {
     const current = room
+    // Recorded here rather than only on the event: `room` is cleared before
+    // the await below, so by the time LiveKit says `Disconnected` the handler
+    // that would have logged it has already bailed out. Both paths call the
+    // same recorder and the presence rule keeps it to one event either way —
+    // this one for a click, the handler for a room that ended on its own.
+    if (current) {
+      recordVoiceActivity({
+        kind: 'leave',
+        identity: current.localParticipant.identity,
+        name: current.localParticipant.name || current.localParticipant.identity,
+        isLocal: true,
+      })
+    }
     room = null
     // Before anything awaits: a key pressed during teardown must find no room
     // to talk into.

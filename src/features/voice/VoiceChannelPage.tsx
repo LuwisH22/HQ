@@ -21,6 +21,8 @@ import { cn } from '@/lib/utils'
 import { useVoiceRoom } from './use-voice-room'
 import { VoiceControlBar } from './VoiceControlBar'
 import { VoiceParticipantRow } from './VoiceParticipantRow'
+import { VoiceActivityFeed } from './VoiceActivity'
+import { useVoiceActivity } from './use-voice-activity'
 
 /**
  * A voice channel.
@@ -42,6 +44,30 @@ const STATUS: Record<string, { label: string; tone: 'quiet' | 'live' | 'warn' }>
   connected: { label: 'Connected', tone: 'live' },
   reconnecting: { label: 'Reconnecting…', tone: 'warn' },
   error: { label: 'Connection failed', tone: 'warn' },
+}
+
+/**
+ * The activity eyebrow and its feed, together.
+ *
+ * The heading only exists when there is something under it: a section that
+ * says ACTIVITY over nothing is a promise the room has not made yet.
+ */
+function VoiceActivityBlock({
+  channelId,
+  channelName,
+}: {
+  channelId: string
+  channelName: string
+}) {
+  const events = useVoiceActivity()
+  if (!events.some((event) => event.channelId === channelId)) return null
+
+  return (
+    <div className="pb-4">
+      <p className="display-eyebrow text-3xs text-muted-foreground px-4 pt-4 pb-1.5">Activity</p>
+      <VoiceActivityFeed channelId={channelId} channelName={channelName} className="px-4" />
+    </div>
+  )
 }
 
 export function VoiceChannelPage({ channel }: { channel: Channel }) {
@@ -141,7 +167,7 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
               In this channel
               <span className="font-mono tabular-nums">{voice.participants.length}</span>
             </p>
-            <ul className="px-2 pb-4" aria-label={`People in ${channel.name}`}>
+            <ul className="px-2" aria-label={`People in ${channel.name}`}>
               {voice.participants.map((participant) => (
                 <VoiceParticipantRow
                   key={participant.identity}
@@ -150,36 +176,46 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
                 />
               ))}
             </ul>
+
+            {/* What has happened in the room since you joined it. */}
+            <VoiceActivityBlock channelId={channel.id} channelName={channel.name} />
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center p-6">
-            <div className="w-full max-w-sm text-center">
-              <EmptyState
-                icon={Users}
-                title={channel.name}
-                description={
-                  voice.status === 'error' && here
-                    ? 'Something went wrong connecting. Try again.'
-                    : 'Nobody can hear you until you join. Access is decided by this channel’s own permissions, on the server.'
-                }
-                className="border-0"
-              />
+          <div className="flex min-h-full flex-col">
+            <div className="flex flex-1 items-center justify-center p-6">
+              <div className="w-full max-w-sm text-center">
+                <EmptyState
+                  icon={Users}
+                  title={channel.name}
+                  description={
+                    voice.status === 'error' && here
+                      ? 'Something went wrong connecting. Try again.'
+                      : 'Nobody can hear you until you join. Access is decided by this channel’s own permissions, on the server.'
+                  }
+                  className="border-0"
+                />
 
-              {voice.status === 'error' && here && voice.error ? (
-                <p
-                  role="status"
-                  className="text-destructive mx-auto mb-3 flex max-w-xs items-start justify-center gap-1.5 text-xs leading-relaxed"
-                >
-                  <WarningCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                  <span>{voice.error}</span>
-                </p>
-              ) : null}
+                {voice.status === 'error' && here && voice.error ? (
+                  <p
+                    role="status"
+                    className="text-destructive mx-auto mb-3 flex max-w-xs items-start justify-center gap-1.5 text-xs leading-relaxed"
+                  >
+                    <WarningCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                    <span>{voice.error}</span>
+                  </p>
+                ) : null}
 
-              <Button loading={busy} aria-label="Join voice" onClick={() => void join()}>
-                <Microphone aria-hidden="true" />
-                {voice.status === 'error' && here ? 'Try again' : 'Join voice'}
-              </Button>
+                <Button loading={busy} aria-label="Join voice" onClick={() => void join()}>
+                  <Microphone aria-hidden="true" />
+                  {voice.status === 'error' && here ? 'Try again' : 'Join voice'}
+                </Button>
+              </div>
             </div>
+
+            {/* What happened while you were in here, if you have been. It
+                outlives the session that recorded it: the last thing the log
+                says is that you left, and that is worth seeing. */}
+            <VoiceActivityBlock channelId={channel.id} channelName={channel.name} />
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Hash, LockSimple, Microphone, MonitorPlay, PushPin } from '@phosphor-icons/react'
+import { Hash, LockSimple, Microphone, PushPin } from '@phosphor-icons/react'
 import { Avatar, AvatarFallback, AvatarImage, AvatarStatus } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { initialsFor } from '@/services/profile.service'
@@ -180,8 +180,10 @@ export function ChannelPanelContent({
         </ul>
       )}
 
-      {/* Voice is real now and says what it can actually see. Streaming is
-          still a foundation, and says so rather than looking broken. */}
+      {/* Voice is real and says what it can actually see: who is in the room,
+          and who came and went while you were in it. There is no Streaming
+          row because there is no streaming — a section reporting the state of
+          something that does not exist is not a preview of it. */}
       <SectionHeading label="Activity" />
       <div className="pb-4">
         {channel.type === 'voice' ? (
@@ -193,7 +195,6 @@ export function ChannelPanelContent({
             detail="This is a text channel. Voice lives in voice channels."
           />
         )}
-        <ActivityRow icon={MonitorPlay} label="Streaming" detail="No active stream." />
       </div>
     </div>
   )

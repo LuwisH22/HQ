@@ -41,12 +41,21 @@ interface VoiceState {
   audioProcessing: AudioProcessing
   /** Per participant identity, 0–1. Absent means unchanged, which is 1. */
   volumes: Record<string, number>
+  /**
+   * Whether somebody arriving or leaving makes a sound.
+   *
+   * On, because the point of a voice channel is that you are looking at
+   * something else while you are in one. Off is one switch away, and it is a
+   * fact about this browser like everything else here.
+   */
+  voiceActivitySoundsEnabled: boolean
 
   setInputMode: (mode: InputMode) => void
   setPushToTalkKey: (code: string) => void
   setAudioProcessing: (next: Partial<AudioProcessing>) => void
   setVolume: (identity: string, volume: number) => void
   resetVolume: (identity: string) => void
+  setVoiceActivitySounds: (enabled: boolean) => void
 }
 
 /** Whatever arrives, what is stored is a number between silence and unity. */
@@ -68,6 +77,7 @@ export const useVoiceStore = create<VoiceState>()(
         autoGainControl: true,
       },
       volumes: {},
+      voiceActivitySoundsEnabled: true,
 
       setInputMode: (inputMode) => set({ inputMode }),
       setPushToTalkKey: (pushToTalkKey) => set({ pushToTalkKey }),
@@ -83,6 +93,7 @@ export const useVoiceStore = create<VoiceState>()(
           const { [identity]: _gone, ...rest } = current.volumes
           return { volumes: rest }
         }),
+      setVoiceActivitySounds: (voiceActivitySoundsEnabled) => set({ voiceActivitySoundsEnabled }),
     }),
     {
       name: 'lfg-hq-voice',
