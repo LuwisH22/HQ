@@ -1,6 +1,7 @@
 import { getSupabase } from '@/lib/supabase'
 import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
+import { mentionHandleFor } from '@/lib/mention-handle'
 import { demoConversationService } from '@/services/demo'
 import { firstOf } from './postgrest'
 import type { Conversation, ConversationService, MentionCandidate } from './service-contracts'
@@ -156,21 +157,28 @@ export const supabaseConversationService: ConversationService = {
 
     if (rosterError) throw toAppError(rosterError)
 
-    return (data ?? []).map((row) => {
-      const profile = firstOf(row.profile)
-      const role = firstOf(row.role)
+    return (data ?? [])
+      .map((row): MentionCandidate | null => {
+        const profile = firstOf(row.profile)
+        const role = firstOf(row.role)
 
-      // The same rule the mention trigger resolves by.
-      const handle = profile?.display_name ?? (profile?.email ?? '').split('@')[0] ?? ''
+        // What the trigger can actually resolve. A handle it could never
+        // capture is worse than no handle at all.
+        const handle = mentionHandleFor({
+          displayName: profile?.display_name,
+          email: profile?.email,
+        })
+        if (handle === null) return null
 
-      return {
-        userId: row.user_id,
-        handle,
-        displayName: profile?.display_name ?? profile?.full_name ?? profile?.email ?? handle,
-        avatarUrl: profile?.avatar_url ?? null,
-        roleName: role?.name ?? 'Member',
-      }
-    })
+        return {
+          userId: row.user_id,
+          handle,
+          displayName: profile?.display_name ?? profile?.full_name ?? profile?.email ?? handle,
+          avatarUrl: profile?.avatar_url ?? null,
+          roleName: role?.name ?? 'Member',
+        }
+      })
+      .filter((candidate): candidate is MentionCandidate => candidate !== null)
   },
 }
 

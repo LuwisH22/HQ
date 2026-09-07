@@ -1,6 +1,7 @@
 import { getSupabase } from '@/lib/supabase'
 import { AppError, toAppError } from '@/lib/errors'
 import { isDemoSessionActive } from '@/lib/demo-mode'
+import { mentionHandleFor } from '@/lib/mention-handle'
 import { demoChannelService } from '@/services/demo'
 import { firstOf } from './postgrest'
 import type { ChannelType } from '@/types/database.types'
@@ -239,22 +240,30 @@ export const supabaseChannelService: ChannelService = {
 
     if (rosterError) throw toAppError(rosterError)
 
-    return (data ?? []).map((row) => {
-      const profile = firstOf(row.profile)
-      const role = firstOf(row.role)
+    return (data ?? [])
+      .map((row): MentionCandidate | null => {
+        const profile = firstOf(row.profile)
+        const role = firstOf(row.role)
 
-      // The same rule the trigger resolves by: a display name, or the local
-      // part of the sign-in address.
-      const handle = profile?.display_name ?? (profile?.email ?? '').split('@')[0] ?? ''
+        // What the trigger can actually resolve, which is not always the
+        // display name: somebody called "Adit si keren" is offered the local
+        // part of their address instead, and somebody the parser cannot
+        // capture at all is not offered.
+        const handle = mentionHandleFor({
+          displayName: profile?.display_name,
+          email: profile?.email,
+        })
+        if (handle === null) return null
 
-      return {
-        userId: row.user_id,
-        handle,
-        displayName: profile?.display_name ?? profile?.full_name ?? profile?.email ?? handle,
-        avatarUrl: profile?.avatar_url ?? null,
-        roleName: role?.name ?? 'Member',
-      }
-    })
+        return {
+          userId: row.user_id,
+          handle,
+          displayName: profile?.display_name ?? profile?.full_name ?? profile?.email ?? handle,
+          avatarUrl: profile?.avatar_url ?? null,
+          roleName: role?.name ?? 'Member',
+        }
+      })
+      .filter((candidate): candidate is MentionCandidate => candidate !== null)
   },
 
   async listChannelMembers(channelId: string): Promise<string[]> {

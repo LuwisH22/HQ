@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { clearDemoCache, db, resetDemoDatabase } from './demo-database'
 import {
   demoChannelService,
+  demoConversationService,
   demoMessageService,
   demoNotificationService,
   demoOrganizationService,
@@ -69,6 +70,100 @@ function handleOf(userId: string): string {
 }
 
 const mentionsOn = (messageId: string) => db().mentions.filter((m) => m.messageId === messageId)
+
+describe('the handle the menu offers', () => {
+  /** Give somebody a display name and read back what they would be offered as. */
+  async function offeredHandleFor(displayName: string | null, email?: string) {
+    const channel = publicChannel()
+    const target = await actAsNonOwner()
+    const profile = db().profiles.find((p) => p.id === target.userId)!
+    profile.displayName = displayName
+    if (email) profile.email = email
+
+    const offered = await asOwner(() => demoChannelService.listMentionCandidates(channel.id))
+    return { target, channel, candidate: offered.find((c) => c.userId === target.userId) }
+  }
+
+  it('offers a display name the mention pass can capture', async () => {
+    const { candidate } = await offeredHandleFor('Adit')
+    expect(candidate?.handle).toBe('Adit')
+  })
+
+  it('keeps the characters the pass allows', async () => {
+    const { candidate } = await offeredHandleFor('Adit_123')
+    expect(candidate?.handle).toBe('Adit_123')
+  })
+
+  it('falls back to the address when the name has a space in it', async () => {
+    // "@Adit si keren" is read by the pass as "@Adit", which is nobody. The
+    // menu must not insert something that quietly does not happen.
+    const { candidate } = await offeredHandleFor('Adit si keren', 'adit@lfg.gg')
+    expect(candidate?.handle).toBe('adit')
+    // The person is still called what they are called; only the handle moved.
+    expect(candidate?.displayName).toBe('Adit si keren')
+  })
+
+  it('falls back for a name the pass cannot read at all', async () => {
+    const { candidate } = await offeredHandleFor('Adit!! ⭐', 'adit@lfg.gg')
+    expect(candidate?.handle).toBe('adit')
+  })
+
+  it('offers nobody a handle that could never resolve', async () => {
+    // Neither half is capturable, so there is no way to name this person and
+    // the menu says so by leaving them out.
+    const { candidate } = await offeredHandleFor('Adit si keren', 'adit+hq@lfg.gg')
+    expect(candidate).toBeUndefined()
+  })
+
+  it('offers a handle that actually records a mention', async () => {
+    // The whole point, end to end: what the menu inserts, the pass resolves.
+    const { target, channel, candidate } = await offeredHandleFor('Adit si keren', 'adit@lfg.gg')
+    const sent = await asOwner(() =>
+      demoMessageService.send(channel.id, `yo @${candidate!.handle} cek ini`),
+    )
+
+    expect(mentionsOn(sent.id)).toEqual([
+      { messageId: sent.id, userId: target.userId, handle: candidate!.handle.toLowerCase() },
+    ])
+  })
+
+  it('records nothing for the spaced name it used to offer', async () => {
+    // The bug, preserved as a test. The address deliberately shares nothing
+    // with the name, so the first word of the name resolves to nobody —
+    // which is what the old menu inserted and what nobody was ever notified
+    // of.
+    const { target, channel, candidate } = await offeredHandleFor('Adit si keren', 'luwis@lfg.gg')
+    expect(candidate?.handle).toBe('luwis')
+
+    const old = await asOwner(() =>
+      demoMessageService.send(channel.id, 'yo @Adit si keren cek ini'),
+    )
+    expect(mentionsOn(old.id)).toEqual([])
+
+    // And what the menu offers now does reach them.
+    const fixed = await asOwner(() =>
+      demoMessageService.send(channel.id, `yo @${candidate!.handle} cek ini`),
+    )
+    expect(mentionsOn(fixed.id)).toEqual([
+      { messageId: fixed.id, userId: target.userId, handle: 'luwis' },
+    ])
+  })
+
+  it('offers the same rule inside a conversation', async () => {
+    const others = db()
+      .members.map((m) => m.userId)
+      .filter((id) => id !== db().currentUserId)
+    const [a, b] = others
+    const profile = db().profiles.find((p) => p.id === b)!
+    profile.displayName = 'Adit si keren'
+    profile.email = 'adit@lfg.gg'
+
+    db().currentUserId = a!
+    const conversation = await demoConversationService.startDirect('any', b!)
+    const offered = await demoConversationService.listMentionCandidates(conversation)
+    expect(offered.find((c) => c.userId === b)?.handle).toBe('adit')
+  })
+})
 
 describe('recording a mention', () => {
   it('records who was named, and the handle they were named by', async () => {

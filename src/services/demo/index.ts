@@ -1,3 +1,4 @@
+import { mentionHandleFor } from '@/lib/mention-handle'
 import { AppError } from '@/lib/errors'
 import {
   canActOnRank,
@@ -1373,10 +1374,15 @@ export const demoChannelService: ChannelService = {
 
     return db()
       .members.filter((m) => canInChannel(channel, m, 'channels.view'))
-      .map((member) => {
+      .map((member): MentionCandidate | null => {
         const profile = db().profiles.find((p) => p.id === member.userId)
-        // The same rule the mention pass resolves by.
-        const handle = profile?.displayName ?? (profile?.email ?? '').split('@')[0] ?? ''
+        // What the mention pass can actually resolve — the port of the same
+        // rule, so the demo cannot offer a handle the real trigger would drop.
+        const handle = mentionHandleFor({
+          displayName: profile?.displayName,
+          email: profile?.email,
+        })
+        if (handle === null) return null
         return {
           userId: member.userId,
           handle,
@@ -1385,6 +1391,7 @@ export const demoChannelService: ChannelService = {
           roleName: roleById(member.roleId).name,
         }
       })
+      .filter((candidate): candidate is MentionCandidate => candidate !== null)
   },
 
   async listChannelMembers(channelId) {
@@ -2196,8 +2203,12 @@ export const demoConversationService: ConversationService = {
         const member = db().members.find((om) => om.userId === m.userId)
         if (!profile) return null
 
-        // The same rule the mention pass resolves by.
-        const handle = profile.displayName ?? profile.email.split('@')[0] ?? ''
+        // The same rule again: a handle the pass can find, or no candidate.
+        const handle = mentionHandleFor({
+          displayName: profile.displayName,
+          email: profile.email,
+        })
+        if (handle === null) return null
         return {
           userId: m.userId,
           handle,
