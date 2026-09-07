@@ -13,6 +13,19 @@ export function formatTimestamp(value: Date | string): string {
   return format(date, 'd MMM, HH:mm')
 }
 
+/** "22:41" — the time on its own, for a timeline's left column. */
+export function formatClock(value: Date | string): string {
+  return format(new Date(value), 'HH:mm')
+}
+
+/** "Today" / "Yesterday" / "4 Sep" — the rule between days in a timeline. */
+export function formatDayLabel(value: Date | string): string {
+  const date = new Date(value)
+  if (isToday(date)) return 'Today'
+  if (isYesterday(date)) return 'Yesterday'
+  return format(date, 'd MMM')
+}
+
 /** "3 minutes ago" — for activity feeds. */
 export function formatRelative(value: Date | string): string {
   return `${formatDistanceToNowStrict(new Date(value))} ago`

@@ -50,7 +50,11 @@ test('signs in without any credentials and labels the session as demo', async ({
 
 test('shows real seeded data on the dashboard', async ({ page }) => {
   await enterDemo(page)
-  await expect(page.getByText('Active members')).toBeVisible()
+  await expect(
+    page.getByRole('region', { name: 'Organization at a glance' }).getByText('Active', {
+      exact: true,
+    }),
+  ).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Team status' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Recent activity' })).toBeVisible()
 })

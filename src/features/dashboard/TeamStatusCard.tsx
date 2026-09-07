@@ -13,7 +13,14 @@ import { cn } from '@/lib/utils'
 
 const PRESENCE_ORDER = { online: 0, away: 1, offline: 2 } as const
 
-/** Roster with derived presence, most-recently-active first. */
+/**
+ * The roster at a glance, and the dashboard's primary panel.
+ *
+ * Sorted by presence and then by rank, so the answer to "who is about" is the
+ * top of the list rather than something to scan for. Ownership is read from
+ * the rank the membership already carries — brass marks it, and nothing here
+ * decides anything from a role's name.
+ */
 export function TeamStatusCard({ members }: { members: OrganizationMember[] }) {
   const rows = useMemo(() => {
     const now = Date.now()
@@ -30,9 +37,8 @@ export function TeamStatusCard({ members }: { members: OrganizationMember[] }) {
   return (
     <Card className="h-full">
       <CardHeader className="flex-row items-center gap-2 space-y-0">
-        <Users className="text-muted-foreground size-3.5" aria-hidden="true" />
         <CardTitle className="flex-1">Team status</CardTitle>
-        <Button variant="ghost" size="sm" asChild className="text-muted-foreground -my-1">
+        <Button variant="ghost" size="sm" asChild className="text-muted-foreground -my-2">
           <Link to="/members">
             All members
             <ArrowRight aria-hidden="true" />
@@ -48,39 +54,57 @@ export function TeamStatusCard({ members }: { members: OrganizationMember[] }) {
             description="Invite your staff and players to get the roster started."
           />
         ) : (
-          <ul className="divide-border divide-y">
+          <ul className="divide-border-subtle -mx-2 divide-y">
             {rows.map(({ member, presence }) => (
-              <li key={member.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
+              <li key={member.id} className="flex h-11 items-center gap-3 px-2">
                 <span className="relative shrink-0">
-                  <Avatar>
+                  <Avatar className="size-8 rounded-md">
                     {member.profile.avatarUrl ? (
                       <AvatarImage src={member.profile.avatarUrl} alt="" />
                     ) : null}
-                    <AvatarFallback>{initialsFor(member.profile)}</AvatarFallback>
+                    <AvatarFallback className="rounded-md">
+                      {initialsFor(member.profile)}
+                    </AvatarFallback>
                   </Avatar>
                   <AvatarStatus status={presence} />
                 </span>
 
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm leading-tight font-medium">
+                <div className="flex min-w-0 flex-1 items-baseline gap-2">
+                  <p className="truncate text-sm leading-tight font-semibold">
                     {displayNameFor(member.profile)}
                   </p>
-                  <p className="text-2xs text-muted-foreground truncate">
-                    {member.profile.title ?? member.role.name}
-                  </p>
+                  {member.profile.title ? (
+                    <p className="text-muted-foreground truncate text-xs">{member.profile.title}</p>
+                  ) : null}
                 </div>
 
-                <Badge variant={member.role.rank === 0 ? 'default' : 'outline'}>
+                <Badge variant={member.role.rank === 0 ? 'brass' : 'neutral'}>
                   {member.role.name}
                 </Badge>
 
-                <span
-                  className={cn(
-                    'text-2xs w-14 shrink-0 text-right',
-                    presence === 'online' ? 'text-success' : 'text-muted-foreground',
-                  )}
-                >
-                  {presenceLabel(presence)}
+                {/* Dot and word, so presence is never colour alone. */}
+                <span className="flex w-16 shrink-0 items-center justify-end gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'size-1.5 rounded-full',
+                      presence === 'online'
+                        ? 'bg-success'
+                        : presence === 'away'
+                          ? 'bg-warning'
+                          : 'bg-offline',
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      'text-2xs',
+                      presence === 'offline'
+                        ? 'text-muted-foreground'
+                        : 'text-secondary-foreground',
+                    )}
+                  >
+                    {presenceLabel(presence)}
+                  </span>
                 </span>
               </li>
             ))}

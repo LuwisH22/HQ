@@ -65,8 +65,9 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('workspace shell', () => {
   test('lands on the dashboard with real organization data', async ({ page }) => {
-    await expect(page.getByText('Active members')).toBeVisible()
-    await expect(page.getByText('Your role')).toBeVisible()
+    const ribbon = page.getByRole('region', { name: 'Organization at a glance' })
+    await expect(ribbon.getByText('Active', { exact: true })).toBeVisible()
+    await expect(ribbon.getByText('Your role', { exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Team status' })).toBeVisible()
   })
 
