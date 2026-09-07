@@ -1,19 +1,41 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { CircleNotch } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/common/states'
 import { useAuth } from '@/hooks/use-auth'
 import { effectiveMemberStatus, suspensionEndsAt } from '@/lib/moderation'
 import { useWorkspace } from '@/hooks/use-workspace'
 
+/**
+ * The screen the app waits behind.
+ *
+ * The mascot is a looping video rather than a spinner, and it is decorative:
+ * the state is the line under it, which is what `role="status"` announces. It
+ * lives and dies with this component — the element is gone the moment the app
+ * has something to render, so nothing keeps playing behind the workspace.
+ *
+ * Sized by its width with the height left to the file, so whatever the clip's
+ * proportions are, they are the ones on screen. Muted and inline, because
+ * every browser refuses to autoplay anything else.
+ */
 function BootScreen({ label }: { label: string }) {
   return (
     <div
-      className="bg-background flex min-h-dvh flex-col items-center justify-center gap-3"
+      className="bg-background flex min-h-dvh flex-col items-center justify-center gap-4 p-6"
       role="status"
       aria-live="polite"
     >
-      <CircleNotch className="text-muted-foreground size-5 animate-spin" aria-hidden="true" />
+      <video
+        src="/loading/cat.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        aria-hidden="true"
+        tabIndex={-1}
+        disablePictureInPicture
+        className="h-auto max-h-[40vh] w-auto max-w-[min(260px,64vw)] rounded-md object-contain"
+      />
       <p className="text-muted-foreground text-xs">{label}</p>
     </div>
   )
