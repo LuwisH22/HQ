@@ -48,8 +48,10 @@ function ConversationRow({
         <>
           {isActive ? <span aria-hidden="true" className="nav-rail -left-1.5" /> : null}
           {/* A tile rather than a glyph: these are people, and a 20px tile is
-              what makes the row read as one. */}
-          <Avatar className="size-5 shrink-0 rounded-xs">
+              what makes the row read as one. Hidden from the accessible name:
+              read aloud, the initials are the name again with the letters
+              removed — the row announced "AGAGER". */}
+          <Avatar className="size-5 shrink-0 rounded-xs" aria-hidden="true">
             {conversation.otherAvatarUrl ? (
               <AvatarImage src={conversation.otherAvatarUrl} alt="" />
             ) : null}
@@ -86,7 +88,7 @@ export function DirectMessageNav({ onNavigate }: { onNavigate?: () => void }) {
       {query.isPending ? (
         <div className="space-y-1 px-1" aria-hidden="true">
           {[0, 1].map((i) => (
-            <div key={i} className="bg-foreground/7 h-6 rounded-sm" />
+            <div key={i} className="bg-muted h-6 rounded-sm" />
           ))}
         </div>
       ) : query.isError ? (

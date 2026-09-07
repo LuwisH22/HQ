@@ -38,7 +38,7 @@ export function DemoModeBanner() {
         <TooltipTrigger asChild>
           <span
             role="status"
-            className="border-demo/50 text-demo text-3xs inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 font-semibold tracking-[0.1em] uppercase"
+            className="border-demo/50 text-demo text-3xs display-eyebrow inline-flex items-center gap-1.5 rounded-sm border px-2 py-1"
           >
             <Flask className="size-3" aria-hidden="true" />
             Demo mode

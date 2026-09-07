@@ -102,10 +102,8 @@ export function ChannelsPage() {
           {groups.map((group) => (
             <section key={group.id}>
               <div className="mb-1 flex items-baseline gap-2 px-1">
-                <h2 className="text-3xs text-foreground/50 font-semibold tracking-[0.1em] uppercase">
-                  {group.name}
-                </h2>
-                <span className="text-3xs text-foreground/30 tabular-nums">
+                <h2 className="display-eyebrow text-3xs text-muted-foreground">{group.name}</h2>
+                <span className="text-2xs text-muted-foreground font-mono tabular-nums">
                   {group.channels.length}
                 </span>
               </div>

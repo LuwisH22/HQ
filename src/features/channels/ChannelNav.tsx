@@ -191,7 +191,7 @@ export function ChannelNav({ onNavigate }: { onNavigate?: () => void }) {
       {directory.isPending ? (
         <div className="space-y-1 px-1" aria-hidden="true">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="bg-foreground/7 h-6 rounded-sm" />
+            <div key={i} className="bg-muted h-6 rounded-sm" />
           ))}
         </div>
       ) : directory.navGroups.length === 0 ? (
@@ -217,7 +217,7 @@ export function ChannelNav({ onNavigate }: { onNavigate?: () => void }) {
               'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
               isActive
                 ? 'text-foreground'
-                : 'text-muted-foreground hover:bg-foreground/7 hover:text-foreground',
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
             )
           }
         >

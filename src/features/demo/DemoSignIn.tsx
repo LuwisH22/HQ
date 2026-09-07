@@ -41,9 +41,7 @@ export function DemoSignIn({ standalone = false }: { standalone?: boolean }) {
         <div className="flex items-start gap-2.5">
           <Flask className="text-demo mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div className="space-y-1">
-            <p className="text-demo text-3xs font-semibold tracking-[0.1em] uppercase">
-              Development mode
-            </p>
+            <p className="display-eyebrow text-demo text-3xs">Development mode</p>
             <p className="text-muted-foreground text-xs leading-relaxed">
               Explore the app with local sample data. Nothing is sent anywhere, and this option does
               not exist in a production build.

@@ -231,7 +231,7 @@ function CreateChannelDialog({
                         'flex items-center gap-1.5 rounded-sm border px-[11px] py-[5px] text-xs transition-all duration-[140ms]',
                         selected
                           ? 'border-primary bg-primary/14 text-foreground font-medium'
-                          : 'border-border text-muted-foreground hover:bg-foreground/7',
+                          : 'border-border text-muted-foreground hover:bg-accent',
                       )}
                     >
                       <option.icon className="size-3.5" aria-hidden="true" />
@@ -275,7 +275,7 @@ function CreateChannelDialog({
                         'flex items-center gap-1.5 rounded-sm border px-[11px] py-[5px] text-xs transition-all duration-[140ms]',
                         selected
                           ? 'border-primary bg-primary/14 text-foreground font-medium'
-                          : 'border-border text-muted-foreground hover:bg-foreground/7',
+                          : 'border-border text-muted-foreground hover:bg-accent',
                       )}
                     >
                       <option.icon className="size-3.5" aria-hidden="true" />

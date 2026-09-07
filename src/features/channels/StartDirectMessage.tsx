@@ -107,7 +107,7 @@ export function StartDirectMessage({ onNavigate }: { onNavigate?: () => void }) 
           {membersQuery.isPending ? (
             <div className="space-y-1" aria-hidden="true">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="bg-foreground/7 h-10 rounded-sm" />
+                <div key={i} className="bg-muted h-10 rounded-sm" />
               ))}
             </div>
           ) : candidates.length === 0 ? (
@@ -133,7 +133,7 @@ export function StartDirectMessage({ onNavigate }: { onNavigate?: () => void }) 
                       onClick={() => start.mutate(member.userId)}
                       className={cn(
                         'flex w-full items-center gap-2.5 rounded-sm px-2 py-1.5 text-left transition-colors',
-                        'hover:bg-foreground/7 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+                        'hover:bg-accent focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
                         'disabled:opacity-45',
                       )}
                     >

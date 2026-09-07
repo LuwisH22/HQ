@@ -75,9 +75,7 @@ export function NotificationBell() {
 
       <DropdownMenuContent align="end" className="w-80 p-0">
         <div className="border-border flex items-center gap-2 border-b px-3 py-2">
-          <h2 className="text-3xs text-foreground/42 flex-1 font-semibold tracking-[0.1em] uppercase">
-            Notifications
-          </h2>
+          <h2 className="display-eyebrow text-3xs text-muted-foreground flex-1">Notifications</h2>
           {unread > 0 ? (
             <Button
               size="sm"
@@ -106,7 +104,7 @@ export function NotificationBell() {
                   <Link
                     to={typeof channelKey === 'string' ? `/channels/${channelKey}` : '/channels'}
                     className={cn(
-                      'hover:bg-foreground/7 flex items-start gap-2.5 px-3 py-2 transition-colors',
+                      'hover:bg-accent flex items-start gap-2.5 px-3 py-2 transition-colors',
                       'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
                     )}
                   >

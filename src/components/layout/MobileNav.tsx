@@ -93,6 +93,12 @@ function DrawerRow({ item, onNavigate }: { item: NavItem; onNavigate: () => void
             aria-hidden="true"
           />
           <span className="truncate">{item.label}</span>
+          {/* A section that does not work yet says so, the way the command
+              palette does. The row still goes somewhere — the destination is
+              a page that explains itself. */}
+          {!item.shipped ? (
+            <span className="text-2xs text-muted-foreground ml-auto font-mono">soon</span>
+          ) : null}
         </>
       )}
     </NavLink>
@@ -152,7 +158,7 @@ export function MobileNavDrawer() {
 
             <ChannelNav onNavigate={() => setOpen(false)} />
 
-            <p className="text-3xs text-foreground/42 px-1 pt-4 pb-1 font-semibold tracking-[0.1em] uppercase">
+            <p className="display-eyebrow text-3xs text-muted-foreground px-1 pt-4 pb-1">
               Organization
             </p>
             <ul className="space-y-0.5">

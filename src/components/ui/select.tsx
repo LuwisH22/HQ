@@ -77,10 +77,7 @@ const SelectLabel = React.forwardRef<
   return (
     <SelectPrimitive.Label
       ref={ref}
-      className={cn(
-        'text-3xs text-muted-foreground px-2.5 py-1.5 font-semibold tracking-[0.1em] uppercase',
-        className,
-      )}
+      className={cn('display-eyebrow text-3xs text-muted-foreground px-2.5 py-1.5', className)}
       {...props}
     />
   )
@@ -95,7 +92,7 @@ const SelectItem = React.forwardRef<
       ref={ref}
       className={cn(
         'relative flex w-full cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm outline-none select-none',
-        'focus:bg-foreground/7',
+        'focus:bg-accent',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
         className,
       )}
