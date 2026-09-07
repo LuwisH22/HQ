@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { EnvelopeSimpleOpen } from '@phosphor-icons/react'
+import { EnvelopeSimpleOpen, WarningCircle } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { FormField } from '@/components/common/FormField'
@@ -115,25 +115,14 @@ export function SignInPage() {
     <AuthLayout
       title="Sign in"
       description="LFG HQ is invitation-only. Use the account your organization set up for you."
-      footer={
-        <button
-          type="button"
-          onClick={() => {
-            setMode(mode === 'password' ? 'magic-link' : 'password')
-            setFormError(null)
-          }}
-          className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
-        >
-          {mode === 'password' ? 'Email me a sign-in link instead' : 'Sign in with a password'}
-        </button>
-      }
     >
       {formError ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/10 text-destructive mb-4 rounded-md border px-3 py-2 text-xs"
+          className="border-destructive/40 bg-destructive/10 text-destructive mb-4 flex items-start gap-2 rounded-sm border px-3 py-2 text-xs"
         >
-          {formError}
+          <WarningCircle className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          <span>{formError}</span>
         </div>
       ) : null}
 
@@ -178,7 +167,7 @@ export function SignInPage() {
           <div className="text-center">
             <Link
               to="/auth/forgot-password"
-              className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+              className="text-accent-text hover:text-accent-glow text-xs underline-offset-4 hover:underline"
             >
               Forgot your password?
             </Link>
@@ -209,6 +198,27 @@ export function SignInPage() {
           </Button>
         </form>
       )}
+
+      {/* The other way in, under a rule rather than in the footer: it is an
+          alternative to the form above it, not a note about the page. */}
+      <div className="my-5 flex items-center gap-3" aria-hidden="true">
+        <span className="border-border-subtle flex-1 border-t" />
+        <span className="text-2xs text-muted-foreground font-mono">or</span>
+        <span className="border-border-subtle flex-1 border-t" />
+      </div>
+
+      <Button
+        type="button"
+        variant="secondary"
+        size="xl"
+        className="w-full"
+        onClick={() => {
+          setMode(mode === 'password' ? 'magic-link' : 'password')
+          setFormError(null)
+        }}
+      >
+        {mode === 'password' ? 'Email me a sign-in link' : 'Sign in with a password'}
+      </Button>
 
       <DemoSignIn />
     </AuthLayout>

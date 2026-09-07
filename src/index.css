@@ -371,6 +371,15 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
   }
+  /* The wordmark. Archivo at its widest, the one place in the app anything
+     is 700, and used on two screens only: sign-in and boot. */
+  .wordmark {
+    font-family: var(--font-display);
+    font-stretch: 118%;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
   /* Expanded, for eyebrows and section labels. */
   .display-eyebrow {
     font-family: var(--font-display);
