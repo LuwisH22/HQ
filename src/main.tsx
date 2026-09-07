@@ -8,8 +8,15 @@ import { createRoot } from 'react-dom/client'
 import './features/auth/capture-invite-token'
 import { App } from './App'
 // Self-hosted so the desktop build works offline and satisfies the Tauri CSP
-// (font-src 'self'), which blocks Google Fonts. Nocturne's hierarchy depends
-// on a real weight 500, which the Segoe UI fallback does not have.
+// (font-src 'self'), which blocks Google Fonts.
+//
+// Blackout's three families: Archivo for display — the width axis is the
+// expression, so the `wdth` build rather than the standard one — Geist for
+// every piece of UI text, Geist Mono for metadata. Inter stays behind them as
+// the fallback, so nothing reflows before the others arrive.
+import '@fontsource-variable/archivo/wdth.css'
+import '@fontsource-variable/geist'
+import '@fontsource-variable/geist-mono'
 import '@fontsource-variable/inter'
 import './index.css'
 

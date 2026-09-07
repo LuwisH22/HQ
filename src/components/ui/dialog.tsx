@@ -43,7 +43,7 @@ const DialogContent = React.forwardRef<
         className={cn(
           'fixed top-1/2 left-1/2 z-50 grid w-[min(480px,92vw)] -translate-x-1/2 -translate-y-1/2',
           // No padding on the panel: screens supply their own band layout.
-          'bg-popover rounded-md shadow-lg',
+          'bg-popover edge-light rounded-lg shadow-lg',
           'max-h-[90vh] overflow-y-auto',
           'data-[state=open]:animate-in data-[state=closed]:animate-out',
           'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',

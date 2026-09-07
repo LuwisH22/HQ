@@ -64,7 +64,9 @@ function AvatarStatus({
       aria-label={label}
       className={cn(
         'border-surface absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2',
-        status === 'online' && 'bg-primary',
+        // Presence is semantic in Blackout, not mono: green means online and
+        // means nothing else.
+        status === 'online' && 'bg-success',
         status === 'away' && 'bg-warning',
         status === 'offline' && 'bg-offline',
         className,

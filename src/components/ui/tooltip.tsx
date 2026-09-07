@@ -16,7 +16,7 @@ const TooltipContent = React.forwardRef<
         ref={ref}
         sideOffset={sideOffset}
         className={cn(
-          'bg-elevated text-foreground text-2xs z-50 overflow-hidden rounded-sm px-2 py-1 shadow-md',
+          'bg-popover edge-light text-foreground z-50 overflow-hidden rounded-sm px-2 py-1 text-xs font-medium shadow-lg',
           'data-[state=delayed-open]:animate-in data-[state=closed]:animate-out',
           'data-[state=delayed-open]:fade-in-0 data-[state=closed]:fade-out-0',
           className,
@@ -37,7 +37,7 @@ function TooltipShortcut({ keys }: { keys: readonly string[] }) {
       {keys.map((key) => (
         <kbd
           key={key}
-          className="border-border bg-elevated text-2xs text-muted-foreground rounded border px-1 font-mono"
+          className="border-border bg-elevated text-2xs text-secondary-foreground rounded-xs border px-[5px] font-mono font-medium"
         >
           {key}
         </kbd>

@@ -4,9 +4,16 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------------------
-   LFG HQ design tokens — Nocturne
-   Values from the Nocturne handoff. Hierarchy is size and space, never weight;
-   elevation is a hairline edge plus ambient darkness, never a stacked shadow.
+   LFG HQ design tokens — Blackout V2
+   Source of truth: docs/design/LFHQ-VISUAL-DESIGN-SYSTEM-V2.md
+
+   Black is the ground and the accent is a light: a fill on a primary button, a
+   line, a ring, a blade. Elevation is a tonal step plus a hairline, with a
+   1px lighter top edge on anything raised. Shadow exists on overlays only.
+   Hierarchy is size and colour before weight.
+
+   Every variable Nocturne defined is still defined, with a Blackout value, so
+   nothing that consumes a token had to be rewritten to keep working.
 --------------------------------------------------------------------------- */
 
 @theme inline {
@@ -41,123 +48,143 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Nocturne's radius scale is 4 / 8 / 14, not a ramp off one base value. */
+  /* --- Blackout additions ------------------------------------------------ */
+  /* The pit: the darkest plane in the app. Sidebar and mobile tab bar. */
+  --color-sidebar: var(--sidebar);
+  /* Two more border levels than Nocturne had: a quieter divider, and the
+     lighter edge that makes a raised surface read as raised. */
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  /* The accent at its two other working strengths. */
+  --color-accent-glow: var(--accent-glow);
+  --color-accent-deep: var(--accent-deep);
+  /* Rank and ownership. At most twice on a screen. */
+  --color-brass: var(--brass);
+  --color-live: var(--live);
+
+  /* Blackout's radii: 2 / 4 / 6 / 10 / 16. Buttons, inputs and rows are r-2;
+     cards and popovers r-3; dialogs r-4; bottom sheets r-5. */
   --radius-xs: 2px;
   --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
 
-  /* Elevation is an edge, not a drop shadow. Overriding Tailwind's own
-     shadow-* scale means every existing `shadow-sm` becomes the hairline. */
-  --shadow-sm: 0 0 0 1px #3f424d;
-  --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgb(0 0 0 / 0.55);
-  --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgb(0 0 0 / 0.65);
+  /* Shadow is an overlay-only device. `shadow-sm` and `shadow-md` stay
+     hairlines so that anything already wearing them reads as an edge rather
+     than acquiring a drop shadow it should not have. */
+  --shadow-sm: 0 0 0 1px var(--border);
+  --shadow-md: 0 0 0 1px var(--border-strong);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.6), 0 0 0 1px var(--border);
 
+  /* Archivo carries display: titles at width 100, stats at 78, eyebrows and
+     the wordmark expanded. Geist is every piece of UI text and all chat.
+     Geist Mono is metadata — timestamps, handles, emails, hints — and nothing
+     else. Inter remains the fallback so nothing reflows before they load. */
+  --font-display:
+    'Archivo Variable', 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    sans-serif;
   --font-sans:
-    'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+    'Geist Variable', 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono:
-    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
-    monospace;
+    'Geist Mono Variable', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
 
-  /* Nocturne's ramp is 25 / 20 / 14 / 13 / 12 / 11 / 10. Only two steps move:
-     `text-sm` drops 14 -> 13 (body, names, nav rows, inputs, buttons) and
-     `text-3xs` is new for eyebrows and stat labels. `text-xs` (12) and
-     `text-2xs` (11) already sit where the spec wants them, so every existing
-     usage of those keeps meaning what it meant. The four one-off sizes —
-     25 / 20 / 14 / 26 — are set at their call sites. */
+  /* The ramp is 26 / 22 / 18 / 15 / 14 / 13 / 12 / 11 / 10. `text-sm` is the
+     UI default at 13, `text-base` is chat at 14 — one step up, because chat is
+     read for hours. `text-2xs` (11) is metadata, `text-3xs` (10) is the
+     smallest eyebrow. The display sizes are set at their call sites. */
   --text-3xs: 0.625rem;
   --text-3xs--line-height: 0.875rem;
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
   --text-sm: 0.8125rem;
   --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+
+  /* One easing family, four durations. Nothing bounces. */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
-/* Nocturne is a dark-only system. The light theme is kept so :root resolves;
-   the product mounts with .dark on <html>. */
-:root {
-  --radius: 0.5rem;
-
-  --background: #f3f5fe;
-  --foreground: #292b31;
-  --surface: #ffffff;
-  --surface-foreground: #292b31;
-  --elevated: #e4e7f5;
-  --card: #ffffff;
-  --card-foreground: #292b31;
-  --popover: #ffffff;
-  --popover-foreground: #292b31;
-
-  --primary: #796cbf;
-  --primary-foreground: #f5f4ff;
-  --secondary: #e4e7f5;
-  --secondary-foreground: #3f424d;
-  --muted: #e4e7f5;
-  --muted-foreground: #75798c;
-  --accent: #e7e5fe;
-  --accent-foreground: #2b2741;
-  --accent-text: #5d5294;
-
-  --destructive: #b4413f;
-  --destructive-foreground: #f5f4ff;
-  --success: #796cbf;
-  --success-foreground: #f5f4ff;
-  --warning: #75798c;
-  --warning-foreground: #f5f4ff;
-  --signal: #796cbf;
-  --demo: #8a5f1f;
-  --offline: #b2b6ca;
-
-  --border: #cfd3e5;
-  --input: #b2b6ca;
-  --ring: #796cbf;
-}
-
+/* Blackout is dark-only and ships no light theme. `:root` exists so every
+   variable resolves before `.dark` is applied to <html>; it carries the same
+   values rather than a second palette to maintain. */
+:root,
 .dark {
-  --background: #161826;
-  --foreground: #e9e9ed;
-  --surface: #232532;
-  --surface-foreground: #e9e9ed;
-  --elevated: #292b31;
-  --card: #232532;
-  --card-foreground: #e9e9ed;
-  --popover: #232532;
-  --popover-foreground: #e9e9ed;
+  --radius: 0.375rem;
 
-  --primary: #9184d9;
-  --primary-foreground: #161826;
-  --secondary: #292b31;
-  --secondary-foreground: #e9e9ed;
-  --muted: #292b31;
-  --muted-foreground: #9397ab;
-  --accent: #3f424d;
-  --accent-foreground: #e9e9ed;
-  /* accent-300 — the accent at body-text size, where #9184d9 is too dim */
-  --accent-text: #d2cefd;
+  /* --- Ground ----------------------------------------------------------- */
+  --background: #0c0c12;
+  --sidebar: #07070a;
+  --surface: #14141c;
+  --elevated: #1a1a24;
+  --card: #14141c;
+  --popover: #1c1c27;
 
-  /* Outside the system, on the system's lightness scale: destructive is
-     L 0.664 / C 0.122 at hue 23, demo the same lightness and chroma at hue 75.
-     Nocturne is mono, but "you are not on real data" has to stay unmissable,
-     so the demo badge keeps its own colour rather than becoming a neutral. */
-  --destructive: #d4736f;
-  --destructive-foreground: #161826;
-  --demo: #bf872e;
-  /* neutral-700 — presence, offline */
-  --offline: #595d6c;
+  --foreground: #f1f0f7;
+  --surface-foreground: #f1f0f7;
+  --card-foreground: #f1f0f7;
+  --popover-foreground: #f1f0f7;
 
-  /* Mono palette: presence is not colour-coded. Online reads as the accent,
-     away as neutral-500, offline as neutral-700. */
-  --success: #9184d9;
-  --success-foreground: #161826;
-  --warning: #9397ab;
-  --warning-foreground: #161826;
-  --signal: #9184d9;
+  /* --- Type ------------------------------------------------------------- */
+  /* `secondary-foreground` is body copy and nav labels; `muted-foreground` is
+     timestamps, helpers and placeholders, and is not used for anything a
+     reader has to read. */
+  --secondary-foreground: #a7a6b8;
+  --muted-foreground: #6b6a7e;
 
-  --border: #3f424d;
-  --input: #3f424d;
-  --ring: #9184d9;
+  /* --- Accent ----------------------------------------------------------- */
+  /* `primary` is the saturated fill and covers under 1% of a screen.
+     `accent-text` is the working accent: links, selected icons, the blade,
+     mentions, the focus ring. `accent-glow` is only ever a 1px line. */
+  --primary: #6656f0;
+  --primary-foreground: #ffffff;
+  --accent-text: #a99cff;
+  --accent-glow: #cfc8ff;
+  --accent-deep: #5343d1;
+
+  /* Tailwind's `accent` is the hover fill, not the brand. Its foreground is
+     the colour text takes on that fill. */
+  --accent: #1f1f2a;
+  --accent-foreground: #f1f0f7;
+
+  /* `secondary` and `muted` are the elevated plane: secondary buttons, chips,
+     skeletons. */
+  --secondary: #1a1a24;
+  --muted: #1a1a24;
+
+  /* --- Semantics -------------------------------------------------------- */
+  /* Each means one thing. Green never decorates, amber is never brand. */
+  --success: #3dd68c;
+  --success-foreground: #0c0c12;
+  --warning: #f2b84b;
+  --warning-foreground: #0c0c12;
+  --destructive: #f26d63;
+  --destructive-foreground: #ffffff;
+  /* The solid destructive fill, for confirm dialogs only. */
+  --destructive-fill: #c93a32;
+  --live: #f26d63;
+  --offline: #4b4b5e;
+
+  /* Rank and ownership. */
+  --brass: #c9a961;
+
+  /* "You are not on real data" has to stay unmissable, so demo mode keeps a
+     colour of its own rather than becoming a neutral. */
+  --demo: #f2b84b;
+  --signal: #a99cff;
+
+  /* --- Edges ------------------------------------------------------------ */
+  --border-subtle: #1c1c26;
+  --border: #262633;
+  --border-strong: #33334a;
+  --input: #262633;
+  --ring: #a99cff;
 }
 
 @layer base {
@@ -168,6 +195,10 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
+    /* No light theme to fall back to; this stops the browser painting white
+       behind the app for a frame. */
+    color-scheme: dark;
+    background-color: var(--background);
   }
 
   body {
@@ -179,19 +210,31 @@
     overscroll-behavior: none;
   }
 
-  /* Hierarchy is size and space. Weight never goes past 500. */
+  /* Hierarchy is size and colour first. Only two weights carry UI text (400
+     and 500) and one carries emphasis (600). Nothing is 700 but the wordmark. */
   h1,
   h2,
   h3,
   h4,
   h5,
   h6 {
-    font-weight: 500;
-    line-height: 1.12;
-    letter-spacing: -0.015em;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-stretch: 100%;
+    line-height: 1.16;
+    letter-spacing: -0.01em;
   }
 
-  /* Nocturne's focus ring is a 2px accent outline at 2px offset, not a ring. */
+  /* Metadata is monospaced, and monospaced digits should not jump. */
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A 2px ring at 2px offset, in the accent's light tone. Never animated. */
   :focus {
     outline: none;
   }
@@ -202,13 +245,14 @@
   }
 
   ::selection {
-    background: color-mix(in srgb, var(--primary) 30%, transparent);
+    background: rgb(102 86 240 / 0.35);
+    color: var(--foreground);
   }
 
-  /* Slim, unobtrusive scrollbars that match the surface. */
+  /* Slim, unobtrusive scrollbars that match the ground. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: var(--border-strong) transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
@@ -218,7 +262,7 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background-color: var(--border);
+    background-color: var(--border-strong);
     border: 3px solid transparent;
     background-clip: content-box;
     border-radius: 9999px;
@@ -258,14 +302,42 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
 
-  /* Nocturne's accent rail: 2px x 16px, sits outside the row's padding. */
+  /* The blade: 2px x 16px in the accent's light tone, sitting outside the
+     row's padding. It is the one place the accent draws a line, and it is how
+     selection reads everywhere it appears. */
   .nav-rail {
     position: absolute;
     left: -8px;
     width: 2px;
     height: 16px;
     border-radius: 2px;
-    background: var(--primary);
+    background: var(--accent-text);
+  }
+
+  /* Light comes from above. A 1px lighter top edge is what separates a raised
+     surface from the plane it sits on, without a shadow. */
+  .edge-light {
+    box-shadow: inset 0 1px 0 0 var(--border-strong);
+  }
+
+  /* Archivo's width axis, which is the display family's expression. */
+  .font-display {
+    font-family: var(--font-display);
+    font-stretch: 100%;
+  }
+  /* Semi-condensed, for stat numerals. */
+  .display-stat {
+    font-family: var(--font-display);
+    font-stretch: 78%;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  /* Expanded, for eyebrows and section labels. */
+  .display-eyebrow {
+    font-family: var(--font-display);
+    font-stretch: 112%;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
   }
 }
 

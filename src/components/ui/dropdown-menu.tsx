@@ -10,8 +10,10 @@ const DropdownMenuPortal = DropdownMenuPrimitive.Portal
 const DropdownMenuSub = DropdownMenuPrimitive.Sub
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
 
+// The only plane in the app that casts a shadow, and the tonal step is
+// carried by a 1px lighter top edge rather than by the shadow alone.
 const contentClasses = cn(
-  'bg-popover text-popover-foreground z-50 min-w-[10rem] overflow-hidden rounded-md p-1.5 shadow-lg',
+  'bg-popover text-popover-foreground edge-light z-50 min-w-[11rem] overflow-hidden rounded-md p-1 shadow-lg',
   'data-[state=open]:animate-in data-[state=closed]:animate-out',
   'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
   'data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95',
@@ -19,8 +21,8 @@ const contentClasses = cn(
 )
 
 const itemClasses = cn(
-  'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors',
-  'focus:bg-foreground/7',
+  'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors duration-[120ms]',
+  'focus:bg-accent',
   'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
   '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground',
 )

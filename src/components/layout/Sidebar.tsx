@@ -104,7 +104,7 @@ export function Sidebar() {
     <aside
       data-testid="sidebar"
       className={cn(
-        'border-border bg-surface flex h-full shrink-0 flex-col border-r transition-[width] duration-200',
+        'bg-sidebar flex h-full shrink-0 flex-col transition-[width] duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)]',
         collapsed ? 'w-14' : 'w-64',
       )}
     >
