@@ -24,7 +24,7 @@ const buttonVariants = cva(
       variant: {
         // The fill, the edge-light, and a glow that only appears on hover.
         default:
-          'bg-primary text-primary-foreground shadow-[inset_0_1px_0_0_rgb(207_200_255/0.35)] hover:bg-[#7565ff] hover:shadow-[inset_0_1px_0_0_rgb(207_200_255/0.35),0_0_0_1px_rgb(169_156_255/0.4),0_0_16px_rgb(102_86_240/0.25)] active:bg-accent-deep',
+          'bg-primary text-primary-foreground shadow-[inset_0_1px_0_0_rgb(207_200_255/0.35)] hover:shadow-[inset_0_1px_0_0_rgb(207_200_255/0.35),0_0_0_1px_rgb(169_156_255/0.4),0_0_16px_rgb(102_86_240/0.25)] active:bg-accent-deep',
         secondary:
           'bg-elevated border-border text-foreground hover:bg-accent hover:border-border-strong active:bg-surface',
         // Kept as a distinct name because call sites use it; visually the same

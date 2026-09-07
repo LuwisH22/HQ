@@ -13,12 +13,16 @@ import { Card, CardContent } from '@/components/ui/card'
 export function PhasePlaceholderPage({
   title,
   icon: Icon,
-  phase,
   summary,
   capabilities,
 }: {
   title: string
   icon: Icon
+  /**
+   * The build phase this section belongs to. Still accepted so the call sites
+   * and routes stay as they are, and deliberately not rendered: a phase number
+   * is how the work is planned, not something a reader of this page can use.
+   */
   phase: number
   summary: string
   capabilities: readonly string[]
@@ -33,7 +37,7 @@ export function PhasePlaceholderPage({
           </span>
         }
         description={summary}
-        actions={<Badge variant="outline">Phase {phase}</Badge>}
+        actions={<Badge variant="neutral">Not available yet</Badge>}
       />
 
       <Card>
