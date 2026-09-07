@@ -13,16 +13,16 @@ import { VoiceSettingsMenu } from './VoiceSettingsMenu'
 /**
  * Microphone, deafen, leave.
  *
- * Icon-first, at the same 36px the composer's actions settled on, so the two
- * control rows in the product are the same size. The label lives in the
- * tooltip and in `aria-label`; the button holds a glyph, because a row of
- * three words is a form and this is a control.
+ * Icon-first, square, and the system's 32px control — one step above the 28
+ * the header and composer use, because these three are the page's only
+ * actions. The label lives in the tooltip and in `aria-label`; the button
+ * holds a glyph, because a row of three words is a form and this is a control.
  *
  * Leave is the only one with a colour of its own — it is the only one that
- * ends something.
+ * ends something — and it wears it as text rather than as a fill.
  */
 
-const ACTION = 'size-9 [&_svg]:size-[18px]'
+const ACTION = 'size-8 rounded-sm [&_svg]:size-[18px]'
 
 function ControlButton({
   label,
@@ -53,9 +53,9 @@ function ControlButton({
           className={cn(
             ACTION,
             destructive
-              ? 'border-destructive/70 border px-0'
+              ? 'text-destructive hover:bg-destructive/10 px-0'
               : active
-                ? 'bg-destructive/14 text-destructive hover:bg-destructive/20'
+                ? 'bg-destructive/10 text-destructive hover:bg-destructive/16'
                 : 'text-muted-foreground hover:text-foreground',
           )}
         >
@@ -87,7 +87,7 @@ export function VoiceControlBar({
 }) {
   return (
     <div
-      className="border-border flex items-center gap-1 border-t px-3 py-2.5"
+      className="border-border-subtle flex items-center gap-1 border-t px-3 py-2"
       role="group"
       aria-label="Voice controls"
     >

@@ -421,7 +421,7 @@ export function ConversationChatPage() {
             <h1 className="min-w-0 shrink-0 truncate text-[15px] leading-none font-semibold">
               {name}
             </h1>
-            <span className="text-muted-foreground/50 shrink-0" aria-hidden="true">
+            <span className="text-muted-foreground/50 hidden shrink-0 sm:inline" aria-hidden="true">
               ·
             </span>
             <p className="text-muted-foreground hidden truncate text-sm sm:block">

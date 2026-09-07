@@ -72,7 +72,7 @@ export function VoiceSettingsMenu({ canSpeak }: { canSpeak: boolean }) {
           size="icon"
           variant="ghost"
           aria-label="Voice settings"
-          className="text-muted-foreground hover:text-foreground size-9 [&_svg]:size-[18px]"
+          className="text-muted-foreground hover:text-foreground size-8 rounded-sm [&_svg]:size-[18px]"
         >
           <GearSix aria-hidden="true" />
         </Button>
@@ -80,9 +80,7 @@ export function VoiceSettingsMenu({ canSpeak }: { canSpeak: boolean }) {
 
       <DropdownMenuContent align="start" side="top" className="w-72 p-3">
         <fieldset className="border-0 p-0" disabled={!canSpeak}>
-          <legend className="text-3xs text-foreground/42 mb-1.5 font-semibold tracking-[0.1em] uppercase">
-            Input
-          </legend>
+          <legend className="display-eyebrow text-3xs text-muted-foreground mb-1.5">Input</legend>
 
           {/* Menu radio items rather than buttons: they arrive with the right
               role, arrow-key navigation, and — the part that matters — they
@@ -106,7 +104,7 @@ export function VoiceSettingsMenu({ canSpeak }: { canSpeak: boolean }) {
           {inputMode === 'push-to-talk' ? (
             <p className="text-2xs text-muted-foreground mt-2 leading-relaxed">
               Hold{' '}
-              <kbd className="border-border text-foreground rounded-xs border px-1 py-px font-sans">
+              <kbd className="border-border bg-surface text-foreground rounded-xs border px-1 py-px font-mono">
                 {pushToTalkKey === 'Space' ? 'Space' : pushToTalkKey}
               </kbd>{' '}
               to talk. It is ignored while you are typing.
@@ -114,10 +112,10 @@ export function VoiceSettingsMenu({ canSpeak }: { canSpeak: boolean }) {
           ) : null}
         </fieldset>
 
-        <div className="border-border my-3 border-t" />
+        <div className="border-border-subtle my-3 border-t" />
 
         <fieldset className="border-0 p-0" disabled={!canSpeak}>
-          <legend className="text-3xs text-foreground/42 mb-1 font-semibold tracking-[0.1em] uppercase">
+          <legend className="display-eyebrow text-3xs text-muted-foreground mb-1">
             Microphone
           </legend>
 
@@ -140,7 +138,7 @@ export function VoiceSettingsMenu({ canSpeak }: { canSpeak: boolean }) {
             onChange={(next) => void voiceCommands.setAudioProcessing({ autoGainControl: next })}
           />
 
-          <p className="text-2xs text-muted-foreground/70 mt-2 leading-relaxed">
+          <p className="text-2xs text-muted-foreground mt-2 leading-relaxed">
             Changing these replaces your microphone track. The call is not interrupted.
           </p>
         </fieldset>

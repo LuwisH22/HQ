@@ -76,11 +76,14 @@ function BarButton({
           disabled={disabled}
           onClick={onClick}
           className={cn(
-            'size-7 px-0 [&_svg]:size-4',
+            'size-7 rounded-sm px-0 [&_svg]:size-4',
             destructive
-              ? 'border-destructive/70 border'
+              ? // Restrained: the word is danger, the shape is a ghost.
+                'text-destructive hover:bg-destructive/10'
               : active
-                ? 'bg-destructive/14 text-destructive hover:bg-destructive/20'
+                ? // "This state is doing something to you" — a mic that is off,
+                  // a room you cannot hear.
+                  'bg-destructive/10 text-destructive hover:bg-destructive/16'
                 : 'text-muted-foreground hover:text-foreground',
           )}
         >
@@ -170,12 +173,12 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
   const where = channel ? (
     <Link
       to={`/channels/${channel.key}`}
-      className="focus-visible:ring-ring truncate rounded-sm text-xs leading-tight font-medium hover:underline focus-visible:ring-2 focus-visible:outline-none"
+      className="truncate rounded-sm text-sm leading-[18px] font-semibold hover:underline"
     >
       {name}
     </Link>
   ) : (
-    <span className="truncate text-xs leading-tight font-medium">{name}</span>
+    <span className="truncate text-sm leading-[18px] font-semibold">{name}</span>
   )
 
   if (layout === 'bar') {
@@ -184,13 +187,19 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
         role="region"
         aria-label="Voice session"
         data-voice-bar="mobile"
-        className="border-border-subtle bg-elevated flex h-10 items-center gap-2 border-t px-3 md:hidden"
+        className="border-border-subtle bg-elevated flex h-11 items-center gap-2 border-t px-3 md:hidden"
       >
         <span
           aria-hidden="true"
           className={cn(
             'size-1.5 shrink-0 rounded-full',
-            failed ? 'bg-destructive' : live ? 'bg-primary' : 'bg-muted-foreground/60',
+            failed
+              ? 'bg-destructive'
+              : live
+                ? voice.canSpeak
+                  ? 'bg-success'
+                  : 'bg-accent-text'
+                : 'bg-warning',
           )}
         />
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
@@ -199,7 +208,8 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
             {statusLine(voice)}
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-1">{controls}</span>
+        {/* A thumb is not a mouse: the same controls, one size up. */}
+        <span className="flex shrink-0 items-center gap-1 [&_button]:size-8">{controls}</span>
       </div>
     )
   }
@@ -209,9 +219,11 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
       role="region"
       aria-label="Voice session"
       data-voice-bar="sidebar"
-      className="border-border bg-elevated edge-light m-2 rounded-md border p-2"
+      // A fixed height across every state, so the sidebar below it never
+      // moves as a call connects, drops or comes back.
+      className="border-border bg-elevated edge-light m-2 flex h-[92px] flex-col rounded-md border p-2"
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex h-4 items-center gap-1.5">
         <span
           aria-hidden="true"
           className={cn(
@@ -225,7 +237,7 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
                 : 'bg-warning animate-[pulse_1.2s_ease-in-out_infinite]',
           )}
         />
-        <span className="display-eyebrow text-3xs text-muted-foreground truncate">
+        <span className="text-2xs text-muted-foreground truncate font-mono tracking-[0.08em] uppercase">
           {eyebrow(voice)}
         </span>
         {!voice.canSpeak && live ? (
@@ -233,14 +245,14 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
         ) : null}
       </div>
 
-      <div className="mt-1 flex flex-col">
+      <div className="mt-1.5 flex h-8 flex-col justify-center">
         {where}
         <span className="text-2xs text-muted-foreground truncate font-mono">
           {statusLine(voice)}
         </span>
       </div>
 
-      <div className="mt-2 flex items-center gap-1">{controls}</div>
+      <div className="mt-auto flex h-7 items-center gap-1">{controls}</div>
     </div>
   )
 }

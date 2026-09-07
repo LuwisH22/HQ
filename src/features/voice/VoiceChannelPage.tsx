@@ -86,24 +86,34 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-border flex shrink-0 items-center gap-2.5 border-b px-4 py-3">
-        <SpeakerHigh className="text-muted-foreground size-[18px] shrink-0" aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm leading-5 font-semibold">{channel.name}</h1>
-          <p className="text-2xs text-muted-foreground truncate">
+      {/* The chat header's sibling: one line, 48 tall, the same hierarchy.
+          The speaker takes the accent while the room is live, which is the
+          same thing the hash does in a text channel. */}
+      <header className="border-border-subtle flex h-12 shrink-0 items-center gap-2 border-b px-4 sm:px-5">
+        <SpeakerHigh
+          className={cn('size-4 shrink-0', inRoom ? 'text-accent-text' : 'text-muted-foreground')}
+          aria-hidden="true"
+        />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <h1 className="min-w-0 shrink-0 truncate text-[15px] leading-none font-semibold">
+            {channel.name}
+          </h1>
+          <span className="text-muted-foreground/50 hidden shrink-0 sm:inline" aria-hidden="true">
+            ·
+          </span>
+          <p className="text-muted-foreground hidden truncate text-sm sm:block">
             {channel.topic ?? 'Voice channel'}
           </p>
         </div>
 
+        {/* A dot and a word in mono, not a badge: the state is metadata about
+            the room, and every state wearing a coloured pill would flatten
+            the difference between them. */}
         <span
           data-voice-status={here ? voice.status : 'idle'}
           className={cn(
-            'text-2xs flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1',
-            status.tone === 'live'
-              ? 'border-primary/50 text-foreground'
-              : status.tone === 'warn'
-                ? 'border-destructive/50 text-destructive'
-                : 'border-border text-muted-foreground',
+            'text-2xs flex shrink-0 items-center gap-1.5 font-mono',
+            status.tone === 'warn' ? 'text-warning' : 'text-muted-foreground',
           )}
         >
           <span
@@ -111,10 +121,10 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
             className={cn(
               'size-1.5 rounded-full',
               status.tone === 'live'
-                ? 'bg-primary'
+                ? 'bg-success'
                 : status.tone === 'warn'
-                  ? 'bg-destructive'
-                  : 'bg-muted-foreground/50',
+                  ? 'bg-warning'
+                  : 'bg-offline',
             )}
           />
           {status.label}
@@ -127,8 +137,9 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
             {/* Held to a reading width rather than stretched: a muted icon at
                 the far end of a wide screen no longer belongs to the name it
                 describes. */}
-            <p className="text-3xs text-foreground/42 px-4 pt-4 pb-1 font-semibold tracking-[0.1em] uppercase">
-              In this channel · {voice.participants.length}
+            <p className="display-eyebrow text-3xs text-muted-foreground flex items-baseline gap-1.5 px-4 pt-4 pb-1">
+              In this channel
+              <span className="font-mono tabular-nums">{voice.participants.length}</span>
             </p>
             <ul className="px-2 pb-4" aria-label={`People in ${channel.name}`}>
               {voice.participants.map((participant) => (
@@ -159,7 +170,7 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
                   role="status"
                   className="text-destructive mx-auto mb-3 flex max-w-xs items-start justify-center gap-1.5 text-xs leading-relaxed"
                 >
-                  <WarningCircle className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+                  <WarningCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                   <span>{voice.error}</span>
                 </p>
               ) : null}
@@ -178,9 +189,9 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
           {!voice.canSpeak ? (
             <p
               role="status"
-              className="border-border text-2xs text-muted-foreground flex items-start gap-1.5 border-t px-4 py-2 leading-relaxed"
+              className="border-border-subtle text-2xs text-muted-foreground flex items-start gap-1.5 border-t px-4 py-2 leading-relaxed"
             >
-              <Ear className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+              <Ear className="text-accent-text mt-px size-3.5 shrink-0" aria-hidden="true" />
               <span>
                 You are listening only. Speaking in this channel needs the “Speak in voice”
                 permission.
@@ -191,13 +202,14 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
           {voice.audioBlocked ? (
             <div
               role="status"
-              className="border-border text-2xs text-muted-foreground flex items-center gap-2 border-t px-4 py-2 leading-relaxed"
+              className="border-border-subtle bg-surface text-2xs text-secondary-foreground flex items-center gap-2 border-t px-4 py-2 leading-relaxed"
             >
-              <SpeakerSlash className="text-destructive size-3.5 shrink-0" aria-hidden="true" />
+              <SpeakerSlash className="text-warning size-3.5 shrink-0" aria-hidden="true" />
               <span className="flex-1">Your browser is not letting this tab play sound yet.</span>
+              {/* The one place on this page the accent fills a shape: it is
+                  the only thing standing between you and hearing anybody. */}
               <Button
                 size="sm"
-                variant="secondary"
                 aria-label="Enable audio"
                 onClick={() => void voiceCommands.unblockAudio()}
               >
@@ -209,12 +221,9 @@ export function VoiceChannelPage({ channel }: { channel: Channel }) {
           {voice.micBlocked && voice.error ? (
             <p
               role="status"
-              className="border-border text-2xs text-muted-foreground flex items-start gap-1.5 border-t px-4 py-2 leading-relaxed"
+              className="border-border-subtle text-2xs text-muted-foreground flex items-start gap-1.5 border-t px-4 py-2 leading-relaxed"
             >
-              <WarningCircle
-                className="text-destructive mt-px size-3.5 shrink-0"
-                aria-hidden="true"
-              />
+              <WarningCircle className="text-warning mt-px size-3.5 shrink-0" aria-hidden="true" />
               <span>{voice.error}</span>
             </p>
           ) : null}

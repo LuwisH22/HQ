@@ -406,7 +406,10 @@ export function ChannelChatPage() {
             {channel.archivedAt ? <Badge variant="warning">Archived</Badge> : null}
             {channel.topic ? (
               <>
-                <span className="text-muted-foreground/50 shrink-0" aria-hidden="true">
+                <span
+                  className="text-muted-foreground/50 hidden shrink-0 sm:inline"
+                  aria-hidden="true"
+                >
                   ·
                 </span>
                 <p className="text-muted-foreground hidden truncate text-sm sm:block">

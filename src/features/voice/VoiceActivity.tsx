@@ -1,9 +1,10 @@
-import { Microphone, SpeakerHigh } from '@phosphor-icons/react'
+import { Microphone, MicrophoneSlash, SpeakerHigh } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { initialsFor } from '@/services/profile.service'
 import { voiceCommands } from '@/services/voice-session'
 import type { Channel } from '@/services/channel.service'
+import { cn } from '@/lib/utils'
 import { useVoiceRoom } from './use-voice-room'
 
 /**
@@ -37,54 +38,78 @@ export function VoiceActivity({
   const live = here && (voice.status === 'connected' || voice.status === 'reconnecting')
 
   return (
-    <div className="flex items-start gap-2.5 px-4 py-1.5">
-      <SpeakerHigh className="text-muted-foreground/60 mt-px size-4 shrink-0" aria-hidden="true" />
-      <div className="min-w-0 flex-1">
-        <p className="text-xs leading-tight font-medium">Voice</p>
-
-        {live ? (
-          <>
-            <p className="text-2xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-              {voice.participants.length} {voice.participants.length === 1 ? 'person' : 'people'} in
-              voice · you are connected
-            </p>
-            <ul
-              className="mt-1.5 flex flex-wrap gap-1"
-              aria-label={`People in ${channel.name} voice`}
-            >
-              {voice.participants.map((participant) => (
-                <li key={participant.identity}>
-                  <Avatar className="size-6" title={participant.name}>
-                    {avatars.get(participant.identity) ? (
-                      <AvatarImage src={avatars.get(participant.identity) ?? ''} alt="" />
-                    ) : null}
-                    <AvatarFallback>
-                      {initialsFor({ displayName: participant.name })}
-                    </AvatarFallback>
-                  </Avatar>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <>
-            <p className="text-2xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-              No active voice session here.
-            </p>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="mt-1.5"
-              aria-label={`Join voice in ${channel.name}`}
-              loading={here && (voice.status === 'requesting' || voice.status === 'connecting')}
-              onClick={() => void voiceCommands.connect(channel.id)}
-            >
-              <Microphone aria-hidden="true" />
-              Join
-            </Button>
-          </>
-        )}
+    <div className="px-4 py-1.5">
+      <div className="flex items-start gap-2.5">
+        <SpeakerHigh
+          className={cn(
+            'mt-px size-4 shrink-0',
+            live ? 'text-accent-text' : 'text-muted-foreground',
+          )}
+          aria-hidden="true"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium">Voice</p>
+          <p className="text-2xs text-muted-foreground mt-0.5 font-mono">
+            {live
+              ? `${String(voice.participants.length)} connected · you are in`
+              : 'No active session'}
+          </p>
+        </div>
       </div>
+
+      {live ? (
+        <ul className="mt-1.5 -ml-1" aria-label={`People in ${channel.name} voice`}>
+          {voice.participants.map((participant) => (
+            <li
+              key={participant.identity}
+              className="flex h-6 items-center gap-2 rounded-sm px-1"
+              aria-label={`${participant.name}${participant.muted ? ', muted' : ''}`}
+            >
+              <span
+                className={cn(
+                  'shrink-0 rounded-[5px] p-px ring-[1.5px] transition-colors duration-[120ms]',
+                  participant.speaking && !participant.muted
+                    ? 'ring-accent-text'
+                    : 'ring-transparent',
+                )}
+              >
+                <Avatar className="size-5 rounded-sm">
+                  {avatars.get(participant.identity) ? (
+                    <AvatarImage src={avatars.get(participant.identity) ?? ''} alt="" />
+                  ) : null}
+                  <AvatarFallback className="rounded-sm text-[9px]">
+                    {initialsFor({ displayName: participant.name })}
+                  </AvatarFallback>
+                </Avatar>
+              </span>
+              <span
+                className="text-secondary-foreground min-w-0 flex-1 truncate text-xs"
+                aria-hidden="true"
+              >
+                {participant.name}
+              </span>
+              {participant.muted ? (
+                <MicrophoneSlash
+                  className="text-muted-foreground size-3 shrink-0"
+                  aria-hidden="true"
+                />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Button
+          size="sm"
+          variant="secondary"
+          className="mt-1.5 ml-6.5"
+          aria-label={`Join voice in ${channel.name}`}
+          loading={here && (voice.status === 'requesting' || voice.status === 'connecting')}
+          onClick={() => void voiceCommands.connect(channel.id)}
+        >
+          <Microphone aria-hidden="true" />
+          Join
+        </Button>
+      )}
     </div>
   )
 }

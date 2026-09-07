@@ -35,7 +35,7 @@ export function ParticipantVolume({ identity, name }: { identity: string; name: 
           variant="ghost"
           aria-label={`Volume for ${name}, ${String(percent)} percent`}
           className={cn(
-            'text-muted-foreground hover:text-foreground size-7 shrink-0 transition-opacity',
+            'text-muted-foreground hover:text-foreground size-7 shrink-0 rounded-sm transition-opacity',
             // Quiet until wanted, but never hidden from a keyboard.
             'opacity-0 group-hover/participant:opacity-100 focus-visible:opacity-100',
             // Somebody deliberately turned down stays visible, or the setting
@@ -48,27 +48,47 @@ export function ParticipantVolume({ identity, name }: { identity: string; name: 
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-56 p-3">
-        <p className="text-2xs text-muted-foreground mb-2 leading-tight">
-          <span className="text-foreground font-medium">{name}</span> plays at{' '}
-          <span className="tabular-nums">{percent}%</span> for you. Nobody else is affected.
+        <p className="text-2xs text-muted-foreground mb-2 flex items-baseline gap-1.5 leading-tight">
+          <span className="text-foreground min-w-0 flex-1 truncate font-medium">{name}</span>
+          <span className="text-secondary-foreground shrink-0 font-mono tabular-nums">
+            {percent}%
+          </span>
         </p>
 
-        <input
-          type="range"
-          min={0}
-          max={MAX_VOLUME * 100}
-          step={5}
-          value={percent}
-          aria-label={`Volume for ${name}`}
-          className="accent-primary w-full"
-          onChange={(event) => {
-            void voiceCommands.setParticipantVolume(identity, Number(event.target.value) / 100)
-          }}
-        />
+        {/* The track and its filled portion are boxes behind a transparent
+            native range, so the control keeps the keyboard behaviour and the
+            announcement a range arrives with. */}
+        <div className="relative flex h-3 items-center">
+          <span
+            aria-hidden="true"
+            className="bg-border absolute inset-x-0 h-0.5 overflow-hidden rounded-full"
+          >
+            <span
+              className="bg-accent-text block h-full rounded-full"
+              style={{ width: `${String(percent)}%` }}
+            />
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={MAX_VOLUME * 100}
+            step={5}
+            value={percent}
+            aria-label={`Volume for ${name}`}
+            className="voice-slider relative"
+            onChange={(event) => {
+              void voiceCommands.setParticipantVolume(identity, Number(event.target.value) / 100)
+            }}
+          />
+        </div>
+
+        <p className="text-2xs text-muted-foreground mt-2 leading-relaxed">
+          Only you hear this change. Nobody else is affected.
+        </p>
 
         <button
           type="button"
-          className="text-2xs text-muted-foreground hover:text-foreground focus-visible:ring-ring mt-2 rounded-sm underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none"
+          className="text-2xs text-muted-foreground hover:text-foreground mt-1.5 rounded-sm underline-offset-4 hover:underline"
           onClick={() => {
             // Applied first, forgotten second: the other order would write the
             // value straight back into the store it just cleared.
