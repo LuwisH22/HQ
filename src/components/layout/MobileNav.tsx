@@ -43,15 +43,19 @@ export function MobileTabBar() {
           end={item.path === '/'}
           className={({ isActive }) =>
             cn(
-              'text-2xs flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 transition-colors',
+              'text-3xs flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 font-medium transition-colors duration-[120ms]',
               'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset',
-              isActive ? 'text-primary' : 'text-muted-foreground',
+              isActive ? 'text-accent-text' : 'text-muted-foreground',
             )
           }
         >
           {({ isActive }) => (
             <>
-              <item.icon className={cn('size-5', isActive && 'stroke-[2.25]')} aria-hidden="true" />
+              <item.icon
+                weight={isActive ? 'fill' : 'regular'}
+                className="size-[18px]"
+                aria-hidden="true"
+              />
               <span className="truncate leading-none">{item.label}</span>
             </>
           )}
@@ -69,18 +73,28 @@ function DrawerRow({ item, onNavigate }: { item: NavItem; onNavigate: () => void
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm transition-colors',
-          isActive ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground',
+          'relative flex min-h-11 items-center gap-2.5 rounded-sm px-2 text-sm font-medium transition-colors duration-[120ms]',
+          'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+          isActive
+            ? 'bg-surface-active text-foreground'
+            : 'text-secondary-foreground hover:bg-accent hover:text-foreground',
         )
       }
     >
-      <item.icon className="size-4 shrink-0" aria-hidden="true" />
-      <span className="truncate">{item.label}</span>
-      {!item.shipped ? (
-        <span className="text-2xs text-muted-foreground/60 ml-auto tracking-wider uppercase">
-          Soon
-        </span>
-      ) : null}
+      {({ isActive }) => (
+        <>
+          {isActive ? <span aria-hidden="true" className="nav-rail -left-1.5" /> : null}
+          <item.icon
+            weight={isActive ? 'fill' : 'regular'}
+            className={cn(
+              'size-[18px] shrink-0',
+              isActive ? 'text-accent-text' : 'text-muted-foreground',
+            )}
+            aria-hidden="true"
+          />
+          <span className="truncate">{item.label}</span>
+        </>
+      )}
     </NavLink>
   )
 }

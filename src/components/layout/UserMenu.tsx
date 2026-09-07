@@ -56,14 +56,14 @@ export function ProfileButton({ collapsed }: { collapsed: boolean }) {
       type="button"
       onClick={() => setProfileOpen(true)}
       className={cn(
-        'hover:bg-foreground/7 flex min-w-0 flex-1 items-center gap-2 rounded-md p-1.5 text-left transition-colors',
+        'hover:bg-accent flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-sm px-1.5 text-left transition-colors duration-[120ms]',
         'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
-        collapsed && 'flex-none justify-center p-1',
+        collapsed && 'flex-none justify-center px-1',
       )}
       aria-label="Your profile"
     >
       <span className="relative shrink-0">
-        <Avatar>
+        <Avatar className="size-7">
           {profile.avatarUrl ? <AvatarImage src={profile.avatarUrl} alt="" /> : null}
           <AvatarFallback>{initialsFor(profile)}</AvatarFallback>
         </Avatar>
@@ -93,9 +93,11 @@ export function ProfileButton({ collapsed }: { collapsed: boolean }) {
 /**
  * Sign out.
  *
- * Red and door-shaped, and its own control rather than an entry inside a menu:
- * leaving should not require finding out where it is hidden. The flow behind
- * it is unchanged — `signOut()` still revokes every session the user holds.
+ * Danger-coloured, but only once it is reached for: a resting control in error
+ * red reads as something being wrong. The footer reveals it on hover and on
+ * focus, and the org menu carries the same action for anyone who never hovers.
+ * The flow behind it is unchanged — `signOut()` still revokes every session
+ * the user holds.
  */
 export function SignOutButton() {
   const { signOut } = useAuth()
@@ -118,9 +120,9 @@ export function SignOutButton() {
           size="icon"
           onClick={() => void handleSignOut()}
           aria-label="Log out"
-          className="text-destructive hover:bg-destructive/12 hover:text-destructive size-9 shrink-0"
+          className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive size-7 shrink-0"
         >
-          <SignOut className="size-[21px]" aria-hidden="true" />
+          <SignOut className="size-[18px]" aria-hidden="true" />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top">Log out</TooltipContent>

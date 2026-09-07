@@ -34,37 +34,33 @@ function ConversationRow({
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          'group relative flex min-h-8 items-center gap-2 rounded-sm py-1 pr-2 pl-2 text-sm transition-colors duration-[140ms]',
+          'group relative flex h-[30px] items-center gap-2 rounded-sm px-2 text-sm transition-colors duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)]',
           'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
           isActive
-            ? 'bg-primary/14 text-foreground font-medium'
+            ? 'bg-surface-active text-foreground font-medium'
             : unread > 0
-              ? 'text-foreground hover:bg-foreground/7 font-medium'
-              : 'text-muted-foreground hover:bg-foreground/7 hover:text-foreground',
+              ? 'text-foreground hover:bg-accent font-semibold'
+              : 'text-secondary-foreground hover:bg-accent hover:text-foreground font-medium',
         )
       }
     >
       {({ isActive }) => (
         <>
-          <span
-            aria-hidden="true"
-            className={cn(
-              'bg-primary absolute -left-1.5 h-3.5 w-0.5 rounded-xs transition-opacity',
-              isActive ? 'opacity-100' : 'opacity-0',
-            )}
-          />
-          <Avatar className="size-4 shrink-0">
+          {isActive ? <span aria-hidden="true" className="nav-rail -left-1.5" /> : null}
+          {/* A tile rather than a glyph: these are people, and a 20px tile is
+              what makes the row read as one. */}
+          <Avatar className="size-5 shrink-0 rounded-xs">
             {conversation.otherAvatarUrl ? (
               <AvatarImage src={conversation.otherAvatarUrl} alt="" />
             ) : null}
-            <AvatarFallback className="text-[8px]">
+            <AvatarFallback className="rounded-xs text-[8px]">
               {initialsFor({ displayName: conversation.otherName })}
             </AvatarFallback>
           </Avatar>
           <span className="truncate">{conversation.otherName}</span>
           {unread > 0 ? (
             <span
-              className="bg-primary/22 text-foreground text-3xs ml-auto min-w-4 rounded-full px-1.5 py-px text-center font-semibold tabular-nums"
+              className="text-2xs text-foreground ml-auto font-mono tabular-nums"
               aria-label={`${String(unread)} unread`}
             >
               {unread > 99 ? '99+' : unread}
@@ -82,10 +78,8 @@ export function DirectMessageNav({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <>
-      <div className="flex items-center gap-1 px-1 pt-4 pb-1">
-        <p className="text-3xs text-foreground/42 flex-1 font-semibold tracking-[0.1em] uppercase">
-          Direct messages
-        </p>
+      <div className="flex h-6 items-center gap-1 px-2 pt-4">
+        <p className="display-eyebrow text-3xs text-muted-foreground flex-1">Direct messages</p>
         <StartDirectMessage onNavigate={onNavigate} />
       </div>
 

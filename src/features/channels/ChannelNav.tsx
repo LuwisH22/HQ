@@ -19,6 +19,37 @@ import { useChannelDirectory, type ChannelGroup } from './use-channels'
  * private channel without an explicit ALLOW is absent, not hidden.
  */
 
+/**
+ * The channel's own glyph.
+ *
+ * Selected turns it accent and switches to Phosphor's fill weight, which is
+ * the app's one rule for a chosen icon.
+ */
+function ChannelIcon({
+  channel,
+  active,
+}: {
+  channel: ChannelGroup['channels'][number]
+  active: boolean
+}) {
+  const shared = cn('size-[18px] shrink-0', active ? 'text-accent-text' : 'text-muted-foreground')
+  const weight = active ? 'fill' : 'regular'
+
+  if (channel.type === 'voice') {
+    return (
+      <SpeakerHigh
+        weight={weight}
+        className={shared}
+        aria-label={channel.isPrivate ? 'Private voice channel' : 'Voice channel'}
+      />
+    )
+  }
+  if (channel.isPrivate) {
+    return <LockSimple weight={weight} className={shared} aria-label="Private" />
+  }
+  return <Hash weight={weight} className={shared} aria-hidden="true" />
+}
+
 function ChannelRow({
   channel,
   unread,
@@ -34,44 +65,29 @@ function ChannelRow({
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          'group relative flex min-h-8 items-center gap-2 rounded-sm py-1 pr-2 pl-2 text-sm transition-colors duration-[140ms]',
+          'group relative flex h-[30px] items-center gap-2 rounded-sm px-2 text-sm transition-colors duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)]',
           'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
           isActive
-            ? 'bg-primary/14 text-foreground font-medium'
+            ? 'bg-surface-active text-foreground font-medium'
             : unread > 0
-              ? // Unread is weight, not colour: the row reads as louder
-                // without becoming a second kind of selected.
-                'text-foreground hover:bg-foreground/7 font-medium'
-              : 'text-muted-foreground hover:bg-foreground/7 hover:text-foreground',
+              ? // Unread is weight and a dot, never colour: the row reads as
+                // louder without becoming a second kind of selected.
+                'text-foreground hover:bg-accent font-semibold'
+              : 'text-secondary-foreground hover:bg-accent hover:text-foreground font-medium',
         )
       }
     >
       {({ isActive }) => (
         <>
-          <span
-            aria-hidden="true"
-            className={cn(
-              'bg-primary absolute -left-1.5 h-3.5 w-0.5 rounded-xs transition-opacity',
-              isActive ? 'opacity-100' : 'opacity-0',
-            )}
-          />
+          {isActive ? <span aria-hidden="true" className="nav-rail -left-1.5" /> : null}
           {/* A voice channel says so first: it is the difference that changes
               what clicking does. Private is carried by the label rather than
               by a second glyph, so the row keeps one icon whatever it is. */}
-          {channel.type === 'voice' ? (
-            <SpeakerHigh
-              className="size-3.5 shrink-0 opacity-70"
-              aria-label={channel.isPrivate ? 'Private voice channel' : 'Voice channel'}
-            />
-          ) : channel.isPrivate ? (
-            <LockSimple className="size-3.5 shrink-0 opacity-70" aria-label="Private" />
-          ) : (
-            <Hash className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
-          )}
+          <ChannelIcon channel={channel} active={isActive} />
           <span className="truncate">{channel.name}</span>
           {unread > 0 ? (
             <span
-              className="bg-primary/22 text-foreground text-3xs ml-auto min-w-4 rounded-full px-1.5 py-px text-center font-semibold tabular-nums"
+              className="text-2xs text-foreground ml-auto font-mono tabular-nums"
               aria-label={`${String(unread)} unread`}
             >
               {unread > 99 ? '99+' : unread}
@@ -105,29 +121,34 @@ function CategorySection({
         onClick={() => toggleCategory(group.id)}
         aria-expanded={!collapsed}
         className={cn(
-          'text-3xs text-foreground/42 hover:text-foreground/70 flex w-full items-center gap-1 px-1 py-1 font-semibold tracking-[0.1em] uppercase transition-colors',
+          'display-eyebrow text-3xs text-muted-foreground hover:text-secondary-foreground flex h-6 w-full items-center gap-1 px-2 transition-colors duration-[120ms]',
           'focus-visible:ring-ring rounded-xs focus-visible:ring-2 focus-visible:outline-none',
         )}
       >
         <CaretRight
-          className={cn('size-2.5 transition-transform duration-150', !collapsed && 'rotate-90')}
+          className={cn(
+            'size-3 shrink-0 transition-transform duration-[120ms]',
+            !collapsed && 'rotate-90',
+          )}
           aria-hidden="true"
         />
         <span className="truncate">{group.name}</span>
         {collapsed && hidden > 0 ? (
           <span
-            className="bg-primary/22 text-foreground text-3xs ml-auto rounded-full px-1.5 py-px font-semibold tabular-nums"
+            className="text-2xs text-foreground ml-auto font-mono tracking-normal normal-case tabular-nums"
             aria-label={`${String(hidden)} unread`}
           >
             {hidden > 99 ? '99+' : hidden}
           </span>
         ) : (
-          <span className="text-foreground/28 ml-auto tabular-nums">{group.channels.length}</span>
+          <span className="text-2xs text-muted-foreground/60 ml-auto font-mono tracking-normal normal-case tabular-nums">
+            {group.channels.length}
+          </span>
         )}
       </button>
 
       {collapsed ? null : (
-        <ul className="mt-0.5 space-y-px pl-1.5">
+        <ul className="space-y-0.5 pl-1.5">
           {group.channels.map((channel) => (
             <li key={channel.id}>
               <ChannelRow
@@ -146,10 +167,8 @@ function CategorySection({
 /** Section heading with an optional trailing action. */
 function SectionHeading({ label, action }: { label: string; action?: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1 px-1 pt-4 pb-1">
-      <p className="text-3xs text-foreground/42 flex-1 font-semibold tracking-[0.1em] uppercase">
-        {label}
-      </p>
+    <div className="flex h-6 items-center gap-1 px-2 pt-4">
+      <p className="display-eyebrow text-3xs text-muted-foreground flex-1">{label}</p>
       {action}
     </div>
   )

@@ -31,6 +31,15 @@ import { useChannelDirectory } from '@/features/channels/use-channels'
  * both places.
  */
 
+/** The state, in the words §12 gives it. */
+function eyebrow(voice: VoiceState): string {
+  if (voice.status === 'connecting' || voice.status === 'requesting') return 'Voice · connecting'
+  if (voice.status === 'reconnecting') return 'Reconnecting'
+  if (voice.status === 'error') return 'Connection failed'
+  if (!voice.canSpeak) return 'Voice · listening'
+  return 'Voice · connected'
+}
+
 function statusLine(voice: VoiceState): string {
   if (voice.status === 'connecting' || voice.status === 'requesting') return 'Connecting…'
   if (voice.status === 'reconnecting') return 'Reconnecting…'
@@ -175,7 +184,7 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
         role="region"
         aria-label="Voice session"
         data-voice-bar="mobile"
-        className="border-border bg-surface flex items-center gap-2 border-t px-3 py-1.5 md:hidden"
+        className="border-border-subtle bg-elevated flex h-10 items-center gap-2 border-t px-3 md:hidden"
       >
         <span
           aria-hidden="true"
@@ -186,7 +195,9 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
         />
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
           {where}
-          <span className="text-2xs text-muted-foreground truncate">{statusLine(voice)}</span>
+          <span className="text-2xs text-muted-foreground truncate font-mono">
+            {statusLine(voice)}
+          </span>
         </span>
         <span className="flex shrink-0 items-center gap-1">{controls}</span>
       </div>
@@ -198,27 +209,35 @@ export function VoiceSessionBar({ layout = 'sidebar' }: { layout?: 'sidebar' | '
       role="region"
       aria-label="Voice session"
       data-voice-bar="sidebar"
-      className="border-border bg-surface/60 mx-2 mb-2 rounded-md border p-2"
+      className="border-border bg-elevated edge-light m-2 rounded-md border p-2"
     >
       <div className="flex items-center gap-1.5">
         <span
           aria-hidden="true"
           className={cn(
             'size-1.5 shrink-0 rounded-full',
-            failed ? 'bg-destructive' : live ? 'bg-primary' : 'bg-muted-foreground/60',
+            failed
+              ? 'bg-destructive'
+              : live
+                ? voice.canSpeak
+                  ? 'bg-success'
+                  : 'bg-accent-text'
+                : 'bg-warning animate-[pulse_1.2s_ease-in-out_infinite]',
           )}
         />
-        <span className="text-3xs text-foreground/42 font-semibold tracking-[0.1em] uppercase">
-          Voice
+        <span className="display-eyebrow text-3xs text-muted-foreground truncate">
+          {eyebrow(voice)}
         </span>
         {!voice.canSpeak && live ? (
-          <Ear className="text-muted-foreground/60 ml-auto size-3.5" aria-label="Listening only" />
+          <Ear className="text-accent-text ml-auto size-3.5 shrink-0" aria-label="Listening only" />
         ) : null}
       </div>
 
-      <div className="mt-0.5 flex flex-col">
+      <div className="mt-1 flex flex-col">
         {where}
-        <span className="text-2xs text-muted-foreground truncate">{statusLine(voice)}</span>
+        <span className="text-2xs text-muted-foreground truncate font-mono">
+          {statusLine(voice)}
+        </span>
       </div>
 
       <div className="mt-2 flex items-center gap-1">{controls}</div>

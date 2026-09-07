@@ -58,6 +58,9 @@
   /* The accent at its two other working strengths. */
   --color-accent-glow: var(--accent-glow);
   --color-accent-deep: var(--accent-deep);
+  /* Selected rows and mention chips: the accent tint composited on surface,
+     which is a step sideways from hover rather than a step further up. */
+  --color-surface-active: var(--surface-active);
   /* Rank and ownership. At most twice on a screen. */
   --color-brass: var(--brass);
   --color-live: var(--live);
@@ -123,6 +126,7 @@
   --sidebar: #07070a;
   --surface: #14141c;
   --elevated: #1a1a24;
+  --surface-active: #1b1930;
   --card: #14141c;
   --popover: #1c1c27;
 

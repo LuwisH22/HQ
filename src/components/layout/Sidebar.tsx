@@ -12,46 +12,45 @@ import { OrganizationSwitcher } from './OrganizationSwitcher'
 import { VoiceSessionBar } from '@/features/voice/VoiceSessionBar'
 import { ProfileButton, SignOutButton } from './UserMenu'
 
+/**
+ * One navigation row, 30px tall.
+ *
+ * Selection is three things at once and none of them is weight: the row takes
+ * the accent-tinted surface, the icon turns accent and switches to Phosphor's
+ * fill weight, and the blade appears in the sidebar's gutter. Weight is
+ * reserved for unread, which is a state rather than a place.
+ */
 function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
-  const upcoming = !item.shipped
-
   const link = (
     <NavLink
       to={item.path}
       end={item.path === '/'}
       className={({ isActive }) =>
         cn(
-          'group relative flex items-center gap-2.5 rounded-sm px-2.5 py-1.5 text-sm transition-colors duration-[140ms]',
+          'group relative flex h-[30px] items-center gap-2 rounded-sm px-2 text-sm font-medium transition-colors duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)]',
           'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
           collapsed && 'justify-center px-0',
           isActive
-            ? 'bg-primary/14 text-foreground font-medium'
-            : 'text-muted-foreground hover:bg-foreground/7 hover:text-foreground',
+            ? 'bg-surface-active text-foreground'
+            : 'text-secondary-foreground hover:bg-accent hover:text-foreground',
         )
       }
     >
       {({ isActive }) => (
         <>
-          {/* Active marker sits outside the padding so it reads as a rail. */}
-          <span
-            aria-hidden="true"
+          {isActive ? <span aria-hidden="true" className="nav-rail" /> : null}
+          <item.icon
+            weight={isActive ? 'fill' : 'regular'}
             className={cn(
-              'bg-primary absolute -left-2 h-4 w-0.5 rounded-xs transition-opacity',
-              isActive ? 'opacity-100' : 'opacity-0',
+              'size-[18px] shrink-0',
+              isActive ? 'text-accent-text' : 'text-muted-foreground',
             )}
+            aria-hidden="true"
           />
-          <item.icon className="size-4 shrink-0" aria-hidden="true" />
           {collapsed ? (
             <span className="sr-only">{item.label}</span>
           ) : (
-            <>
-              <span className="truncate">{item.label}</span>
-              {upcoming ? (
-                <span className="text-3xs text-foreground/38 ml-auto font-semibold tracking-[0.1em] uppercase">
-                  Soon
-                </span>
-              ) : null}
-            </>
+            <span className="truncate">{item.label}</span>
           )}
         </>
       )}
@@ -63,10 +62,7 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>{link}</TooltipTrigger>
-      <TooltipContent side="right">
-        {item.label}
-        {upcoming ? ' · coming soon' : ''}
-      </TooltipContent>
+      <TooltipContent side="right">{item.label}</TooltipContent>
     </Tooltip>
   )
 }
@@ -88,9 +84,14 @@ export function Sidebar() {
   const collapsed = useUiStore((state) => state.sidebarCollapsed)
   const toggleSidebar = useUiStore((state) => state.toggleSidebar)
 
+  // The navigation lists what the organization can do today. A module that
+  // has not shipped is not a row with a label on it — it is absent, and it
+  // appears the day it works.
   const visibleItems = useMemo(
     () =>
-      NAV_ITEMS.filter((item) => item.requires.length === 0 || permissions.canAny(item.requires)),
+      NAV_ITEMS.filter(
+        (item) => item.shipped && (item.requires.length === 0 || permissions.canAny(item.requires)),
+      ),
     [permissions],
   )
 
@@ -98,21 +99,19 @@ export function Sidebar() {
   const organizationItems = visibleItems.filter((item) => item.group === 'organization')
   // Collapsed to icons there is no room for a channel list, so the directory
   // link stands in for it rather than the channels becoming unreachable.
-  const chatItems = visibleItems.filter((item) => item.group === 'chat' && item.shipped)
+  const chatItems = visibleItems.filter((item) => item.group === 'chat')
 
   return (
     <aside
       data-testid="sidebar"
       className={cn(
         'bg-sidebar flex h-full shrink-0 flex-col transition-[width] duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)]',
-        collapsed ? 'w-14' : 'w-64',
+        collapsed ? 'w-16' : 'w-64',
       )}
     >
-      <div className={cn('p-2', collapsed && 'px-1.5')}>
-        <OrganizationSwitcher collapsed={collapsed} />
-      </div>
+      <OrganizationSwitcher collapsed={collapsed} />
 
-      <nav aria-label="Main" className="min-h-0 flex-1 overflow-y-auto px-3 py-1">
+      <nav aria-label="Main" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <ul className="space-y-0.5">
           {primaryItems.map((item) => (
             <li key={item.id}>
@@ -133,11 +132,11 @@ export function Sidebar() {
         {organizationItems.length > 0 ? (
           <>
             {!collapsed ? (
-              <p className="text-3xs text-foreground/42 px-1 pt-4 pb-1 font-semibold tracking-[0.1em] uppercase">
+              <p className="display-eyebrow text-3xs text-muted-foreground flex h-6 items-center px-2 pt-4">
                 Organization
               </p>
             ) : (
-              <div className="border-border my-3 border-t" aria-hidden="true" />
+              <div className="border-border-subtle my-3 border-t" aria-hidden="true" />
             )}
             <ul className="space-y-0.5">
               {organizationItems.map((item) => (
@@ -154,21 +153,30 @@ export function Sidebar() {
           channel list: it is where you are, not where you might go. */}
       <VoiceSessionBar />
 
-      {/* Three controls, three jobs: your profile, the way out, and the
-          width of this panel. They used to be a dropdown and one small arrow,
-          which made signing out something you had to go looking for. */}
-      <div className={cn('border-border shrink-0 border-t p-2', collapsed && 'px-1.5')}>
-        <div className={cn('flex items-center gap-1', collapsed && 'flex-col gap-1.5')}>
-          <ProfileButton collapsed={collapsed} />
+      {/* Who you are, and — once you reach for them — what you can do about
+          it. The actions used to sit out in the open, which made a sign-out
+          button the loudest thing in the sidebar. */}
+      <div
+        className={cn(
+          'group/footer border-border-subtle flex shrink-0 items-center gap-1 border-t px-2',
+          collapsed ? 'h-auto flex-col gap-1.5 px-1.5 py-2' : 'h-[52px]',
+        )}
+      >
+        <ProfileButton collapsed={collapsed} />
+        {!collapsed ? (
+          <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-[120ms] group-focus-within/footer:opacity-100 group-hover/footer:opacity-100">
+            <SignOutButton />
+          </span>
+        ) : (
           <SignOutButton />
-        </div>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"
           onClick={toggleSidebar}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!collapsed}
-          className={cn('text-muted-foreground mt-1', collapsed ? 'mx-auto flex' : 'ml-auto flex')}
+          className="text-muted-foreground shrink-0"
         >
           {collapsed ? (
             <CaretDoubleRight aria-hidden="true" />
