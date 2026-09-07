@@ -120,7 +120,7 @@ export function RoleEditorDialog({
           this anchors to the top instead, where the available height is
           knowable; centring returns at sm and above. */}
       <DialogContent className="top-3 flex max-h-[88dvh] translate-y-0 flex-col gap-0 overflow-hidden overflow-y-hidden p-0 sm:top-1/2 sm:max-h-[85dvh] sm:max-w-2xl sm:-translate-y-1/2">
-        <div className="border-border shrink-0 border-b px-5 py-4">
+        <div className="border-border-subtle shrink-0 border-b px-5 py-4">
           <DialogTitle>{role ? `Edit ${role.name}` : 'Create a role'}</DialogTitle>
           <DialogDescription className="mt-1">
             Names are yours to choose and carry no authority of their own. Rank decides who may
@@ -175,9 +175,7 @@ export function RoleEditorDialog({
           <div className="space-y-4">
             {grouped.map(([category, rows]) => (
               <div key={category}>
-                <p className="text-3xs text-muted-foreground mb-2 font-semibold tracking-[0.1em] uppercase">
-                  {category}
-                </p>
+                <p className="display-eyebrow text-3xs text-muted-foreground mb-2">{category}</p>
                 <div className="space-y-1.5">
                   {rows.map((row) => {
                     const canDelegate = permissions.can(row.key as Permission)
@@ -188,7 +186,7 @@ export function RoleEditorDialog({
                     return (
                       <label
                         key={row.key}
-                        className="hover:bg-elevated flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5"
+                        className="hover:bg-elevated flex cursor-pointer items-start gap-2.5 rounded-sm px-2 py-1.5 transition-colors duration-[120ms]"
                       >
                         <Checkbox
                           checked={isOn}
@@ -221,7 +219,7 @@ export function RoleEditorDialog({
           </div>
         </div>
 
-        <div className="border-border bg-elevated flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
+        <div className="border-border-subtle bg-elevated flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
           <p className="text-muted-foreground text-2xs flex items-center gap-1.5">
             <Info className="size-3.5 shrink-0" aria-hidden="true" />
             Locked items are permissions you do not hold yourself.

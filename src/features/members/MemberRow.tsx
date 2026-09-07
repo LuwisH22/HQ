@@ -27,6 +27,7 @@ import {
   type OrganizationMember,
 } from '@/services/organization.service'
 import { displayNameFor, initialsFor } from '@/services/profile.service'
+import { cn } from '@/lib/utils'
 import { queryKeys } from '@/lib/query-keys'
 import { errorMessage } from '@/lib/errors'
 import { canActOnRank, canGrantRank } from '@/lib/permissions'
@@ -111,22 +112,32 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
   // Only roles at or below the viewer's own authority may be assigned.
   const assignableRoles = roles.filter((role) => canGrantRank(actorRank, role.rank))
 
+  // Ownership is a property of the organization, not of a role — so it is
+  // only ever drawn where the app actually knows it, which is the viewer's own
+  // membership. A roster row for somebody else carries no ownership claim.
+  const ownsOrganization = isSelf && membership?.isOwner === true
+
   return (
-    <div className="bg-card flex items-center gap-3 rounded-md p-3 shadow-sm">
+    <div className="group/member hover:bg-surface flex min-h-14 items-center gap-3 px-3 py-2 transition-colors duration-[120ms]">
       <span className="relative shrink-0">
-        <Avatar className="size-9">
+        <Avatar className="size-8 rounded-md">
           {member.profile.avatarUrl ? <AvatarImage src={member.profile.avatarUrl} alt="" /> : null}
-          <AvatarFallback>{initialsFor(member.profile)}</AvatarFallback>
+          <AvatarFallback className="rounded-md">{initialsFor(member.profile)}</AvatarFallback>
         </Avatar>
-        <AvatarStatus status={presence} />
+        <AvatarStatus status={presence} className="size-2 border-[1.5px]" />
       </span>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="truncate text-sm leading-tight font-medium">
+          <p
+            className={cn(
+              'truncate text-sm leading-tight font-semibold',
+              presence === 'offline' ? 'text-secondary-foreground' : 'text-foreground',
+            )}
+          >
             {displayNameFor(member.profile)}
           </p>
-          {isSelf ? <Badge variant="secondary">You</Badge> : null}
+          {isSelf ? <Badge variant="neutral">You</Badge> : null}
           {effective === 'suspended' ? (
             <Badge variant="warning">
               {suspendedUntil
@@ -138,16 +149,39 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
         </div>
         <p className="text-2xs text-muted-foreground truncate">
           {member.profile.title ? `${member.profile.title} · ` : ''}
-          {member.profile.email}
+          <span className="font-mono">{member.profile.email}</span>
         </p>
       </div>
 
-      <div className="hidden shrink-0 text-right sm:block">
-        <p className="text-2xs text-muted-foreground">{presenceLabel(presence)}</p>
-        <p className="text-2xs text-muted-foreground/70">Joined {formatDate(member.joinedAt)}</p>
+      {/* Presence is a dot and a word; the join date is mono, because it is a
+          date and a column of them should line up. */}
+      <div className="hidden w-[124px] shrink-0 text-right sm:block">
+        <p className="text-2xs flex items-center justify-end gap-1.5">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'size-1.5 rounded-full',
+              presence === 'online'
+                ? 'bg-success'
+                : presence === 'away'
+                  ? 'bg-warning'
+                  : 'bg-offline',
+            )}
+          />
+          <span
+            className={
+              presence === 'offline' ? 'text-muted-foreground' : 'text-secondary-foreground'
+            }
+          >
+            {presenceLabel(presence)}
+          </span>
+        </p>
+        <p className="text-2xs text-muted-foreground truncate font-mono whitespace-nowrap">
+          Joined {formatDate(member.joinedAt)}
+        </p>
       </div>
 
-      <Badge variant={member.role.rank === 0 ? 'default' : 'outline'} className="shrink-0">
+      <Badge variant={ownsOrganization ? 'brass' : 'neutral'} className="shrink-0">
         <Shield className="size-3" aria-hidden="true" />
         {member.role.name}
       </Badge>
@@ -159,7 +193,7 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
           {member.roles
             .filter((role) => role.id !== member.role.id)
             .map((role) => (
-              <Badge key={role.id} variant="secondary">
+              <Badge key={role.id} variant="neutral">
                 {role.name}
               </Badge>
             ))}
@@ -173,6 +207,9 @@ export function MemberRow({ member, roles }: { member: OrganizationMember; roles
               variant="ghost"
               size="icon-sm"
               loading={busy}
+              // Quiet until the row is under the pointer or the button has
+              // focus, and never hidden from a keyboard.
+              className="text-muted-foreground hover:text-foreground shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/member:opacity-100 sm:focus-visible:opacity-100 sm:aria-expanded:opacity-100"
               aria-label={`Actions for ${displayNameFor(member.profile)}`}
             >
               {busy ? null : <DotsThree aria-hidden="true" />}

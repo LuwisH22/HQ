@@ -101,7 +101,7 @@ export function InviteMemberDialog({
         <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} noValidate>
           {/* Header band */}
           <div className="flex gap-3 px-5 pt-5 pb-4">
-            <span className="border-primary flex size-8 shrink-0 items-center justify-center rounded-sm border">
+            <span className="border-border bg-elevated text-accent-text flex size-8 shrink-0 items-center justify-center rounded-sm border">
               <UserPlus className="text-primary size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -181,8 +181,8 @@ export function InviteMemberDialog({
           </div>
 
           {/* Footer band */}
-          <div className="border-border bg-elevated/40 flex items-center gap-3 border-t px-5 py-3.5">
-            <p className="text-foreground/45 text-3xs min-w-0 flex-1">
+          <div className="border-border-subtle bg-elevated flex items-center gap-3 border-t px-5 py-3.5">
+            <p className="text-muted-foreground text-2xs min-w-0 flex-1">
               You can only assign roles at or below your own.
             </p>
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>

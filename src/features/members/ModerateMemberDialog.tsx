@@ -123,7 +123,7 @@ export function ModerateMemberDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-0 overflow-hidden p-0">
-        <div className="border-border border-b px-5 py-4">
+        <div className="border-border-subtle border-b px-5 py-4">
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription className="mt-1">{copy.description}</DialogDescription>
         </div>
@@ -131,7 +131,7 @@ export function ModerateMemberDialog({
         <div className="space-y-4 px-5 py-4">
           <p className="text-xs">
             <span className="text-muted-foreground">Member: </span>
-            <span className="font-medium">{name}</span>
+            <span className="font-semibold">{name}</span>
           </p>
 
           {intent === 'suspend' ? (
@@ -198,7 +198,7 @@ export function ModerateMemberDialog({
           ) : null}
         </div>
 
-        <div className="border-border bg-elevated flex justify-end gap-2 border-t px-5 py-3">
+        <div className="border-border-subtle bg-elevated flex justify-end gap-2 border-t px-5 py-3">
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

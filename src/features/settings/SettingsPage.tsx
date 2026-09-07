@@ -36,34 +36,65 @@ export function SettingsPage() {
   const tabs = TABS.filter((tab) => !tab.requires || permissions.can(tab.requires))
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 p-4 sm:p-6">
-      <PageHeader title="Settings" description="How this organization is configured." />
+    <div className="mx-auto w-full max-w-[960px] space-y-5 px-4 pt-4 pb-8 sm:px-6 sm:pt-5">
+      <PageHeader
+        eyebrow="Organization"
+        title="Settings"
+        description="How this organization is configured."
+      />
 
-      <nav aria-label="Settings sections" className="-mx-1 overflow-x-auto">
-        <ul className="border-border flex gap-1 border-b px-1">
-          {tabs.map((tab) => (
-            <li key={tab.path}>
-              <NavLink
-                to={tab.path}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors',
-                    'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
-                    isActive
-                      ? 'border-primary text-foreground'
-                      : 'text-muted-foreground hover:text-foreground border-transparent',
-                  )
-                }
-              >
-                <tab.icon className="size-3.5" aria-hidden="true" />
-                {tab.label}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      {/* One nav, two shapes: a rail beside the content where there is room
+          for one, and the same rows scrolling horizontally where there is
+          not. The links, their labels and their order do not change. */}
+      <div className="lg:flex lg:items-start lg:gap-6">
+        <nav
+          aria-label="Settings sections"
+          className="-mx-1 shrink-0 overflow-x-auto lg:mx-0 lg:w-[200px] lg:overflow-visible"
+        >
+          <ul className="border-border-subtle flex gap-1 border-b px-1 lg:flex-col lg:gap-0.5 lg:border-b-0 lg:px-0">
+            {tabs.map((tab) => (
+              <li key={tab.path}>
+                <NavLink
+                  to={tab.path}
+                  className={({ isActive }) =>
+                    cn(
+                      'relative flex items-center gap-2 border-b-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-[120ms]',
+                      'lg:h-[30px] lg:rounded-sm lg:border-b-0 lg:px-2 lg:py-0 lg:text-sm',
+                      isActive
+                        ? 'border-primary text-foreground lg:bg-surface-active'
+                        : 'text-secondary-foreground hover:text-foreground lg:hover:bg-accent border-transparent',
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {/* The same blade the sidebar uses, and only where the
+                          nav is a rail — a blade on a tab strip is a line
+                          across the wrong axis. */}
+                      {isActive ? (
+                        <span aria-hidden="true" className="nav-rail hidden lg:block" />
+                      ) : null}
+                      <tab.icon
+                        weight={isActive ? 'fill' : 'regular'}
+                        className={cn(
+                          'size-4 shrink-0',
+                          isActive ? 'text-accent-text' : 'text-muted-foreground',
+                        )}
+                        aria-hidden="true"
+                      />
+                      {tab.label}
+                    </>
+                  )}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-      <Outlet />
+        <div className="min-w-0 flex-1 pt-5 lg:pt-0">
+          <Outlet />
+        </div>
+      </div>
     </div>
   )
 }

@@ -96,8 +96,9 @@ export function MembersPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-5 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[960px] space-y-5 px-4 pt-4 pb-8 sm:px-6 sm:pt-5">
       <PageHeader
+        eyebrow="Roster"
         title="Members"
         description={`Everyone in ${organization?.name ?? 'the organization'}, and what they can do.`}
         actions={
@@ -110,18 +111,27 @@ export function MembersPage() {
         }
       />
 
-      <div className="relative">
-        <MagnifyingGlass
-          className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
-          aria-hidden="true"
-        />
-        <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by name, email or role"
-          aria-label="Search members"
-          className="pl-8"
-        />
+      {/* The search well and the count on one line: how many people there
+          are is metadata about the list, not a heading. */}
+      <div className="flex items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-[240px]">
+          <MagnifyingGlass
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+            aria-hidden="true"
+          />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by name, email or role"
+            aria-label="Search members"
+            className="pl-8"
+          />
+        </div>
+        {membersQuery.isSuccess ? (
+          <p className="text-2xs text-muted-foreground shrink-0 font-mono tabular-nums">
+            {filtered.length} of {(membersQuery.data ?? []).length}
+          </p>
+        ) : null}
       </div>
 
       {membersQuery.isPending ? (
@@ -139,7 +149,13 @@ export function MembersPage() {
           }
         />
       ) : (
-        <ul aria-label="Members" className="space-y-2">
+        // One surface with hairlines between the rows, not a stack of cards:
+        // the roster is a list of people, and a card each turns it into a
+        // gallery.
+        <ul
+          aria-label="Members"
+          className="border-border bg-card divide-border-subtle divide-y overflow-hidden rounded-md border"
+        >
           {filtered.map((member) => (
             <li key={member.id}>
               <MemberRow member={member} roles={rolesQuery.data ?? []} />

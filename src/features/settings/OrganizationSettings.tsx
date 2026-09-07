@@ -77,7 +77,15 @@ function OrganizationForm({
         label="Handle"
         hint="The permanent identifier for this organization. It cannot be changed."
       >
-        {(props) => <Input {...props} value={`@${organization.slug}`} readOnly disabled />}
+        {(props) => (
+          <Input
+            {...props}
+            value={`@${organization.slug}`}
+            readOnly
+            disabled
+            className="font-mono"
+          />
+        )}
       </FormField>
 
       <FormField label="Name" error={form.formState.errors.name?.message} required>
@@ -121,7 +129,7 @@ function OrganizationForm({
       </FormField>
 
       {canManage ? (
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="border-border-subtle mt-1 flex justify-end gap-2 border-t pt-4">
           <Button
             type="button"
             variant="ghost"
@@ -153,10 +161,13 @@ export function OrganizationSettings() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Organization</CardTitle>
+      <CardHeader className="border-border-subtle border-b">
+        <CardTitle className="text-[15px]">Organization</CardTitle>
+        <p className="text-muted-foreground text-sm">
+          The name, handle and default timezone everything else is scheduled against.
+        </p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         <OrganizationForm key={organization.id} organization={organization} canManage={canManage} />
       </CardContent>
     </Card>

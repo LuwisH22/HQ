@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -91,7 +92,7 @@ function ProfileForm({ profile, onDone }: { profile: Profile; onDone: () => void
   return (
     <form
       onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
-      className="flex flex-col gap-4 px-5 pt-1 pb-5"
+      className="flex flex-col gap-4 px-5 pt-4 pb-5"
       noValidate
     >
       <FormField
@@ -155,7 +156,7 @@ function ProfileForm({ profile, onDone }: { profile: Profile; onDone: () => void
         )}
       </FormField>
 
-      <div className="flex justify-end gap-2 pt-1">
+      <div className="border-border-subtle mt-1 flex justify-end gap-2 border-t pt-4">
         <Button type="button" variant="ghost" onClick={onDone}>
           Close
         </Button>
@@ -167,26 +168,34 @@ function ProfileForm({ profile, onDone }: { profile: Profile; onDone: () => void
   )
 }
 
-/** Identity below the title: who you are, and the address you sign in with. */
+/**
+ * Identity below the title: who you are, and the address you sign in with.
+ *
+ * A band on the canvas rather than a card: it is the same plane the dialog
+ * opens on, separated by a hairline, so the form below reads as the part you
+ * can change and this as the part you are.
+ */
 function ProfileHeader({ profile }: { profile: Profile }) {
   const { membership } = useWorkspace()
 
   return (
-    <div className="flex items-center gap-3 px-5 pt-3 pb-4">
-      <Avatar className="size-11">
+    <div className="border-border-subtle bg-background flex items-center gap-3 border-y px-5 py-3.5">
+      <Avatar className="size-10 shrink-0 rounded-md">
         {profile.avatarUrl ? <AvatarImage src={profile.avatarUrl} alt="" /> : null}
-        <AvatarFallback>{initialsFor(profile)}</AvatarFallback>
+        <AvatarFallback className="rounded-md">{initialsFor(profile)}</AvatarFallback>
       </Avatar>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="truncate text-sm leading-tight font-semibold">{displayNameFor(profile)}</p>
-        <p className="text-2xs text-muted-foreground mt-0.5 truncate">
-          {membership?.role.name ?? 'Member'}
-        </p>
         {/* Read-only on purpose: the sign-in address is changed by an
             administrator, not from here. Shown as text rather than a disabled
             field, which is both smaller and less of an invitation. */}
-        <p className="text-2xs text-muted-foreground/70 truncate">{profile.email}</p>
+        <p className="text-2xs text-muted-foreground mt-0.5 truncate font-mono">{profile.email}</p>
       </div>
+      {/* Brass only where the app actually knows ownership: the flag comes
+          from the organization's owner column, never from a role's name. */}
+      <Badge variant={membership?.isOwner ? 'brass' : 'neutral'} className="shrink-0">
+        {membership?.role.name ?? 'Member'}
+      </Badge>
     </div>
   )
 }
@@ -204,7 +213,10 @@ export function ProfileDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent aria-describedby={undefined}>
-        <DialogTitle className="px-5 pt-5">Your profile</DialogTitle>
+        <div className="px-5 pt-5 pb-3.5">
+          <p className="display-eyebrow text-3xs text-muted-foreground">Account</p>
+          <DialogTitle className="mt-1 text-[15px]">Your profile</DialogTitle>
+        </div>
 
         {query.isPending ? (
           <div className="px-5 pt-4 pb-5">

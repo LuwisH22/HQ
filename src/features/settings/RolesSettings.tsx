@@ -100,10 +100,12 @@ export function RolesSettings() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex-row items-center gap-2 space-y-0">
-          <Shield className="text-muted-foreground size-3.5" aria-hidden="true" />
-          <CardTitle className="flex-1">Roles</CardTitle>
-          <Badge variant="outline">{roles.length}</Badge>
+        <CardHeader className="border-border-subtle flex-row items-center gap-2 space-y-0 border-b">
+          <Shield className="text-muted-foreground size-4" aria-hidden="true" />
+          <CardTitle className="flex-1 text-[15px]">Roles</CardTitle>
+          <span className="text-2xs text-muted-foreground font-mono tabular-nums">
+            {roles.length}
+          </span>
           {canManage ? (
             <Button
               size="sm"
@@ -117,44 +119,48 @@ export function RolesSettings() {
             </Button>
           ) : null}
         </CardHeader>
-        <CardContent>
-          <ul className="divide-border divide-y" aria-label="Roles">
+        <CardContent className="pt-2">
+          <ul className="divide-border-subtle -mx-2 divide-y" aria-label="Roles">
             {roles.map((role) => {
               // You may only manage roles strictly below your own authority.
               // Postgres enforces the same rule; this only hides what would fail.
               const manageable = canManage && role.rank > actorRank
               return (
-                <li key={role.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                <li key={role.id} className="group/role flex min-h-11 items-center gap-3 px-2 py-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm leading-tight font-medium">{role.name}</p>
-                      {role.isSystem ? <Badge variant="secondary">Provisioned</Badge> : null}
+                      <p className="truncate text-sm leading-tight font-semibold">{role.name}</p>
+                      {role.isSystem ? <Badge variant="neutral">Provisioned</Badge> : null}
                     </div>
                     {role.description ? (
-                      <p className="text-2xs text-muted-foreground mt-0.5 leading-relaxed">
+                      <p className="text-2xs text-muted-foreground mt-0.5 truncate">
                         {role.description}
                       </p>
                     ) : null}
                   </div>
-                  <span className="text-2xs text-muted-foreground shrink-0 font-mono">
+                  {/* Rank is the authority, and it is a number: mono, so a
+                      column of them lines up and reads as an ordering. */}
+                  <span className="text-2xs text-muted-foreground shrink-0 font-mono tabular-nums">
                     rank {role.rank}
                   </span>
                   {manageable ? (
-                    <div className="flex shrink-0 gap-1">
+                    <div className="flex shrink-0 gap-0.5">
                       <Button
-                        size="icon"
+                        size="icon-sm"
                         variant="ghost"
+                        className="text-muted-foreground hover:text-foreground"
                         aria-label={`Edit ${role.name}`}
                         onClick={() => {
                           setEditing(role)
                           setEditorOpen(true)
                         }}
                       >
-                        <PencilSimple className="size-3.5" aria-hidden="true" />
+                        <PencilSimple aria-hidden="true" />
                       </Button>
                       <Button
-                        size="icon"
+                        size="icon-sm"
                         variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
                         aria-label={`Delete ${role.name}`}
                         loading={deleteMutation.isPending && deleteMutation.variables === role.id}
                         onClick={() => {
@@ -167,7 +173,7 @@ export function RolesSettings() {
                           }
                         }}
                       >
-                        <Trash className="size-3.5" aria-hidden="true" />
+                        <Trash aria-hidden="true" />
                       </Button>
                     </div>
                   ) : null}
@@ -177,7 +183,7 @@ export function RolesSettings() {
           </ul>
 
           <p className="text-2xs text-muted-foreground mt-3 flex items-start gap-1.5 leading-relaxed">
-            <Crown className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+            <Crown className="text-brass mt-0.5 size-3 shrink-0" aria-hidden="true" />
             Ownership is a property of the organization, not of a role. Renaming or deleting a role
             never changes who owns this workspace.
           </p>
@@ -195,21 +201,21 @@ export function RolesSettings() {
       ) : null}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Permission matrix</CardTitle>
-          <p className="text-2xs text-muted-foreground">
+        <CardHeader className="border-border-subtle border-b">
+          <CardTitle className="text-[15px]">Permission matrix</CardTitle>
+          <p className="text-muted-foreground text-sm">
             What each role is allowed to do. Enforced by Row Level Security in the database, not by
             the interface.
           </p>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent className="overflow-x-auto pt-4">
           <table className="w-full min-w-[520px] border-collapse text-left">
             <caption className="sr-only">Permissions granted to each role</caption>
             <thead>
               <tr className="border-border border-b">
                 <th
                   scope="col"
-                  className="text-3xs text-muted-foreground py-2 pr-3 font-semibold tracking-[0.1em] uppercase"
+                  className="display-eyebrow text-3xs text-muted-foreground py-2 pr-3"
                 >
                   Capability
                 </th>
@@ -217,7 +223,7 @@ export function RolesSettings() {
                   <th
                     key={role.id}
                     scope="col"
-                    className="text-3xs text-muted-foreground px-2 py-2 text-center font-semibold tracking-[0.1em] uppercase"
+                    className="display-eyebrow text-3xs text-muted-foreground px-2 py-2 text-center"
                   >
                     {role.name}
                   </th>
@@ -231,16 +237,18 @@ export function RolesSettings() {
                     <th
                       scope="colgroup"
                       colSpan={roles.length + 1}
-                      className="text-3xs text-accent-text pt-3.5 pb-1 text-left font-semibold tracking-[0.1em] uppercase"
+                      className="display-eyebrow text-3xs text-secondary-foreground pt-4 pb-1 text-left"
                     >
                       {category}
                     </th>
                   </tr>
                   {rows.map((row) => (
-                    <tr key={row.key} className="border-border/60 border-b">
-                      <th scope="row" className="py-1.5 pr-3 text-xs font-normal">
-                        <span className="block leading-tight">{row.label}</span>
-                        <span className="text-2xs text-muted-foreground/70 block font-mono">
+                    <tr key={row.key} className="border-border-subtle border-b">
+                      <th scope="row" className="py-2 pr-3 text-xs font-normal">
+                        <span className="text-secondary-foreground block leading-tight">
+                          {row.label}
+                        </span>
+                        <span className="text-2xs text-muted-foreground block font-mono">
                           {row.key}
                         </span>
                       </th>
@@ -250,11 +258,19 @@ export function RolesSettings() {
                           <td key={role.id} className="px-2 py-1.5 text-center">
                             {granted ? (
                               <Check
-                                className="text-primary mx-auto size-3.5"
+                                weight="bold"
+                                className="text-accent-text mx-auto size-3.5"
                                 aria-label="Granted"
                               />
                             ) : (
-                              <span className="sr-only">Not granted</span>
+                              <>
+                                {/* A dash rather than nothing: an empty cell
+                                    is ambiguous about whether the row loaded. */}
+                                <span aria-hidden="true" className="text-muted-foreground/50">
+                                  –
+                                </span>
+                                <span className="sr-only">Not granted</span>
+                              </>
                             )}
                           </td>
                         )

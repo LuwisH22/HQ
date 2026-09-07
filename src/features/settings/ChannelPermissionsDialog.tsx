@@ -87,7 +87,7 @@ export function ChannelPermissionsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="top-3 flex max-h-[88dvh] translate-y-0 flex-col gap-0 overflow-hidden overflow-y-hidden p-0 sm:top-1/2 sm:max-h-[85dvh] sm:max-w-2xl sm:-translate-y-1/2">
-        <div className="border-border shrink-0 border-b px-5 py-4">
+        <div className="border-border-subtle shrink-0 border-b px-5 py-4">
           <DialogTitle>Permissions · {channel.name}</DialogTitle>
           <DialogDescription className="mt-1">
             {channel.isPrivate
@@ -103,21 +103,24 @@ export function ChannelPermissionsDialog({
             .filter((role) => role.rank > actorRank)
             .map((role) => (
               <div key={role.id}>
-                <p className="mb-2 text-xs font-medium">{role.name}</p>
-                <div className="space-y-1.5">
+                <p className="display-eyebrow text-3xs text-muted-foreground mb-2">{role.name}</p>
+                <div className="divide-border-subtle divide-y">
                   {OVERRIDABLE.map((permission) => {
                     const value = current(role.id, permission.key)
                     return (
-                      <div key={permission.key} className="flex items-center gap-3">
-                        <span className="text-muted-foreground flex-1 text-xs">
+                      <div key={permission.key} className="flex min-h-9 items-center gap-3 py-1.5">
+                        <span className="text-secondary-foreground min-w-0 flex-1 text-xs">
                           {permission.label}
                         </span>
+                        {/* One control with three segments rather than three
+                            chips: the choices are exclusive, and a segmented
+                            control says so by its shape before its colour. */}
                         <div
-                          className="flex gap-1"
+                          className="border-border bg-elevated flex shrink-0 overflow-hidden rounded-sm border"
                           role="group"
                           aria-label={`${permission.label} for ${role.name}`}
                         >
-                          {CHOICES.map((choice) => (
+                          {CHOICES.map((choice, index) => (
                             <button
                               key={choice.label}
                               type="button"
@@ -131,12 +134,13 @@ export function ChannelPermissionsDialog({
                                 })
                               }
                               className={cn(
-                                'text-2xs rounded-sm border px-2 py-0.5 transition-colors duration-[140ms]',
+                                'text-2xs border-border h-6 px-2 transition-colors duration-[120ms]',
+                                index > 0 && 'border-l',
                                 value === choice.value
                                   ? choice.value === 'deny'
-                                    ? 'border-destructive text-destructive bg-destructive/10'
-                                    : 'border-primary text-foreground bg-primary/14'
-                                  : 'border-border text-muted-foreground hover:text-foreground',
+                                    ? 'bg-destructive/12 text-destructive font-medium'
+                                    : 'bg-surface-active text-accent-text font-medium'
+                                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
                               )}
                             >
                               {choice.label}
@@ -151,7 +155,7 @@ export function ChannelPermissionsDialog({
             ))}
         </div>
 
-        <div className="border-border bg-elevated flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
+        <div className="border-border-subtle bg-elevated flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 py-3">
           <p className="text-muted-foreground text-2xs flex items-center gap-1.5">
             <Info className="size-3.5 shrink-0" aria-hidden="true" />
             Deny wins over Allow. Roles above your own are not listed.

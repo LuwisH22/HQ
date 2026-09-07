@@ -35,33 +35,34 @@ export function PendingInvitations({ organizationId }: { organizationId: string 
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-2 space-y-0">
-        <EnvelopeSimple className="text-muted-foreground size-3.5" aria-hidden="true" />
-        <CardTitle className="flex-1">Pending invitations</CardTitle>
-        {pending.length > 0 ? <Badge variant="outline">{pending.length}</Badge> : null}
+      <CardHeader className="border-border-subtle flex-row items-center gap-2 space-y-0 border-b">
+        <EnvelopeSimple className="text-muted-foreground size-4" aria-hidden="true" />
+        <CardTitle className="flex-1 text-[15px]">Pending invitations</CardTitle>
+        {pending.length > 0 ? (
+          <span className="text-2xs text-muted-foreground font-mono tabular-nums">
+            {pending.length}
+          </span>
+        ) : null}
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="pt-2">
         {query.isPending ? (
           <CardSkeleton lines={3} />
         ) : query.isError ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : (
-          <ul className="divide-border divide-y">
+          <ul className="divide-border-subtle -mx-2 divide-y">
             {pending.map((invitation) => {
               const expired = new Date(invitation.expiresAt).getTime() < Date.now()
               return (
-                <li
-                  key={invitation.id}
-                  className="flex items-center gap-3 py-2 first:pt-0 last:pb-0"
-                >
+                <li key={invitation.id} className="flex min-h-11 items-center gap-3 px-2 py-1.5">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm leading-tight">{invitation.email}</p>
+                    <p className="truncate text-sm leading-tight font-medium">{invitation.email}</p>
                     <p className="text-2xs text-muted-foreground truncate">
                       {invitation.roleName}
                       {invitation.invitedByName ? ` · invited by ${invitation.invitedByName}` : ''}
                       {' · '}
-                      {formatTimeUntil(invitation.expiresAt)}
+                      <span className="font-mono">{formatTimeUntil(invitation.expiresAt)}</span>
                     </p>
                   </div>
 
@@ -70,6 +71,7 @@ export function PendingInvitations({ organizationId }: { organizationId: string 
                   <Button
                     variant="ghost"
                     size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive shrink-0"
                     aria-label={`Revoke invitation for ${invitation.email}`}
                     loading={revokeMutation.isPending && revokeMutation.variables === invitation.id}
                     onClick={() => revokeMutation.mutate(invitation.id)}
