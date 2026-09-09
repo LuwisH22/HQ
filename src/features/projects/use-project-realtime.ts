@@ -40,10 +40,19 @@ const PROJECT_TABLES = [
   'project_labels',
   'task_labels',
   'task_comments',
+  'project_review_comments',
 ] as const
 
-/** What the list is made of: the projects, and the head count beside each. */
-const LIST_TABLES = ['projects', 'project_members'] as const
+/**
+ * What the list is made of: the projects, the head count beside each, and the
+ * tasks that decide who is shown as working on one.
+ *
+ * Tasks are here and the board is not. The list draws avatars and a count
+ * derived from assignment, so it has to hear about a task being assigned,
+ * finished or deleted — but it has no board to redraw, and the overview is a
+ * family of its own so hearing about one does not refetch every project.
+ */
+const LIST_TABLES = ['projects', 'project_members', 'tasks'] as const
 
 /**
  * The socket half: join a topic, hear about some tables, leave.
@@ -194,6 +203,7 @@ export function useProjectRealtime(
         queryKeys.projects.detail(org, project),
         queryKeys.projects.members(org, project),
         queryKeys.projects.labels(org, project),
+        queryKeys.projects.review(org, project),
         queryKeys.projects.commentsAll(org),
       ])
       if (writingRef.current) owed.current = true
@@ -224,7 +234,10 @@ export function useProjectsRealtime(organizationId: string | undefined, enabled 
       invalidate(queryClient, routeProjectsListChange(change, org).keys)
     },
     () => {
-      invalidate(queryClient, [queryKeys.projects.list(org)])
+      invalidate(queryClient, [
+        queryKeys.projects.list(org),
+        queryKeys.projects.overview(org),
+      ])
     },
   )
 }

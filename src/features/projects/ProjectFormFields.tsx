@@ -20,16 +20,22 @@ import type { ProjectFormValues } from './project-form'
  * two copies that drift. What differs between the two dialogs is the title,
  * the verb on the button and which routine is called — not the form.
  *
- * Archiving is not in the status list on purpose: it is a separate action with
- * a separate permission, and a dropdown that could quietly archive something
- * would be an authorization decision hidden in a field.
+ * The stage is asked for once, when a project is started, and never again.
+ * Editing cannot move a project along: that is what the workflow buttons on
+ * the project itself are for, each one a named action with a rule behind it,
+ * and a dropdown that could quietly mark something reviewed or finished would
+ * be exactly the bypass 6.5 exists to close. `update_project` has no status
+ * argument to send one to either.
  */
 export function ProjectFormFields({
   form,
   autoFocus = false,
+  showStage = false,
 }: {
   form: UseFormReturn<ProjectFormValues>
   autoFocus?: boolean
+  /** Only when starting a project. Editing cannot move one along. */
+  showStage?: boolean
 }) {
   return (
     <>
@@ -45,7 +51,8 @@ export function ProjectFormFields({
         )}
       </FormField>
 
-      <FormField label="Status" error={form.formState.errors.status?.message} required>
+      {showStage ? (
+      <FormField label="Stage" error={form.formState.errors.status?.message} required>
         {(props) => (
           <Controller
             control={form.control}
@@ -67,6 +74,7 @@ export function ProjectFormFields({
           />
         )}
       </FormField>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Starts" error={form.formState.errors.startDate?.message} hint="Optional.">

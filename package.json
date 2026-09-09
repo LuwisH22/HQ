@@ -26,6 +26,7 @@
     "verify:tasks": "node scripts/verify-tasks.mjs",
     "verify:labels": "node scripts/verify-labels-comments.mjs",
     "verify:projects-realtime": "node scripts/verify-projects-realtime.mjs",
+    "verify:project-lifecycle": "node scripts/verify-project-lifecycle.mjs",
     "verify:calendar": "node scripts/verify-calendar.mjs",
     "verify:calendar-realtime": "node scripts/verify-calendar-realtime.mjs",
     "verify:calendar-reminders": "node scripts/verify-calendar-reminders.mjs",

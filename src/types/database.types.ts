@@ -33,7 +33,14 @@ export type CalendarEventType =
  * do, and only `archived` means anything beyond a label — a project arrives
  * there through its own routine and its rows stay where they are.
  */
-export type ProjectStatus = 'planned' | 'active' | 'completed' | 'archived'
+/**
+ * Where a project has got to.
+ *
+ * Four stages, in order, and archiving is not one of them: a project is at a
+ * stage and separately either put away or not, so being archived no longer
+ * destroys the answer to "where had this got to?".
+ */
+export type ProjectStatus = 'planned' | 'in_progress' | 'in_review' | 'done'
 
 /**
  * Which column a task is in.
@@ -752,6 +759,14 @@ export interface Database {
           /** A day, not an instant: 'YYYY-MM-DD' or null. */
           start_date: string | null
           due_date: string | null
+          /** When it was put away, or null. Independent of the stage. */
+          archived_at: string | null
+          review_started_at: string | null
+          /** Computed by the server from its own clock; never sent by a client. */
+          review_deadline_at: string | null
+          review_duration_minutes: number | null
+          /** How many times this project has been sent to review. */
+          review_round: number
           created_by: string | null
           created_at: string
           updated_at: string
@@ -883,6 +898,44 @@ export interface Database {
           },
         ]
       }
+      project_review_comments: {
+        /**
+         * `deleted_body` is deliberately absent, exactly as on `task_comments`:
+         * `authenticated` has no column privilege on it, so asking for it — or
+         * for `*` — is refused.
+         */
+        Row: {
+          id: string
+          project_id: string
+          author_id: string | null
+          /** Empty once deleted. The words move somewhere no client may read. */
+          body: string
+          /** Which round of review this was said in. */
+          review_round: number
+          deleted_at: string | null
+          deleted_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'project_review_comments_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'project_review_comments_author_id_fkey'
+            columns: ['author_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       task_comments: {
         /**
          * `deleted_body` is deliberately absent: `authenticated` has no column
@@ -1000,7 +1053,6 @@ export interface Database {
           p_project_id: string
           p_name?: string | null
           p_description?: string | null
-          p_status?: ProjectStatus | null
           p_start_date?: string | null
           p_due_date?: string | null
           /** Null already means "leave it", so clearing a date says so. */
@@ -1009,7 +1061,53 @@ export interface Database {
         }
         Returns: undefined
       }
+      /**
+       * The only way a project changes stage.
+       *
+       * There is deliberately no status argument on `update_project`: a
+       * routine that accepted one would publish it on an endpoint anybody can
+       * reach, and the lifecycle would be optional again.
+       */
+      transition_project: {
+        Args: {
+          p_project_id: string
+          p_target: ProjectStatus
+          /** 60, 240, 720, 1440, 2880, 4320 — or null for no limit. */
+          p_review_duration_minutes?: number | null
+          /** Completing with work still open, said out loud. */
+          p_allow_unfinished?: boolean
+        }
+        Returns: undefined
+      }
       archive_project: { Args: { p_project_id: string }; Returns: undefined }
+      restore_project: { Args: { p_project_id: string }; Returns: undefined }
+      delete_project: { Args: { p_project_id: string }; Returns: undefined }
+      project_overview: {
+        Args: { p_organization_id: string }
+        Returns: {
+          project_id: string
+          total_tasks: number
+          done_tasks: number
+          workers: {
+            member_id: string
+            user_id: string
+            display_name: string | null
+            full_name: string | null
+            email: string
+            avatar_url: string | null
+            open_tasks: number
+          }[]
+        }[]
+      }
+      create_project_review_comment: {
+        Args: { p_project_id: string; p_body: string }
+        Returns: string
+      }
+      update_project_review_comment: {
+        Args: { p_comment_id: string; p_body: string }
+        Returns: undefined
+      }
+      delete_project_review_comment: { Args: { p_comment_id: string }; Returns: undefined }
       add_project_member: {
         Args: { p_project_id: string; p_member_id: string }
         Returns: undefined

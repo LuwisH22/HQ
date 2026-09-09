@@ -131,7 +131,7 @@ const { data: projectId, error: projectError } = await author.rpc('create_projec
   p_organization_id: orgId,
   p_name: `Realtime probe ${stamp}`,
   p_description: null,
-  p_status: 'active',
+  p_status: 'in_progress',
   p_start_date: null,
   p_due_date: null,
 })

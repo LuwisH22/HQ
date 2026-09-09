@@ -66,12 +66,12 @@ const TITLE = 'Label probe'
 const { data: project } = await supabase.rpc('create_project', {
   p_organization_id: org,
   p_name: `${TITLE} · board`,
-  p_status: 'active',
+  p_status: 'in_progress',
 })
 const { data: other } = await supabase.rpc('create_project', {
   p_organization_id: org,
   p_name: `${TITLE} · elsewhere`,
-  p_status: 'active',
+  p_status: 'in_progress',
 })
 const { data: task } = await supabase.rpc('create_task', {
   p_project_id: project,
@@ -298,7 +298,7 @@ console.log('\n7 · an archived project')
   })
   check('and nothing can be said', Boolean(said), said?.message ?? 'accepted')
 
-  await supabase.rpc('update_project', { p_project_id: project, p_status: 'active' })
+  await supabase.rpc('restore_project', { p_project_id: project })
   const { error: again } = await supabase.rpc('create_task_comment', {
     p_task_id: task,
     p_body: 'Back again.',

@@ -181,6 +181,7 @@ describe('opening the subscription', () => {
       'project_labels',
       'task_labels',
       'task_comments',
+      'project_review_comments',
     ])
   })
 
@@ -227,7 +228,7 @@ describe('opening the subscription', () => {
     }, { wrapper })
 
     expect(open().topic).toBe(`projects:${ORG}`)
-    expect(open().tables).toEqual(['projects', 'project_members'])
+    expect(open().tables).toEqual(['projects', 'project_members', 'tasks'])
   })
 })
 
@@ -337,6 +338,7 @@ describe('the connection itself', () => {
     expect(held(queryKeys.projects.members(ORG, PROJECT))).toBe(true)
     expect(held(queryKeys.projects.labels(ORG, PROJECT))).toBe(true)
     expect(held(queryKeys.projects.commentsAll(ORG))).toBe(true)
+    expect(held(queryKeys.projects.review(ORG, PROJECT))).toBe(true)
   })
 
   it('catches up again when replication is actually running', () => {
@@ -351,6 +353,7 @@ describe('the connection itself', () => {
 
     expect(held(board)).toBe(true)
     expect(held(queryKeys.projects.commentsAll(ORG))).toBe(true)
+    expect(held(queryKeys.projects.review(ORG, PROJECT))).toBe(true)
   })
 
   it('ignores a system message about anything else', () => {

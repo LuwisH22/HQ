@@ -92,17 +92,13 @@ test.beforeAll(async () => {
  * Put away everything this project made.
  *
  * Archiving rather than deleting, because that is all the product can do — the
- * table has no delete path on purpose. Archived rows stay out of the way of
- * the next run, which reads its own names anyway.
+ * Deleted, since 6.5: archiving was all the product could do when this suite
+ * was written, so probe rows accumulated run after run. They no longer need to.
  */
 async function sweep(): Promise<void> {
-  const { data } = await backend
-    .from('projects')
-    .select('id, status')
-    .like('name', `${SCOPE}%`)
-    .neq('status', 'archived')
+  const { data } = await backend.from('projects').select('id').like('name', `${SCOPE}%`)
   for (const row of data ?? []) {
-    await backend.rpc('archive_project', { p_project_id: row.id })
+    await backend.rpc('delete_project', { p_project_id: row.id })
   }
 }
 
@@ -127,7 +123,7 @@ async function start(
   const { data, error } = await backend.rpc('create_project', {
     p_organization_id: organizationId,
     p_name: name,
-    p_status: 'active',
+    p_status: 'in_progress',
     ...extra,
   })
   if (error) throw new Error(`could not start ${name}: ${error.message}`)
@@ -138,13 +134,14 @@ async function start(
 async function rowOf(id: string) {
   const { data } = await backend
     .from('projects')
-    .select('name, description, status, start_date, due_date')
+    .select('name, description, status, archived_at, start_date, due_date')
     .eq('id', id)
   return (data ?? [])[0] as
     | {
         name: string
         description: string | null
         status: string
+        archived_at: string | null
         start_date: string | null
         due_date: string | null
       }
@@ -171,8 +168,8 @@ test.describe('the list', () => {
     await expect(projectNamed(page, active.name)).toBeVisible({ timeout: 15_000 })
     await expect(projectNamed(page, planned.name)).toBeVisible()
 
-    // Grouped by status, and only the groups with something in them.
-    await expect(page.getByRole('heading', { name: 'Active', level: 2 })).toBeVisible()
+    // Grouped by lifecycle stage, and only the groups with something in them.
+    await expect(page.getByRole('heading', { name: 'In progress', level: 2 })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Planned', level: 2 })).toBeVisible()
 
     // A row says the things a list of projects is asked for.
@@ -335,9 +332,12 @@ test.describe('archiving one', () => {
     await dialog.getByRole('button', { name: 'Archive project' }).click()
     await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 15_000 })
 
-    // Archived, not deleted: the row and everything on it stay.
+    // Archived, not deleted: the row and everything on it stay — and since
+    // 6.5 the stage stays too, on its own column, so where a project had got
+    // to survives being put away.
     const row = await rowOf(project.id)
-    expect(row?.status).toBe('archived')
+    expect(row?.archived_at).not.toBeNull()
+    expect(row?.status).toBe('in_progress')
     expect(row?.name).toBe(project.name)
 
     // And it reads as archived in the list rather than disappearing from it.
@@ -350,11 +350,14 @@ test.describe('archiving one', () => {
     const project = await start('kept')
 
     await page.goto(`/#/projects/${project.id}`)
-    await page.getByRole('button', { name: 'Archive' }).click()
+    await page.getByRole('button', { name: 'Archive', exact: true }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click()
 
     await expect(page.getByRole('dialog')).toHaveCount(0)
-    expect((await rowOf(project.id))?.status).toBe('active')
+    // Not archived, and — since 6.5 — still at the stage it was.
+    const row = await rowOf(project.id)
+    expect(row?.archived_at).toBeNull()
+    expect(row?.status).toBe('in_progress')
   })
 })
 

@@ -118,7 +118,7 @@ console.log('\n2 · a signed-in member writes only through the routines')
     .insert({ organization_id: org, name: `${TITLE} · direct` })
   check('a direct INSERT is refused', Boolean(error), error?.code ?? '')
 
-  const { id } = await start('the table is read-only', { p_status: 'active' })
+  const { id } = await start('the table is read-only', { p_status: 'in_progress' })
   // No UPDATE policy means the statement matches no row rather than failing,
   // so what is checked is the row, not the response.
   const { data: changed } = await supabase
@@ -200,7 +200,7 @@ let subject = null
 {
   const { id, error } = await start('the real one', {
     p_description: 'Checking the routine end to end.',
-    p_status: 'active',
+    p_status: 'in_progress',
     p_start_date: '2026-10-01',
     p_due_date: '2026-11-30',
   })
@@ -242,14 +242,16 @@ console.log('\n6 · changing one')
   check('a date can be taken off', cleared?.[0]?.start_date === null)
   check('without taking the other one', cleared?.[0]?.due_date === '2026-11-30')
 
-  const { error: archived } = await supabase.rpc('update_project', {
+  const { error: staged } = await supabase.rpc('update_project', {
     p_project_id: subject,
-    p_status: 'archived',
+    p_status: 'done',
   })
+  // Since 6.5 there is no status argument at all, so PostgREST cannot even
+  // find a function to call: the lifecycle is not editable, by construction.
   check(
-    'archiving is not something an edit can do',
-    Boolean(archived),
-    archived?.message ?? 'accepted',
+    'an edit cannot set the stage, or archive',
+    Boolean(staged),
+    staged?.code ?? 'accepted',
   )
 }
 
@@ -318,10 +320,14 @@ console.log('\n8 · archiving keeps everything')
 
   const { data: row } = await supabase
     .from('projects')
-    .select('status, name, description, due_date')
+    .select('status, archived_at, name, description, due_date')
     .eq('id', subject)
   check('the row is still there', (row ?? []).length === 1)
-  check('with its status changed', row?.[0]?.status === 'archived')
+  check('with the archive recorded on its own column', row?.[0]?.archived_at !== null)
+  // 6.5: archiving no longer overwrites the stage, so where a project had got
+  // to survives being put away and comes back with it.
+  check('and the stage left exactly where it was', row?.[0]?.status === 'in_progress',
+    String(row?.[0]?.status))
   check('and nothing else lost', row?.[0]?.description !== null && row?.[0]?.due_date !== null)
 
   const { data: members } = await supabase
@@ -333,9 +339,17 @@ console.log('\n8 · archiving keeps everything')
   const { error: twice } = await supabase.rpc('archive_project', { p_project_id: subject })
   check('archiving it again is refused', Boolean(twice), twice?.message ?? 'accepted')
 
-  await supabase.rpc('update_project', { p_project_id: subject, p_status: 'planned' })
-  const { data: back } = await supabase.from('projects').select('status').eq('id', subject)
-  check('and it can be brought back by an edit', back?.[0]?.status === 'planned')
+  const { error: restored } = await supabase.rpc('restore_project', { p_project_id: subject })
+  check('and it can be brought back', !restored, restored?.message ?? '')
+  const { data: back } = await supabase
+    .from('projects')
+    .select('status, archived_at')
+    .eq('id', subject)
+  check(
+    'at the stage it was put away',
+    back?.[0]?.status === 'in_progress' && back?.[0]?.archived_at === null,
+    String(back?.[0]?.status),
+  )
 }
 
 console.log('\n9 · audit')
@@ -373,18 +387,17 @@ console.log('\n9 · audit')
 
 console.log('\ncleanup')
 {
-  for (const id of made) {
-    const { data: row } = await supabase.from('projects').select('status').eq('id', id)
-    if ((row ?? [])[0] && row[0].status !== 'archived') {
-      await supabase.rpc('archive_project', { p_project_id: id })
-    }
+  // 6.5 gave the application a real delete, so a probe leaves nothing behind.
+  const { data: mine } = await supabase.from('projects').select('id').like('name', `${TITLE}%`)
+  for (const row of mine ?? []) {
+    await supabase.rpc('delete_project', { p_project_id: row.id })
   }
   const { data: left } = await supabase
     .from('projects')
     .select('id, status')
     .like('name', `${TITLE}%`)
-  const unarchived = (left ?? []).filter((row) => row.status !== 'archived')
-  check('every probe project is archived', unarchived.length === 0, `${String(unarchived.length)} left`)
+  check('every probe project is deleted', (left ?? []).length === 0,
+    `${String((left ?? []).length)} left`)
 
   if ((left ?? []).length > 0) {
     console.log(

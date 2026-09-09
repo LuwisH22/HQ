@@ -7,7 +7,7 @@ import {
   toProjectPatch,
   type ProjectFormValues,
 } from './project-form'
-import { PROJECT_STATUS_ORDER, SELECTABLE_STATUSES } from './project-status'
+import { PROJECT_STATUSES, SELECTABLE_STATUSES } from './project-status'
 import type { Project } from '@/services/project.service'
 
 /**
@@ -30,9 +30,14 @@ function project(overrides: Partial<Project> = {}): Project {
     organizationId: ORG,
     name: 'Spring bootcamp',
     description: 'Two weeks in Jakarta.',
-    status: 'active',
+    status: 'in_progress',
     startDate: '2026-10-01',
     dueDate: '2026-11-30',
+    archivedAt: null,
+    reviewStartedAt: null,
+    reviewDeadlineAt: null,
+    reviewDurationMinutes: null,
+    reviewRound: 0,
     createdBy: 'user-1',
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-02T00:00:00.000Z',
@@ -76,15 +81,21 @@ describe('naming a project', () => {
 })
 
 describe('the status of a project', () => {
-  it('offers the three a person may choose, and not archived', () => {
-    expect(SELECTABLE_STATUSES).toEqual(['planned', 'active', 'completed'])
+  it('offers only the two stages a project may start at, and not archived', () => {
     // Archiving has its own permission and its own confirmation; a dropdown
     // that could do it would be an authorization decision hidden in a field.
+    // Archived is not a stage at all any more, so it cannot be offered.
     expect(SELECTABLE_STATUSES as readonly string[]).not.toContain('archived')
   })
 
-  it('groups the four in the order the list reads them', () => {
-    expect(PROJECT_STATUS_ORDER).toEqual(['active', 'planned', 'completed', 'archived'])
+  it('offers only the two stages a project may start at', () => {
+    // Not review, and not done: those are places the workflow arrives at, and
+    // `create_project` refuses them for the same reason.
+    expect(SELECTABLE_STATUSES).toEqual(['planned', 'in_progress'])
+  })
+
+  it('keeps the four stages in lifecycle order', () => {
+    expect(PROJECT_STATUSES).toEqual(['planned', 'in_progress', 'in_review', 'done'])
   })
 
   it('starts a new project as planned', () => {
@@ -96,10 +107,12 @@ describe('the status of a project', () => {
     expect(projectFormSchema.safeParse(forged).success).toBe(false)
   })
 
-  it('opens an archived project on a status somebody may choose', () => {
-    // The form cannot offer 'archived', so editing one shows the nearest
-    // thing — and saving does not un-archive anything by itself.
-    expect(defaultsFromProject(project({ status: 'archived' })).status).toBe('planned')
+  it('opens a project past the start on a stage somebody may choose', () => {
+    // The create form offers two stages; a project in review is past both, so
+    // the field opens on the nearest one it can. It is not drawn when editing,
+    // and saving the form cannot move a project along in any case.
+    expect(defaultsFromProject(project({ status: 'in_review' })).status).toBe('planned')
+    expect(defaultsFromProject(project({ status: 'done' })).status).toBe('planned')
   })
 })
 
@@ -167,9 +180,16 @@ describe('what the service is given', () => {
     const patch = toProjectPatch(defaultsFromProject(original))
     expect(patch.name).toBe(original.name)
     expect(patch.description).toBe(original.description)
-    expect(patch.status).toBe(original.status)
     expect(patch.startDate).toBe(original.startDate)
     expect(patch.dueDate).toBe(original.dueDate)
+  })
+
+  it('never sends a stage with an edit', () => {
+    // The whole of 6.5 in one assertion: `update_project` has no status
+    // argument, so a patch that carried one would be sending a field at a
+    // routine that cannot accept it — and if it ever could, the lifecycle
+    // would be optional again.
+    expect('status' in toProjectPatch(defaultsFromProject(project()))).toBe(false)
   })
 
   it('reads a project with nothing optional set as empty fields', () => {

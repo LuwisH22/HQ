@@ -120,6 +120,13 @@ export function routeProjectChange(
       return { keys: [], board: true }
     }
 
+    case 'project_review_comments': {
+      if (elsewhere(field(change, 'project_id'), projectId)) return NOTHING
+      // The review conversation only. Saying something about a project does
+      // not move it along, so neither the header nor the board is stale.
+      return { keys: [queryKeys.projects.review(org, projectId)], board: false }
+    }
+
     case 'task_comments': {
       const taskId = field(change, 'task_id')
       // Keyed by the task, so a comment on a task nobody has open invalidates
@@ -158,6 +165,15 @@ export function routeProjectsListChange(change: Change, organizationId: string):
       // One refetch of a list this small is cheaper than the machinery that
       // would be needed to find out.
       return { keys: [queryKeys.projects.list(organizationId)], board: false }
+    }
+
+    case 'tasks': {
+      // Not the board — the list does not draw one. Who is working on a
+      // project is derived from assignment, and how much is left from status,
+      // so a task changing anywhere in the organization is exactly what makes
+      // a row of avatars or a count on this page wrong. The overview is its
+      // own family precisely so this does not refetch every project as well.
+      return { keys: [queryKeys.projects.overview(organizationId)], board: false }
     }
 
     default:

@@ -87,7 +87,7 @@ test.beforeAll(async () => {
   const { data, error: made } = await backend.rpc('create_project', {
     p_organization_id: organizationId,
     p_name: `${SCOPE} board ${RUN}`,
-    p_status: 'active',
+    p_status: 'in_progress',
   })
   if (made) throw new Error(`could not create the watched project: ${made.message}`)
   projectId = data as string
@@ -97,13 +97,10 @@ async function sweep(): Promise<void> {
   const { data: tasks } = await backend.from('tasks').select('id').eq('project_id', projectId)
   for (const row of tasks ?? []) await backend.rpc('delete_task', { p_task_id: row.id })
 
-  const { data: projects } = await backend
-    .from('projects')
-    .select('id')
-    .like('name', `${SCOPE}%`)
-    .neq('status', 'archived')
+  // Deleted, since 6.5: nothing needs to be left lying around archived.
+  const { data: projects } = await backend.from('projects').select('id').like('name', `${SCOPE}%`)
   for (const row of projects ?? []) {
-    await backend.rpc('archive_project', { p_project_id: row.id })
+    await backend.rpc('delete_project', { p_project_id: row.id })
   }
 }
 
@@ -249,7 +246,7 @@ test.describe('the list of projects', () => {
     const { data: id, error } = await backend.rpc('create_project', {
       p_organization_id: organizationId,
       p_name: name,
-      p_status: 'active',
+      p_status: 'in_progress',
     })
     if (error) throw new Error(`could not create a project: ${error.message}`)
 

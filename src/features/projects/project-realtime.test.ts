@@ -40,6 +40,8 @@ const detail = ['projects', ORG, 'detail', PROJECT]
 const members = ['projects', ORG, 'detail', PROJECT, 'members']
 const labels = ['projects', ORG, 'detail', PROJECT, 'labels']
 const comments = ['projects', ORG, 'comments', TASK]
+const review = ['projects', ORG, 'detail', PROJECT, 'review']
+const overview = ['projects', ORG, 'overview']
 const everyComment = ['projects', ORG, 'comments']
 
 describe('a project itself', () => {
@@ -174,6 +176,36 @@ describe('comments', () => {
   })
 })
 
+describe('the review conversation', () => {
+  it('refreshes only the review when somebody comments on this project', () => {
+    expect(route(wrote('project_review_comments', { id: 'r1', project_id: PROJECT }))).toEqual({
+      keys: [review],
+      board: false,
+    })
+  })
+
+  it('ignores a review comment on another project', () => {
+    expect(
+      route(wrote('project_review_comments', { id: 'r1', project_id: OTHER_PROJECT })),
+    ).toEqual({ keys: [], board: false })
+  })
+
+  it('never carries a review comment body into a cache', () => {
+    const refresh = route(
+      wrote('project_review_comments', { id: 'r1', project_id: PROJECT, body: 'secret' }),
+    )
+
+    expect(JSON.stringify(refresh)).not.toContain('secret')
+  })
+
+  it('treats a deleted review comment as news about this project', () => {
+    // A soft delete carries its project like any update; a real delete — the
+    // cascade when the project itself goes — carries only an id, and cannot be
+    // attributed, so it is treated as ours.
+    expect(route(deleted('project_review_comments'))).toEqual({ keys: [review], board: false })
+  })
+})
+
 describe('what cannot be attributed', () => {
   it('treats an unauthorized envelope as news, per table', () => {
     expect(route(unauthorized('tasks'))).toEqual({ keys: [], board: true })
@@ -208,14 +240,27 @@ describe('the list on its own', () => {
     })
   })
 
-  it('hears nothing about tasks or comments at all', () => {
+  it('refreshes who is working on things when a task changes', () => {
+    // Not the board, which the list does not draw, and not the projects
+    // themselves: only the derived counts and avatars, which is exactly what a
+    // task being assigned or finished makes wrong.
     expect(routeProjectsListChange(wrote('tasks', { project_id: PROJECT }), ORG)).toEqual({
-      keys: [],
+      keys: [overview],
       board: false,
     })
+    expect(routeProjectsListChange(deleted('tasks'), ORG)).toEqual({
+      keys: [overview],
+      board: false,
+    })
+  })
+
+  it('hears nothing about comments at all', () => {
     expect(routeProjectsListChange(wrote('task_comments', { task_id: TASK }), ORG)).toEqual({
       keys: [],
       board: false,
     })
+    expect(
+      routeProjectsListChange(wrote('project_review_comments', { project_id: PROJECT }), ORG),
+    ).toEqual({ keys: [], board: false })
   })
 })

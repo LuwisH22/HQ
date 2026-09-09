@@ -220,11 +220,67 @@ export interface Project {
   /** A day — 'YYYY-MM-DD' — or nothing. Projects run over dates, not instants. */
   startDate: string | null
   dueDate: string | null
+  /**
+   * When it was put away, or null.
+   *
+   * Its own field rather than a fifth status, so "done and archived" and
+   * "done and active" are both sayable and restoring returns a project to the
+   * stage it was at rather than to one somebody guessed.
+   */
+  archivedAt: string | null
+  /** When the current review began, or null once changes were requested. */
+  reviewStartedAt: string | null
+  /** When it ends. Server-computed; a countdown on screen only reads it. */
+  reviewDeadlineAt: string | null
+  reviewDurationMinutes: number | null
+  /** How many times this project has been sent to review. */
+  reviewRound: number
   createdBy: string | null
   createdAt: string
   updatedAt: string
   /** How many people this project is for. Context, never authorization. */
   memberCount: number
+}
+
+/**
+ * Somebody with unfinished work on a project.
+ *
+ * Derived from assignment rather than stored: a second relationship would be
+ * wrong the moment a task was reassigned. Nothing about presence — this says
+ * who the work is on, which is a fact about the board, not about a person.
+ */
+export interface ProjectWorker {
+  memberId: string
+  userId: string
+  name: string
+  avatarUrl: string | null
+  /** How many unfinished tasks they hold here. */
+  openTasks: number
+}
+
+/** What the list needs beyond the project row itself. */
+export interface ProjectOverview {
+  projectId: string
+  totalTasks: number
+  doneTasks: number
+  workers: ProjectWorker[]
+}
+
+/** One thing somebody said while reviewing a project as a whole. */
+export interface ProjectReviewComment {
+  id: string
+  projectId: string
+  authorId: string | null
+  /** Already empty when deleted: the words are somewhere no client can reach. */
+  body: string
+  authorName: string
+  authorAvatarUrl: string | null
+  /** Which round of review it was said in. */
+  reviewRound: number
+  deletedAt: string | null
+  deletedBy: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 /** What a caller supplies to start one, or to change one. */
@@ -905,9 +961,14 @@ export interface CalendarService {
 export interface ProjectService {
   list(organizationId: string): Promise<Project[]>
   get(projectId: string): Promise<Project | null>
+  overview(organizationId: string): Promise<ProjectOverview[]>
   create(input: ProjectInput): Promise<string>
   update(projectId: string, input: ProjectPatch): Promise<void>
+  transition(projectId: string, move: ProjectTransition): Promise<void>
   archive(projectId: string): Promise<void>
+  restore(projectId: string): Promise<void>
+  /** Permanent, and not what archiving does. */
+  remove(projectId: string): Promise<void>
   listMembers(projectId: string): Promise<ProjectMember[]>
   addMember(projectId: string, memberId: string): Promise<void>
   removeMember(projectId: string, memberId: string): Promise<void>
@@ -923,9 +984,23 @@ export interface ProjectService {
 export interface ProjectPatch {
   name?: string
   description?: string | null
-  status?: ProjectStatus
   startDate?: string | null
   dueDate?: string | null
+}
+
+/**
+ * Sending a project to the next stage.
+ *
+ * The target rather than a verb, because the database validates the pair and
+ * a client-side name for the move would be a second vocabulary to keep in
+ * step. Duration is only read when the target is `in_review`.
+ */
+export interface ProjectTransition {
+  target: ProjectStatus
+  /** 60, 240, 720, 1440, 2880, 4320 — or null for no limit. */
+  reviewDurationMinutes?: number | null
+  /** Completing with tasks still open, acknowledged rather than hidden. */
+  allowUnfinished?: boolean
 }
 
 /**
@@ -966,4 +1041,18 @@ export interface TaskService {
   move(taskId: string, move: TaskMove): Promise<void>
   assign(taskId: string, assigneeId: string | null): Promise<void>
   remove(taskId: string): Promise<void>
+}
+
+/**
+ * The review conversation about a project as a whole.
+ *
+ * Deliberately not `CommentService`: that one is about a task, every one of
+ * its rows names a task, and overloading it would make "which task?"
+ * unanswerable in both directions.
+ */
+export interface ReviewCommentService {
+  list(projectId: string): Promise<ProjectReviewComment[]>
+  create(projectId: string, body: string): Promise<string>
+  update(commentId: string, body: string): Promise<void>
+  remove(commentId: string): Promise<void>
 }

@@ -70,7 +70,7 @@ test.beforeAll(async () => {
   const { data, error: projectError } = await backend.rpc('create_project', {
     p_organization_id: organizationId,
     p_name: `${SCOPE} board ${RUN}`,
-    p_status: 'active',
+    p_status: 'in_progress',
   })
   if (projectError) throw new Error(`task fixtures failed: ${projectError.message}`)
   projectId = data as string
@@ -80,10 +80,7 @@ test.afterAll(async () => {
   if (!backend) return
   const { data } = await backend.from('tasks').select('id').eq('project_id', projectId)
   for (const row of data ?? []) await backend.rpc('delete_task', { p_task_id: row.id })
-  const { data: project } = await backend.from('projects').select('status').eq('id', projectId)
-  if (project?.[0]?.status !== 'archived') {
-    await backend.rpc('archive_project', { p_project_id: projectId })
-  }
+  await backend.rpc('delete_project', { p_project_id: projectId })
   await backend.auth.signOut({ scope: 'local' })
 })
 

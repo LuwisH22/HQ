@@ -90,7 +90,7 @@ export function CreateProjectDialog({
           className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4"
         >
           <FormFailure error={mutation.isError ? mutation.error : null} />
-          <ProjectFormFields form={form} autoFocus />
+          <ProjectFormFields form={form} autoFocus showStage />
         </form>
 
         <div className="border-border-subtle bg-elevated flex shrink-0 items-center justify-end gap-2 border-t px-5 py-3">

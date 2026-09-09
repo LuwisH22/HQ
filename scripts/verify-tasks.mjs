@@ -68,7 +68,7 @@ const TITLE = 'Task probe'
 const { data: project, error: projectError } = await supabase.rpc('create_project', {
   p_organization_id: org,
   p_name: `${TITLE} · board`,
-  p_status: 'active',
+  p_status: 'in_progress',
 })
 if (projectError) {
   console.error(`verify-tasks: could not make a project — ${projectError.message}`)
@@ -335,7 +335,8 @@ console.log('\n9 · an archived project')
   check('and nothing can be deleted', Boolean(deleted), deleted?.message ?? 'accepted')
 
   // Bringing the project back is all it takes: no other change anywhere.
-  await supabase.rpc('update_project', { p_project_id: project, p_status: 'active' })
+  // Since 6.5 that is its own routine — un-archiving was never really an edit.
+  await supabase.rpc('restore_project', { p_project_id: project })
   const { error: again } = await supabase.rpc('update_task', {
     p_task_id: second,
     p_title: `${TITLE} · second`,
@@ -401,12 +402,10 @@ console.log('\ncleanup')
     .limit(1)
   check('and the record of deleting them outlives them', (audits ?? []).length > 0)
 
-  await supabase.rpc('archive_project', { p_project_id: project })
-  console.log(
-    '        The probe project stays, archived: nothing deletes a project by\n' +
-      '        design. Clearing it is an operator job:\n\n' +
-      "          delete from public.projects where name like 'Task probe%';\n",
-  )
+  // 6.5 gave the application a real delete, so a probe leaves nothing behind.
+  await supabase.rpc('delete_project', { p_project_id: project })
+  const { data: leftProject } = await supabase.from('projects').select('id').eq('id', project)
+  check('and the probe project is deleted', (leftProject ?? []).length === 0)
 }
 
 await supabase.auth.signOut({ scope: 'local' })

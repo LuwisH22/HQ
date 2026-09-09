@@ -6,10 +6,14 @@ import { SELECTABLE_STATUSES } from './project-status'
  * What a person types, and what the database is given.
  *
  * Every rule below also holds in Postgres. The lengths are the CHECK
- * constraints from 20250918004500, the statuses are its enumeration, and
- * `due_date >= start_date` is a constraint as well as a refinement. Bypassing
- * this form gains nothing; it exists so the refusal arrives in a sentence
- * rather than as a round trip.
+ * constraints from 20250918004500, the two stages a project may start at are
+ * what `create_project` accepts, and `due_date >= start_date` is a constraint
+ * as well as a refinement. Bypassing this form gains nothing; it exists so the
+ * refusal arrives in a sentence rather than as a round trip.
+ *
+ * The stage is here for creating and nowhere else. Editing a project cannot
+ * change where it has got to — `transition_project` owns that, and since 6.5
+ * `update_project` has no status argument to send one to.
  *
  * Dates are days, held as the string an `<input type="date">` deals in. A
  * project runs over dates somebody writes on a whiteboard — it does not start
@@ -62,9 +66,9 @@ export function defaultsForNew(): ProjectFormValues {
 /**
  * A project, back in the fields it was written in.
  *
- * An archived project keeps its own status in the database, but the form
- * offers only the three a person may choose; it opens on the nearest thing it
- * can, and saving does not un-archive anything by itself.
+ * A project past the start of its life has a stage the create form cannot
+ * offer, so the field opens on the nearest one it can — and is not drawn at
+ * all when editing, because saving this form no longer moves anything.
  */
 export function defaultsFromProject(project: Project): ProjectFormValues {
   const status = (SELECTABLE_STATUSES as readonly string[]).includes(project.status)
@@ -95,15 +99,15 @@ export function toProjectInput(values: ProjectFormValues, organizationId: string
 /**
  * And as it takes a change.
  *
- * Every field is sent, because the form holds all of them: a date cleared in
- * the form arrives as null, which the service turns into the routine's "take
- * this off" rather than into "leave it alone".
+ * Every field the form owns is sent, because the form holds all of them: a
+ * date cleared in the form arrives as null, which the service turns into the
+ * routine's "take this off" rather than into "leave it alone". The stage is
+ * not among them, and there is nowhere to put it if it were.
  */
 export function toProjectPatch(values: ProjectFormValues): ProjectPatch {
   return {
     name: values.name.trim(),
     description: values.description.trim() || null,
-    status: values.status,
     startDate: values.startDate || null,
     dueDate: values.dueDate || null,
   }

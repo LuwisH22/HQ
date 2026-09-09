@@ -12,8 +12,10 @@ import { PROJECT_STATUS_LABELS } from './project-status'
  *
  * A confirmation because it changes what the organization sees, not because it
  * destroys anything: nothing is deleted, the project keeps everything on it,
- * and it can be brought back by editing its status. That is why this asks
- * rather than warns, and why the button is not destructive-red.
+ * and Restore brings it back at the stage it was put away — archiving no
+ * longer overwrites that. Deleting is the other button, and it is not this
+ * one. That is why this asks rather than warns, and why it is not
+ * destructive-red.
  *
  * The routine decides who may — `projects.delete`, which the permission
  * catalogue describes as "Archive or delete a project". A failure keeps this
@@ -59,7 +61,8 @@ export function ArchiveProjectDialog({
         <div className="px-5 pt-5 pb-3">
           <DialogTitle className="text-[15px]">Archive project?</DialogTitle>
           <DialogDescription className="mt-1">
-            It moves out of the way and keeps everything on it. You can bring it back later.
+            It moves out of the way and keeps everything on it. Restore brings it back exactly
+            where it is now.
           </DialogDescription>
         </div>
 

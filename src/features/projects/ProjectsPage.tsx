@@ -8,10 +8,10 @@ import { EmptyState, ErrorState, ForbiddenState, ListSkeleton } from '@/componen
 import { useWorkspace } from '@/hooks/use-workspace'
 import { usePermission } from '@/hooks/use-permission'
 import type { Project } from '@/services/project.service'
-import { PROJECT_STATUS_LABELS, PROJECT_STATUS_ORDER } from './project-status'
+import { PROJECT_STATUS_LABELS, PROJECT_STATUSES } from './project-status'
 import { ProjectRow } from './ProjectRow'
 import { CreateProjectDialog } from './CreateProjectDialog'
-import { useProjects } from './use-projects'
+import { useProjectOverview, useProjects } from './use-projects'
 import { useProjectsRealtime } from './use-project-realtime'
 
 /**
@@ -29,6 +29,10 @@ export function ProjectsPage() {
   const [creating, setCreating] = useState(false)
 
   const query = useProjects(organization?.id, canView)
+  // A second, smaller query: counts and who is carrying the work go stale for
+  // different reasons than a project's own row does, and finishing a task
+  // should redraw a line of avatars rather than the whole list.
+  const overview = useProjectOverview(organization?.id, canView)
   // Somebody else creating, renaming or archiving a project should not need
   // this list to be reopened before it says so.
   useProjectsRealtime(organization?.id, canView)
@@ -42,10 +46,29 @@ export function ProjectsPage() {
   }
 
   const projects = query.data ?? []
-  const groups = PROJECT_STATUS_ORDER.map((status) => ({
-    status,
-    items: projects.filter((project) => project.status === status),
-  })).filter((group) => group.items.length > 0)
+  const overviews = new Map((overview.data ?? []).map((row) => [row.projectId, row]))
+
+  /*
+   * Grouped by stage, and archived is not one of them.
+   *
+   * Archiving used to overwrite the stage, so a put-away project could only be
+   * filed under "Archived". Now it keeps where it got to, which means it needs
+   * a group of its own at the bottom rather than a stage it never reached — a
+   * project archived half way through review is still half way through review.
+   */
+  const active = projects.filter((project) => project.archivedAt === null)
+  const groups: { key: string; label: string; items: Project[] }[] = PROJECT_STATUSES.map(
+    (status) => ({
+      key: status,
+      label: PROJECT_STATUS_LABELS[status],
+      items: active.filter((project) => project.status === status),
+    }),
+  )
+  groups.push({
+    key: 'archived',
+    label: 'Archived',
+    items: projects.filter((project) => project.archivedAt !== null),
+  })
 
   return (
     <div className="mx-auto w-full max-w-[900px] space-y-5 px-4 pt-4 pb-8 sm:px-6 sm:pt-5">
@@ -88,25 +111,31 @@ export function ProjectsPage() {
         />
       ) : null}
 
-      {groups.map((group) => (
-        <section
-          key={group.status}
-          aria-labelledby={`projects-${group.status}`}
-          className="space-y-2"
-        >
-          <h2
-            id={`projects-${group.status}`}
-            className="display-eyebrow text-3xs text-muted-foreground"
+      {groups
+        .filter((group) => group.items.length > 0)
+        .map((group) => (
+          <section
+            key={group.key}
+            aria-labelledby={`projects-${group.key}`}
+            className="space-y-2"
           >
-            {PROJECT_STATUS_LABELS[group.status]}
-          </h2>
-          <ul className="space-y-1.5">
-            {group.items.map((project: Project) => (
-              <ProjectRow key={project.id} project={project} />
-            ))}
-          </ul>
-        </section>
-      ))}
+            <h2
+              id={`projects-${group.key}`}
+              className="display-eyebrow text-3xs text-muted-foreground"
+            >
+              {group.label}
+            </h2>
+            <ul className="space-y-1.5">
+              {group.items.map((project: Project) => (
+                <ProjectRow
+                  key={project.id}
+                  project={project}
+                  overview={overviews.get(project.id)}
+                />
+              ))}
+            </ul>
+          </section>
+        ))}
 
       <CreateProjectDialog
         open={creating}

@@ -99,6 +99,14 @@ export const queryKeys = {
     /** Everything projects for an organization, for invalidation after a write. */
     all: (organizationId: string) => ['projects', organizationId] as const,
     list: (organizationId: string) => ['projects', organizationId, 'list'] as const,
+    /**
+     * Counts and who is working on each project.
+     *
+     * A sibling of the list rather than part of it: renaming a project and
+     * finishing a task are different news, and the row that draws both should
+     * not refetch everything when either happens.
+     */
+    overview: (organizationId: string) => ['projects', organizationId, 'overview'] as const,
     detail: (organizationId: string, projectId: string) =>
       ['projects', organizationId, 'detail', projectId] as const,
     members: (organizationId: string, projectId: string) =>
@@ -132,6 +140,14 @@ export const queryKeys = {
      * somebody actually has open.
      */
     commentsAll: (organizationId: string) => ['projects', organizationId, 'comments'] as const,
+    /**
+     * One project's review conversation.
+     *
+     * Under the project, not under a task: a review is about the project as a
+     * whole, which is the same reason it is a table of its own.
+     */
+    review: (organizationId: string, projectId: string) =>
+      ['projects', organizationId, 'detail', projectId, 'review'] as const,
   },
 
   calendar: {
