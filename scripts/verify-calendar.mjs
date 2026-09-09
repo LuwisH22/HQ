@@ -358,6 +358,53 @@ console.log('\nupdate')
   check('deleting an event that is not there is refused', Boolean(error), error?.code ?? '')
 }
 
+// --- 7b · an event cannot change hands -------------------------------------
+{
+  // There is no organization parameter on the update routine at all, so there
+  // is nothing to send: PostgREST refuses a call carrying one. The trigger on
+  // the table refuses the same thing from any other direction.
+  const { error } = await supabase.rpc('update_calendar_event', {
+    p_event_id: timed.id,
+    p_organization_id: '00000000-0000-4000-8000-000000000000',
+  })
+  check('an update cannot carry an organization', Boolean(error), error?.code ?? '')
+
+  const { data } = await supabase
+    .from('calendar_events')
+    .select('organization_id')
+    .eq('id', timed.id)
+  check('the event still belongs where it did', (data ?? [])[0]?.organization_id === org.id)
+}
+
+// --- 7c · deleting ----------------------------------------------------------
+{
+  const doomed = await createEvent({
+    p_organization_id: org.id,
+    p_title: 'Calendar probe · deletable',
+    p_starts_at: '2026-03-11T10:00:00.000Z',
+    p_ends_at: '2026-03-11T11:00:00.000Z',
+  })
+  check('an event to delete was created', Boolean(doomed.id), doomed.error?.message ?? '')
+
+  const { error } = await supabase.rpc('delete_calendar_event', { p_event_id: doomed.id })
+  check('authorized delete works', !error, error?.message ?? '')
+  if (!error && doomed.id) created.splice(created.indexOf(doomed.id), 1)
+
+  const { data } = await supabase.from('calendar_events').select('id').eq('id', doomed.id)
+  check('the row is gone', (data ?? []).length === 0)
+
+  // Deleting is permanent, so the second attempt finds nothing — which is also
+  // what a stale client sees after somebody else has removed an event.
+  const { error: again } = await supabase.rpc('delete_calendar_event', { p_event_id: doomed.id })
+  check('deleting it twice is refused', Boolean(again), again?.code ?? '')
+
+  const { error: editGone } = await supabase.rpc('update_calendar_event', {
+    p_event_id: doomed.id,
+    p_title: 'ghost',
+  })
+  check('editing a deleted event is refused', Boolean(editGone), editGone?.code ?? '')
+}
+
 // --- 8 · audit -------------------------------------------------------------
 console.log('\naudit')
 {
@@ -370,6 +417,29 @@ console.log('\naudit')
   const actions = (data ?? []).map((r) => r.action)
   check('creating was logged', actions.includes('calendar_event.created'), actions.join(', '))
   check('updating was logged', actions.includes('calendar_event.updated'))
+}
+{
+  // A deletion's audit entry has to outlive the row it describes.
+  const { data } = await supabase
+    .from('audit_logs')
+    .select('action, entity_type, entity_id')
+    .eq('organization_id', org.id)
+    .eq('action', 'calendar_event.deleted')
+    .order('created_at', { ascending: false })
+    .limit(1)
+  check('deleting was logged, and survives the row', (data ?? []).length === 1)
+  const { data: rows } = await supabase
+    .from('calendar_events')
+    .select('id')
+    .eq('id', (data ?? [])[0]?.entity_id ?? '00000000-0000-4000-8000-000000000000')
+  check('and the row it names is really gone', (rows ?? []).length === 0)
+}
+{
+  const { data } = await supabase
+    .from('audit_logs')
+    .select('entity_type')
+    .eq('organization_id', org.id)
+    .eq('entity_id', String(timed.id))
   check(
     'the entity type is the calendar event',
     (data ?? []).every((r) => r.entity_type === 'calendar_event'),
@@ -440,7 +510,9 @@ check('the probe takes back everything it made', created.length === 0, `${create
   check('no probe events remain', (data ?? []).length === 0, `${(data ?? []).length} found`)
 }
 
-await supabase.auth.signOut()
+// Local scope: the default revokes every refresh token this account holds,
+// which would sign the operator out of their own browser for running a check.
+await supabase.auth.signOut({ scope: 'local' })
 
 console.log(
   failures === 0

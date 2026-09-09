@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, At } from '@phosphor-icons/react'
+import { Bell, At, CalendarBlank } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -91,24 +91,35 @@ export function NotificationBell() {
 
         {notifications.length === 0 ? (
           <p className="text-muted-foreground/70 text-2xs px-3 py-4 text-center leading-relaxed">
-            Nothing yet. Mentions land here.
+            Nothing yet. Mentions and calendar reminders land here.
           </p>
         ) : (
           <ul className="max-h-80 overflow-y-auto py-1" aria-label="Notifications">
             {notifications.map((notification) => {
               const channelKey = notification.metadata['channel_key']
               const excerpt = notification.metadata['excerpt']
+              // A calendar notification is about an event rather than a
+              // message, so it points at the calendar and wears its icon.
+              // Everything else about the row is unchanged.
+              const calendar = notification.entityType === 'calendar_event'
+              const Icon = calendar ? CalendarBlank : At
 
               return (
                 <li key={notification.id}>
                   <Link
-                    to={typeof channelKey === 'string' ? `/channels/${channelKey}` : '/channels'}
+                    to={
+                      calendar
+                        ? '/calendar'
+                        : typeof channelKey === 'string'
+                          ? `/channels/${channelKey}`
+                          : '/channels'
+                    }
                     className={cn(
                       'hover:bg-accent flex items-start gap-2.5 px-3 py-2 transition-colors',
                       'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
                     )}
                   >
-                    <At
+                    <Icon
                       className={cn(
                         'mt-px size-3.5 shrink-0',
                         notification.readAt === null

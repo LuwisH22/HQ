@@ -432,6 +432,8 @@ export interface Database {
           timezone: string
           event_type: CalendarEventType
           created_by: string | null
+          /** Minutes before starts_at to remind the creator. Null is none. */
+          reminder_minutes: number | null
           created_at: string
           updated_at: string
         }
@@ -892,6 +894,7 @@ export interface Database {
           p_description?: string | null
           p_location?: string | null
           p_event_type?: CalendarEventType
+          p_reminder_minutes?: number | null
         }
         Returns: string
       }
@@ -906,10 +909,16 @@ export interface Database {
           p_description?: string | null
           p_location?: string | null
           p_event_type?: CalendarEventType | null
+          /** Null leaves it alone; -1 clears it; otherwise it is set. */
+          p_reminder_minutes?: number | null
         }
         Returns: undefined
       }
       delete_calendar_event: { Args: { p_event_id: string }; Returns: undefined }
+      deliver_due_calendar_reminders: {
+        Args: { p_window?: string }
+        Returns: number
+      }
       delete_message: {
         Args: { p_message_id: string; p_reason?: string | null }
         Returns: undefined

@@ -180,6 +180,8 @@ export interface CalendarEvent {
   timezone: string
   eventType: CalendarEventType
   createdBy: string | null
+  /** Minutes before it starts to remind whoever scheduled it. Null is none. */
+  reminderMinutes: number | null
   createdAt: string
   updatedAt: string
 }
@@ -196,6 +198,12 @@ export interface CalendarEventInput {
   description?: string | null
   location?: string | null
   eventType?: CalendarEventType
+  /**
+   * One of 0, 5, 15, 30, 60 or 1440 minutes before the start, or null for no
+   * reminder. On an update, leaving the key out leaves the reminder alone;
+   * passing null removes it.
+   */
+  reminderMinutes?: number | null
 }
 
 /** The window a calendar screen is showing. Both ends are instants. */

@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarBlank, CaretLeft, CaretRight } from '@phosphor-icons/react'
+import { CalendarBlank, CaretLeft, CaretRight, Plus } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
+import { Can } from '@/components/common/Can'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, ErrorState, ForbiddenState } from '@/components/common/states'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,9 +27,13 @@ import {
   type DayKey,
 } from './calendar-time'
 import { useCalendarEvents } from './use-calendar-events'
+import { useCalendarRealtime } from './use-calendar-realtime'
 import { MonthView } from './MonthView'
 import { TimeGrid } from './TimeGrid'
 import { EventDetailDialog } from './EventDetailDialog'
+import { CreateEventDialog } from './CreateEventDialog'
+import { EditEventDialog } from './EditEventDialog'
+import { DeleteEventDialog } from './DeleteEventDialog'
 
 /**
  * The organization's calendar.
@@ -79,10 +84,33 @@ export function CalendarPage() {
   })
   const displayZone = profileQuery.data?.timezone ?? organization?.timezone ?? detectTimezone()
 
+  // Somebody else's scrim appears, moves or disappears while this page is
+  // open, without anybody pressing anything. Only for a reader who may see the
+  // calendar at all: there is no sense opening a socket for one who would
+  // receive nothing but empty envelopes.
+  useCalendarRealtime(canView ? organization?.id : undefined)
+
   const today = todayKey(displayZone)
   const [view, setView] = useState<View>('month')
   const [anchor, setAnchor] = useState<DayKey>(today)
   const [openEvent, setOpenEvent] = useState<CalendarEvent | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<CalendarEvent | null>(null)
+  const [deleting, setDeleting] = useState<CalendarEvent | null>(null)
+
+  // The zone arrives late: the profile is a query, so the first render falls
+  // back to the organization's and the anchor is chosen in that. Where the two
+  // disagree about what day it is — a UTC profile read from Jakarta, in the
+  // seven hours between their midnights — the calendar would sit on one day
+  // and mark another as today. So follow the zone, unless the reader has
+  // already moved somewhere of their own.
+  const anchoredIn = useRef(displayZone)
+  useEffect(() => {
+    if (anchoredIn.current === displayZone) return
+    const before = todayKey(anchoredIn.current)
+    anchoredIn.current = displayZone
+    setAnchor((current) => (current === before ? todayKey(displayZone) : current))
+  }, [displayZone])
 
   // The days on screen, which are also the query's window.
   const days = useMemo(() => {
@@ -131,6 +159,20 @@ export function CalendarPage() {
         eyebrow="Schedule"
         title="Calendar"
         description={`Scrims, matches and meetings in ${organization?.name ?? 'your organization'}.`}
+        actions={
+          // Hidden rather than disabled, as every other permission-gated
+          // action in this application is. The database refuses it either way.
+          <Can perm="calendar.create">
+            <Button
+              onClick={() => {
+                setCreating(true)
+              }}
+            >
+              <Plus aria-hidden="true" />
+              New event
+            </Button>
+          </Can>
+        }
       />
 
       {/* --- The bar: where you are, and how you are looking at it --------- */}
@@ -258,7 +300,47 @@ export function CalendarPage() {
         onClose={() => {
           setOpenEvent(null)
         }}
+        // The detail hands the event over and closes: two dialogs open at once
+        // is two focus traps arguing.
+        onEdit={(event) => {
+          setOpenEvent(null)
+          setEditing(event)
+        }}
+        onDelete={(event) => {
+          setOpenEvent(null)
+          setDeleting(event)
+        }}
       />
+
+      <EditEventDialog
+        event={editing}
+        timezone={displayZone}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null)
+        }}
+      />
+
+      <DeleteEventDialog
+        event={deleting}
+        onOpenChange={(next) => {
+          if (!next) setDeleting(null)
+        }}
+        onDeleted={() => {
+          setDeleting(null)
+        }}
+      />
+
+      {/* Scheduled where the calendar is looking: the day on screen, in the
+          zone it is being read in. */}
+      {organization ? (
+        <CreateEventDialog
+          open={creating}
+          onOpenChange={setCreating}
+          organizationId={organization.id}
+          day={anchor}
+          timezone={displayZone}
+        />
+      ) : null}
     </div>
   )
 }

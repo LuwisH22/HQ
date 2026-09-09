@@ -191,7 +191,41 @@ describe('writing', () => {
       p_description: null,
       p_location: null,
       p_event_type: null,
+      p_reminder_minutes: null,
     })
+  })
+
+  it('distinguishes leaving a reminder alone from taking it away', async () => {
+    // Two things that look alike in JavaScript and mean opposite things to the
+    // routine: a key that is not there, and a key set to null.
+    await calendarService.update('event-1', { title: 'Scrim' })
+    expect((recorded.rpc?.[1] as Record<string, unknown>).p_reminder_minutes).toBeNull()
+
+    await calendarService.update('event-1', { reminderMinutes: 15 })
+    expect((recorded.rpc?.[1] as Record<string, unknown>).p_reminder_minutes).toBe(15)
+
+    await calendarService.update('event-1', { reminderMinutes: null })
+    // -1 is the routine's "remove it".
+    expect((recorded.rpc?.[1] as Record<string, unknown>).p_reminder_minutes).toBe(-1)
+  })
+
+  it('sends a reminder along with a new event, and nothing when there is none', async () => {
+    await calendarService.create({
+      organizationId: 'org-1',
+      title: 'Scrim',
+      startsAt: '2026-03-01T13:00:00.000Z',
+      endsAt: '2026-03-01T15:00:00.000Z',
+      reminderMinutes: 30,
+    })
+    expect((recorded.rpc?.[1] as Record<string, unknown>).p_reminder_minutes).toBe(30)
+
+    await calendarService.create({
+      organizationId: 'org-1',
+      title: 'Scrim',
+      startsAt: '2026-03-01T13:00:00.000Z',
+      endsAt: '2026-03-01T15:00:00.000Z',
+    })
+    expect((recorded.rpc?.[1] as Record<string, unknown>).p_reminder_minutes).toBeNull()
   })
 
   it('offers no way to move an event to another organization', () => {

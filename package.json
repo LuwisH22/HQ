@@ -23,6 +23,8 @@
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run assert:no-demo && npm run assert:no-secrets",
     "verify:live": "node scripts/verify-live.mjs",
     "verify:calendar": "node scripts/verify-calendar.mjs",
+    "verify:calendar-realtime": "node scripts/verify-calendar-realtime.mjs",
+    "verify:calendar-reminders": "node scripts/verify-calendar-reminders.mjs",
     "assert:no-demo": "node scripts/assert-no-demo-code.mjs",
     "check:backend": "node scripts/check-backend.mjs",
     "assert:no-secrets": "node scripts/assert-no-secrets.mjs"

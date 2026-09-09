@@ -28,7 +28,7 @@ export type { CalendarEvent, CalendarEventInput, CalendarRange } from './service
 
 /** The columns a calendar screen needs, and nothing else. */
 const FIELDS =
-  'id, organization_id, title, description, location, starts_at, ends_at, all_day, timezone, event_type, created_by, created_at, updated_at'
+  'id, organization_id, title, description, location, starts_at, ends_at, all_day, timezone, event_type, created_by, reminder_minutes, created_at, updated_at'
 
 interface Row {
   id: string
@@ -42,6 +42,7 @@ interface Row {
   timezone: string
   event_type: CalendarEvent['eventType']
   created_by: string | null
+  reminder_minutes: number | null
   created_at: string
   updated_at: string
 }
@@ -59,6 +60,7 @@ function toEvent(row: Row): CalendarEvent {
     timezone: row.timezone,
     eventType: row.event_type,
     createdBy: row.created_by,
+    reminderMinutes: row.reminder_minutes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -115,6 +117,7 @@ export const supabaseCalendarService: CalendarService = {
       p_description: input.description ?? null,
       p_location: input.location ?? null,
       p_event_type: input.eventType ?? 'other',
+      p_reminder_minutes: input.reminderMinutes ?? null,
     })
 
     if (error) throw toAppError(error)
@@ -137,6 +140,12 @@ export const supabaseCalendarService: CalendarService = {
       p_description: input.description ?? null,
       p_location: input.location ?? null,
       p_event_type: input.eventType ?? null,
+      // Three states, two of which look alike in JavaScript: a key that is not
+      // there leaves the reminder alone, and an explicit null removes it. The
+      // routine reads -1 as "remove", which is the integer equivalent of the
+      // empty string that clears a description.
+      p_reminder_minutes:
+        input.reminderMinutes === undefined ? null : (input.reminderMinutes ?? -1),
     })
 
     if (error) throw toAppError(error)

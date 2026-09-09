@@ -1,6 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
-import { CalendarBlank, Clock, MapPin, User } from '@phosphor-icons/react'
+import {
+  Bell,
+  CalendarBlank,
+  Clock,
+  MapPin,
+  PencilSimple,
+  Trash,
+  User,
+} from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { organizationService } from '@/services/organization.service'
 import { displayNameFor } from '@/services/profile.service'
@@ -10,15 +19,18 @@ import { useWorkspace } from '@/hooks/use-workspace'
 import { usePermission } from '@/hooks/use-permission'
 import { formatTimestamp } from '@/utils/datetime'
 import { EVENT_TYPE_LABELS } from './event-types'
+import { REMINDER_LABELS, reminderValueOf } from './event-form'
+import { useCanEditEvent } from './use-can-edit-event'
 import { allDayLength, clockIn, dayTitle, dayKeyOf, durationLabel } from './calendar-time'
 
 /**
- * One event, read-only.
+ * One event.
  *
- * Phase 5.2 shows what is scheduled; changing it belongs to the phase that
- * builds the form. There is deliberately no edit or delete control here rather
- * than a disabled one, because a disabled button is a promise with a date on
- * it.
+ * Read-only for most people, and that is the default: the two actions appear
+ * only where `calendar.manage`, or authorship plus `calendar.create`, would
+ * let the database accept them. Hidden rather than disabled, as every other
+ * permission-gated action in this application is — a greyed-out Delete tells
+ * somebody about a door they cannot open.
  *
  * The zone the event was written in is shown only when it differs from the
  * zone this reader is in — otherwise it is noise on every row.
@@ -27,10 +39,15 @@ export function EventDetailDialog({
   event,
   displayZone,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   event: CalendarEvent | null
   displayZone: string
   onClose: () => void
+  /** Opens the edit form. Absent means this surface offers no editing. */
+  onEdit?: (event: CalendarEvent) => void
+  onDelete?: (event: CalendarEvent) => void
 }) {
   const { organization } = useWorkspace()
   const canViewMembers = usePermission('members.view')
@@ -48,10 +65,43 @@ export function EventDetailDialog({
     ? (membersQuery.data ?? []).find((member) => member.userId === event.createdBy)
     : undefined
 
+  const mayChange = useCanEditEvent(event)
+
   return (
     <Dialog open={event !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent aria-describedby={undefined} className="sm:max-w-md">
-        {event ? <Body event={event} displayZone={displayZone} author={author?.profile} /> : null}
+        {event ? (
+          <>
+            <Body event={event} displayZone={displayZone} author={author?.profile} />
+
+            {mayChange && onEdit && onDelete ? (
+              <div className="border-border-subtle bg-elevated flex items-center justify-end gap-2 border-t px-5 py-3">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    onDelete(event)
+                  }}
+                >
+                  <Trash aria-hidden="true" />
+                  Delete
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    onEdit(event)
+                  }}
+                >
+                  <PencilSimple aria-hidden="true" />
+                  Edit
+                </Button>
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </DialogContent>
     </Dialog>
   )
@@ -109,6 +159,12 @@ function Body({
 
         {event.location ? <Row icon={MapPin} label={event.location} /> : null}
         {author ? <Row icon={User} label={displayNameFor(author)} /> : null}
+
+        {/* Only when there is one. Whoever scheduled it is who hears about it,
+            which is what the form says as well. */}
+        {event.reminderMinutes === null ? null : (
+          <Row icon={Bell} label={REMINDER_LABELS[reminderValueOf(event.reminderMinutes)]} />
+        )}
       </div>
 
       <div className="space-y-3 px-5 py-4">

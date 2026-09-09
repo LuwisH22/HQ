@@ -29,6 +29,7 @@ function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
     timezone: JAKARTA,
     eventType: 'scrim',
     createdBy: 'user-1',
+    reminderMinutes: null,
     createdAt: '2026-02-01T00:00:00.000Z',
     updatedAt: '2026-02-01T00:00:00.000Z',
     ...overrides,

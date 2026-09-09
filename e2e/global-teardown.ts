@@ -170,6 +170,16 @@ export default async function globalTeardown(): Promise<void> {
     else removed += 1
   }
 
+  // Calendar events the suite scheduled. Their titles carry the project that
+  // made them, which nobody types into a real event.
+  const { data: eventRows } = await supabase.from('calendar_events').select('id, title')
+  for (const event of (eventRows ?? []) as { id: string; title: string }[]) {
+    if (!/^E2E calendar (desktop|mobile|moderation|signout)/.test(event.title)) continue
+    const { error } = await supabase.rpc('delete_calendar_event', { p_event_id: event.id })
+    if (error) console.warn(`teardown: could not delete ${event.title}: ${error.message}`)
+    else removed += 1
+  }
+
   // Files a failed run uploaded but never attached to anything. An object with
   // no attachment row is reachable by nobody but its uploader, which is who
   // this is — and a real attachment always has a row, so this cannot take one.
