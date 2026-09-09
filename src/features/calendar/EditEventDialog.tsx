@@ -15,7 +15,7 @@ import {
   type EventFormValues,
 } from './event-form'
 import { EventFormFields } from './EventFormFields'
-import { FormFailure } from './FormFailure'
+import { FormFailure } from '@/components/common/FormFailure'
 
 /**
  * Changing an event that already exists.

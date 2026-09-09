@@ -26,6 +26,36 @@ export type ChannelType = 'text' | 'voice'
 export type CalendarEventType =
   'match' | 'scrim' | 'practice' | 'meeting' | 'content' | 'event' | 'other'
 
+/**
+ * Where a project is in its life.
+ *
+ * Four states and no workflow: nothing reads this to decide what anybody may
+ * do, and only `archived` means anything beyond a label — a project arrives
+ * there through its own routine and its rows stay where they are.
+ */
+export type ProjectStatus = 'planned' | 'active' | 'completed' | 'archived'
+
+/**
+ * Which column a task is in.
+ *
+ * The board's five, in the order it draws them. Only `done` means anything
+ * beyond a column: it is what stamps a task's completion, and the routines
+ * keep the two in step.
+ */
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done'
+
+/** How much a task matters. A label; nothing reads it to decide anything. */
+export type TaskPriority = 'none' | 'low' | 'medium' | 'high' | 'urgent'
+
+/**
+ * What a label looks like.
+ *
+ * Six tokens, not a colour: each one is a Badge variant this application
+ * already draws, so a label cannot carry styling of its own. The database
+ * holds the same six in a CHECK.
+ */
+export type LabelColor = 'violet' | 'brass' | 'success' | 'warning' | 'danger' | 'neutral'
+
 export interface Database {
   public: {
     Tables: {
@@ -712,9 +742,282 @@ export interface Database {
           },
         ]
       }
+      projects: {
+        Row: {
+          id: string
+          organization_id: string
+          name: string
+          description: string | null
+          status: ProjectStatus
+          /** A day, not an instant: 'YYYY-MM-DD' or null. */
+          start_date: string | null
+          due_date: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'projects_organization_id_fkey'
+            columns: ['organization_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      project_members: {
+        Row: {
+          project_id: string
+          /** An organization_members id, not a profile id. */
+          member_id: string
+          added_by: string | null
+          added_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'project_members_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'project_members_member_id_fkey'
+            columns: ['member_id']
+            isOneToOne: false
+            referencedRelation: 'organization_members'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          id: string
+          project_id: string
+          title: string
+          description: string | null
+          status: TaskStatus
+          priority: TaskPriority
+          /** An organization_members id, and one on the project's roster. */
+          assignee_id: string | null
+          created_by: string | null
+          /** A day, not an instant: 'YYYY-MM-DD' or null. */
+          due_date: string | null
+          /** Sparse and fractional. Decided by the routines, never by a client. */
+          position: number
+          created_at: string
+          updated_at: string
+          /** Set on entering Done and cleared on leaving it, by the routines. */
+          completed_at: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'tasks_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tasks_assignee_id_fkey'
+            columns: ['assignee_id']
+            isOneToOne: false
+            referencedRelation: 'organization_members'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      project_labels: {
+        Row: {
+          id: string
+          project_id: string
+          name: string
+          description: string | null
+          color: LabelColor
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'project_labels_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      task_labels: {
+        Row: {
+          task_id: string
+          label_id: string
+          assigned_by: string | null
+          assigned_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'task_labels_task_id_fkey'
+            columns: ['task_id']
+            isOneToOne: false
+            referencedRelation: 'tasks'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'task_labels_label_id_fkey'
+            columns: ['label_id']
+            isOneToOne: false
+            referencedRelation: 'project_labels'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      task_comments: {
+        /**
+         * `deleted_body` is deliberately absent: `authenticated` has no column
+         * privilege on it, so asking for it — or for `*` — is refused.
+         */
+        Row: {
+          id: string
+          task_id: string
+          author_id: string | null
+          /** Empty once deleted. The words move somewhere no client may read. */
+          body: string
+          deleted_at: string | null
+          deleted_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'task_comments_task_id_fkey'
+            columns: ['task_id']
+            isOneToOne: false
+            referencedRelation: 'tasks'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'task_comments_author_id_fkey'
+            columns: ['author_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<never, never>
     Functions: {
+      create_label: {
+        Args: {
+          p_project_id: string
+          p_name: string
+          p_color?: LabelColor
+          p_description?: string | null
+        }
+        Returns: string
+      }
+      update_label: {
+        Args: {
+          p_label_id: string
+          p_name?: string | null
+          p_color?: LabelColor | null
+          p_description?: string | null
+        }
+        Returns: undefined
+      }
+      delete_label: { Args: { p_label_id: string }; Returns: undefined }
+      assign_label: { Args: { p_task_id: string; p_label_id: string }; Returns: undefined }
+      remove_label: { Args: { p_task_id: string; p_label_id: string }; Returns: undefined }
+      create_task_comment: { Args: { p_task_id: string; p_body: string }; Returns: string }
+      update_task_comment: { Args: { p_comment_id: string; p_body: string }; Returns: undefined }
+      delete_task_comment: { Args: { p_comment_id: string }; Returns: undefined }
+      create_task: {
+        Args: {
+          p_project_id: string
+          p_title: string
+          p_description?: string | null
+          p_status?: TaskStatus
+          p_priority?: TaskPriority
+          p_assignee_id?: string | null
+          p_due_date?: string | null
+        }
+        Returns: string
+      }
+      update_task: {
+        Args: {
+          p_task_id: string
+          p_title?: string | null
+          p_description?: string | null
+          p_priority?: TaskPriority | null
+          p_due_date?: string | null
+          /** Null already means "leave it", so clearing a date says so. */
+          p_clear_due_date?: boolean
+        }
+        Returns: undefined
+      }
+      move_task: {
+        Args: {
+          p_task_id: string
+          p_status?: TaskStatus | null
+          /** The task this one lands under, and the one it lands above. */
+          p_before_id?: string | null
+          p_after_id?: string | null
+        }
+        Returns: undefined
+      }
+      assign_task: {
+        Args: { p_task_id: string; p_assignee_id?: string | null }
+        Returns: undefined
+      }
+      delete_task: { Args: { p_task_id: string }; Returns: undefined }
+      create_project: {
+        Args: {
+          p_organization_id: string
+          p_name: string
+          p_description?: string | null
+          p_status?: ProjectStatus
+          p_start_date?: string | null
+          p_due_date?: string | null
+        }
+        Returns: string
+      }
+      update_project: {
+        Args: {
+          p_project_id: string
+          p_name?: string | null
+          p_description?: string | null
+          p_status?: ProjectStatus | null
+          p_start_date?: string | null
+          p_due_date?: string | null
+          /** Null already means "leave it", so clearing a date says so. */
+          p_clear_start_date?: boolean
+          p_clear_due_date?: boolean
+        }
+        Returns: undefined
+      }
+      archive_project: { Args: { p_project_id: string }; Returns: undefined }
+      add_project_member: {
+        Args: { p_project_id: string; p_member_id: string }
+        Returns: undefined
+      }
+      remove_project_member: {
+        Args: { p_project_id: string; p_member_id: string }
+        Returns: undefined
+      }
       is_org_member: { Args: { p_organization_id: string }; Returns: boolean }
       has_org_permission: {
         Args: { p_organization_id: string; p_permission: string }

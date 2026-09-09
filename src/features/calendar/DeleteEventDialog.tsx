@@ -6,7 +6,7 @@ import { calendarService, type CalendarEvent } from '@/services/calendar.service
 import { AppError } from '@/lib/errors'
 import { queryKeys } from '@/lib/query-keys'
 import { EVENT_TYPE_LABELS } from './event-types'
-import { FormFailure } from './FormFailure'
+import { FormFailure } from '@/components/common/FormFailure'
 
 /**
  * Taking an event off the calendar.

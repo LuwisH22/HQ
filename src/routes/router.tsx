@@ -60,7 +60,10 @@ const ConversationChatPage = lazy(() =>
   })),
 )
 const ProjectsPage = lazy(() =>
-  import('@/features/placeholder/pages').then((m) => ({ default: m.ProjectsPage })),
+  import('@/features/projects/ProjectsPage').then((m) => ({ default: m.ProjectsPage })),
+)
+const ProjectDetailPage = lazy(() =>
+  import('@/features/projects/ProjectDetailPage').then((m) => ({ default: m.ProjectDetailPage })),
 )
 const CalendarPage = lazy(() =>
   import('@/features/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })),
@@ -114,6 +117,7 @@ export const router = createHashRouter([
           // conversation is not a channel and its id is not a channel key.
           { path: 'dm/:conversationId', element: <ConversationChatPage /> },
           { path: 'projects', element: <ProjectsPage /> },
+          { path: 'projects/:projectId', element: <ProjectDetailPage /> },
           { path: 'calendar', element: <CalendarPage /> },
           { path: 'teams', element: <TeamsPage /> },
           { path: 'files', element: <FilesPage /> },

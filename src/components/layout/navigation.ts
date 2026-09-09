@@ -86,7 +86,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Kanban,
     requires: ['projects.view'],
     phase: 3,
-    shipped: false,
+    shipped: true,
     group: 'organization',
   },
   {

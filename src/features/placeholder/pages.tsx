@@ -2,7 +2,6 @@ import {
   Bell,
   CalendarBlank,
   Files,
-  Kanban,
   Hash,
   ChatTeardropText,
   UsersThree,
@@ -45,23 +44,6 @@ export function ChannelsPage() {
         'Threads, pins, mentions and reactions',
         'Virtualised message history with paging',
         'Presence and per-channel unread state',
-      ]}
-    />
-  )
-}
-
-export function ProjectsPage() {
-  return (
-    <PhasePlaceholderPage
-      title="Projects"
-      icon={Kanban}
-      phase={3}
-      summary="Kanban boards for bootcamps, content, sponsorships and everything else in flight."
-      capabilities={[
-        'Backlog, To Do, In Progress, Review and Done columns',
-        'Drag-and-drop with safe persistence',
-        'Assignees, priorities, labels, due dates and checklists',
-        'Task comments, attachments and activity history',
       ]}
     />
   )

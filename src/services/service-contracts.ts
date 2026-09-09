@@ -4,6 +4,10 @@ import type {
   ChannelType,
   InvitationStatus,
   MemberStatus,
+  LabelColor,
+  ProjectStatus,
+  TaskPriority,
+  TaskStatus,
 } from '@/types/database.types'
 
 /**
@@ -204,6 +208,148 @@ export interface CalendarEventInput {
    * passing null removes it.
    */
   reminderMinutes?: number | null
+}
+
+/** A project, as a screen needs it. */
+export interface Project {
+  id: string
+  organizationId: string
+  name: string
+  description: string | null
+  status: ProjectStatus
+  /** A day — 'YYYY-MM-DD' — or nothing. Projects run over dates, not instants. */
+  startDate: string | null
+  dueDate: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+  /** How many people this project is for. Context, never authorization. */
+  memberCount: number
+}
+
+/** What a caller supplies to start one, or to change one. */
+export interface ProjectInput {
+  organizationId: string
+  name: string
+  description?: string | null
+  status?: ProjectStatus
+  startDate?: string | null
+  dueDate?: string | null
+}
+
+/** Somebody a project is for, with enough of them to draw a row. */
+export interface ProjectMember {
+  /** The organization membership id, which is what the routines take. */
+  memberId: string
+  userId: string
+  addedAt: string
+  profile: MemberProfileSummary
+}
+
+/** One piece of work on a project. */
+export interface Task {
+  id: string
+  projectId: string
+  title: string
+  description: string | null
+  status: TaskStatus
+  priority: TaskPriority
+  /** An organization membership id, and one on the project's roster. */
+  assigneeId: string | null
+  createdBy: string | null
+  /** A day — 'YYYY-MM-DD' — or nothing. */
+  dueDate: string | null
+  /** Sparse and fractional, and decided by the server. */
+  position: number
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+  /** The labels on it, by id. Drawn from the project's own label list. */
+  labelIds: string[]
+}
+
+/** What a caller supplies to add one. */
+export interface TaskInput {
+  projectId: string
+  title: string
+  description?: string | null
+  status?: TaskStatus
+  priority?: TaskPriority
+  assigneeId?: string | null
+  dueDate?: string | null
+}
+
+/**
+ * A change to a task's properties.
+ *
+ * Not its status or position: those move together, through `move`, so a
+ * column and a place in it can never be set apart and drift.
+ */
+export interface TaskPatch {
+  title?: string
+  description?: string | null
+  priority?: TaskPriority
+  dueDate?: string | null
+}
+
+/**
+ * Where a task should land.
+ *
+ * The neighbours rather than a number: the server works out the position, so
+ * a client cannot invent an order and two people dragging at once cannot
+ * agree on a number that means different things.
+ */
+export interface TaskMove {
+  status?: TaskStatus
+  /** The task it lands under, and the one it lands above. */
+  beforeId?: string | null
+  afterId?: string | null
+}
+
+/** A label, which belongs to exactly one project. */
+export interface Label {
+  id: string
+  projectId: string
+  name: string
+  description: string | null
+  /** One of six tokens the Badge component draws. Never a colour value. */
+  color: LabelColor
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** What a caller supplies to make or change one. */
+export interface LabelInput {
+  name: string
+  color?: LabelColor
+  description?: string | null
+}
+
+/**
+ * Something somebody said about a task.
+ *
+ * A deleted comment keeps its row and loses its words: `body` comes back empty
+ * and `deletedAt` says why. The original text is in a column no client has the
+ * privilege to select, so there is nothing here to leak.
+ */
+export interface TaskComment {
+  id: string
+  taskId: string
+  authorId: string | null
+  body: string
+  authorName: string
+  authorAvatarUrl: string | null
+  deletedAt: string | null
+  deletedBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** One page of a task's comments, oldest first, as a thread reads. */
+export interface CommentPage {
+  comments: TaskComment[]
+  hasMore: boolean
 }
 
 /** The window a calendar screen is showing. Both ends are instants. */
@@ -746,4 +892,78 @@ export interface CalendarService {
   create(input: CalendarEventInput): Promise<string>
   update(eventId: string, input: Partial<CalendarEventInput>): Promise<void>
   remove(eventId: string): Promise<void>
+}
+
+/**
+ * Projects.
+ *
+ * No `remove`: a project is archived, never deleted, because the tasks,
+ * comments and history of later phases hang off it and a cascade is not an
+ * undo. Membership is separate because it is context rather than part of the
+ * project's own shape.
+ */
+export interface ProjectService {
+  list(organizationId: string): Promise<Project[]>
+  get(projectId: string): Promise<Project | null>
+  create(input: ProjectInput): Promise<string>
+  update(projectId: string, input: ProjectPatch): Promise<void>
+  archive(projectId: string): Promise<void>
+  listMembers(projectId: string): Promise<ProjectMember[]>
+  addMember(projectId: string, memberId: string): Promise<void>
+  removeMember(projectId: string, memberId: string): Promise<void>
+}
+
+/**
+ * A change to a project.
+ *
+ * A key that is not there leaves the column alone; `null` on a date takes it
+ * off. The organization is not here at all, because a project cannot change
+ * hands and the routine has nowhere to put one.
+ */
+export interface ProjectPatch {
+  name?: string
+  description?: string | null
+  status?: ProjectStatus
+  startDate?: string | null
+  dueDate?: string | null
+}
+
+/**
+ * Tasks.
+ *
+ * Reads are project-scoped: a board asks for one project's work and gets all
+ * of it, because five columns of a six-person organization's tasks is one
+ * small query rather than five.
+ */
+export interface LabelService {
+  /** Every label a project has, for the picker and the manager. */
+  list(projectId: string): Promise<Label[]>
+  create(projectId: string, input: LabelInput): Promise<string>
+  update(labelId: string, input: LabelInput): Promise<void>
+  remove(labelId: string): Promise<void>
+  assign(taskId: string, labelId: string): Promise<void>
+  unassign(taskId: string, labelId: string): Promise<void>
+}
+
+/**
+ * Comments on one task.
+ *
+ * Keyset paginated on `created_at`, the way messages are: `before` is the
+ * oldest comment already held, so a page costs the same whether it is the
+ * first or the twentieth.
+ */
+export interface CommentService {
+  list(taskId: string, before?: string): Promise<CommentPage>
+  create(taskId: string, body: string): Promise<string>
+  update(commentId: string, body: string): Promise<void>
+  remove(commentId: string): Promise<void>
+}
+
+export interface TaskService {
+  list(projectId: string): Promise<Task[]>
+  create(input: TaskInput): Promise<string>
+  update(taskId: string, patch: TaskPatch): Promise<void>
+  move(taskId: string, move: TaskMove): Promise<void>
+  assign(taskId: string, assigneeId: string | null): Promise<void>
+  remove(taskId: string): Promise<void>
 }

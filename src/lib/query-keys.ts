@@ -95,6 +95,45 @@ export const queryKeys = {
       ['audit', organizationId, 'recent', limit] as const,
   },
 
+  projects: {
+    /** Everything projects for an organization, for invalidation after a write. */
+    all: (organizationId: string) => ['projects', organizationId] as const,
+    list: (organizationId: string) => ['projects', organizationId, 'list'] as const,
+    detail: (organizationId: string, projectId: string) =>
+      ['projects', organizationId, 'detail', projectId] as const,
+    members: (organizationId: string, projectId: string) =>
+      ['projects', organizationId, 'detail', projectId, 'members'] as const,
+    /**
+     * One project's board. Under the project's own key, so archiving or
+     * editing a project invalidates its work along with it — and so labels,
+     * comments and realtime have somewhere to hang later.
+     */
+    tasks: (organizationId: string, projectId: string) =>
+      ['projects', organizationId, 'detail', projectId, 'tasks'] as const,
+    /** A project's own labels: the catalogue the picker and the manager read. */
+    labels: (organizationId: string, projectId: string) =>
+      ['projects', organizationId, 'detail', projectId, 'labels'] as const,
+    /**
+     * One task's comments.
+     *
+     * A sibling of the board rather than a child of it, on purpose: writing a
+     * comment must not invalidate the board, and moving a card must not
+     * invalidate a conversation. Phase 6.4 gets three families it can wake
+     * independently.
+     */
+    comments: (organizationId: string, taskId: string) =>
+      ['projects', organizationId, 'comments', taskId] as const,
+    /**
+     * Every task's comments at once.
+     *
+     * A prefix, and only ever used as one: a comment row that arrives without
+     * its task — a real delete carries an id and nothing else — cannot be
+     * placed, and marking the whole family stale refetches only the one task
+     * somebody actually has open.
+     */
+    commentsAll: (organizationId: string) => ['projects', organizationId, 'comments'] as const,
+  },
+
   calendar: {
     /** One window of one organization's diary. The range is part of the key. */
     range: (organizationId: string, from: string, to: string) =>
