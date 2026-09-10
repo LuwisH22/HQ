@@ -4,6 +4,7 @@ import type {
   ChannelType,
   InvitationStatus,
   MemberStatus,
+  RosterStatus,
   LabelColor,
   ProjectStatus,
   TaskPriority,
@@ -300,6 +301,104 @@ export interface ProjectMember {
   userId: string
   addedAt: string
   profile: MemberProfileSummary
+}
+
+/**
+ * A team: a group of the organization's people, and nothing more.
+ *
+ * There is no status. A team is either put away or it is not, and 6.5 spent a
+ * migration proving that a status column which also means "archived" is a
+ * status column that has lost track of one of its jobs.
+ */
+export interface Team {
+  id: string
+  organizationId: string
+  name: string
+  description: string | null
+  /** When it was archived, or null. */
+  archivedAt: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+  /** How many people are on the roster. Context, never authorization. */
+  memberCount: number
+}
+
+/** Somebody on a team, with enough of them to draw a row. */
+export interface TeamMember {
+  /** The organization membership id, which is what the routines take. */
+  memberId: string
+  userId: string
+  /** What they do on this team, or nothing. Operational metadata. */
+  position: string | null
+  /** Starting, substitute, or not currently playing. */
+  status: RosterStatus
+  addedAt: string
+  profile: MemberProfileSummary
+}
+
+/**
+ * A change to somebody's place on a roster.
+ *
+ * Both fields are operational. There is nothing here that could reach an
+ * organization role, a permission, an account status or an ownership, and the
+ * routine behind it writes two columns on one roster row.
+ */
+export interface TeamRosterPatch {
+  /** Absent leaves it; null takes it off. */
+  position?: string | null
+  status?: RosterStatus
+}
+
+/** What a caller supplies to start a team. */
+export interface TeamInput {
+  organizationId: string
+  name: string
+  description?: string | null
+}
+
+/**
+ * A change to a team.
+ *
+ * A key that is not there leaves the column alone. Neither the organization
+ * nor the archived state is here: a team cannot change hands, and archiving is
+ * its own action with its own routine.
+ */
+export interface TeamPatch {
+  name?: string
+  description?: string | null
+}
+
+/**
+ * Teams and their rosters.
+ *
+ * Split the way the permission catalogue has been split since day one:
+ * `create`, `update`, `archive` and `restore` ask for `teams.manage`, while
+ * `addMember` and `removeMember` ask for `teams.roster_manage` — which a coach
+ * holds and a manager also holds, but which `teams.manage` does not imply.
+ * There is no `remove`: 7.1 archives and does not delete.
+ */
+export interface TeamService {
+  list(organizationId: string): Promise<Team[]>
+  get(teamId: string): Promise<Team | null>
+  create(input: TeamInput): Promise<string>
+  update(teamId: string, input: TeamPatch): Promise<void>
+  archive(teamId: string): Promise<void>
+  restore(teamId: string): Promise<void>
+  listMembers(teamId: string): Promise<TeamMember[]>
+  /**
+   * Several rosters at once, keyed by team.
+   *
+   * The list draws a few faces per team, and asking per team would be one
+   * request per row. Scoped by the same policy either way: a team whose roster
+   * the caller may not read simply comes back absent.
+   */
+  listRosters(teamIds: readonly string[]): Promise<Record<string, TeamMember[]>>
+  addMember(teamId: string, memberId: string): Promise<void>
+  removeMember(teamId: string, memberId: string): Promise<void>
+  updateMember(teamId: string, memberId: string, patch: TeamRosterPatch): Promise<void>
+  /** Off one team and onto another, in one statement. */
+  moveMember(fromTeamId: string, toTeamId: string, memberId: string): Promise<void>
 }
 
 /** One piece of work on a project. */

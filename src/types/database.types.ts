@@ -61,6 +61,14 @@ export type TaskPriority = 'none' | 'low' | 'medium' | 'high' | 'urgent'
  * already draws, so a label cannot carry styling of its own. The database
  * holds the same six in a CHECK.
  */
+/**
+ * Whether somebody is starting on a team.
+ *
+ * Operational only, and nothing to do with `member_status`, which is what
+ * decides whether an account may be used at all.
+ */
+export type RosterStatus = 'active' | 'substitute' | 'inactive'
+
 export type LabelColor = 'violet' | 'brass' | 'success' | 'warning' | 'danger' | 'neutral'
 
 export interface Database {
@@ -749,6 +757,61 @@ export interface Database {
           },
         ]
       }
+      teams: {
+        Row: {
+          id: string
+          organization_id: string
+          name: string
+          description: string | null
+          /** When it was put away, or null. Teams have no other state. */
+          archived_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'teams_organization_id_fkey'
+            columns: ['organization_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      team_members: {
+        Row: {
+          team_id: string
+          /** An organization_members id, not a profile id. */
+          member_id: string
+          /** What they do on this team, in the organization's own words. */
+          roster_position: string | null
+          /** Starting, substitute, or not currently playing. */
+          roster_status: RosterStatus
+          added_by: string | null
+          added_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'team_members_team_id_fkey'
+            columns: ['team_id']
+            isOneToOne: false
+            referencedRelation: 'teams'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'team_members_member_id_fkey'
+            columns: ['member_id']
+            isOneToOne: false
+            referencedRelation: 'organization_members'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       projects: {
         Row: {
           id: string
@@ -1037,6 +1100,35 @@ export interface Database {
         Returns: undefined
       }
       delete_task: { Args: { p_task_id: string }; Returns: undefined }
+      create_team: {
+        Args: { p_organization_id: string; p_name: string; p_description?: string | null }
+        Returns: string
+      }
+      update_team: {
+        Args: { p_team_id: string; p_name?: string | null; p_description?: string | null }
+        Returns: undefined
+      }
+      archive_team: { Args: { p_team_id: string }; Returns: undefined }
+      restore_team: { Args: { p_team_id: string }; Returns: undefined }
+      /** Roster writes take teams.roster_manage, which teams.manage does not imply. */
+      add_team_member: { Args: { p_team_id: string; p_member_id: string }; Returns: undefined }
+      remove_team_member: { Args: { p_team_id: string; p_member_id: string }; Returns: undefined }
+      /** Operational metadata only: it can change no permission or account state. */
+      update_team_member: {
+        Args: {
+          p_team_id: string
+          p_member_id: string
+          p_position?: string | null
+          /** Null means "leave it"; this is how a position is taken off. */
+          p_clear_position?: boolean
+          p_status?: RosterStatus | null
+        }
+        Returns: undefined
+      }
+      move_team_member: {
+        Args: { p_from_team_id: string; p_to_team_id: string; p_member_id: string }
+        Returns: undefined
+      }
       create_project: {
         Args: {
           p_organization_id: string

@@ -1,4 +1,7 @@
 import { queryKeys } from '@/lib/query-keys'
+import { elsewhere, fieldOf, type Change } from '@/lib/realtime-feed'
+
+export type { Change, ChangedRow } from '@/lib/realtime-feed'
 
 /**
  * What a change to the database means for the caches.
@@ -9,20 +12,15 @@ import { queryKeys } from '@/lib/query-keys'
  * the screen goes stale without saying so — and it is arithmetic on a payload,
  * so it can be read and tested without a connection.
  *
+ * The socket itself, and the two questions every router asks of a payload,
+ * live in `@/lib/realtime-feed` — shared with every other feature that
+ * listens, so there is one way of doing this rather than one per feature.
+ *
  * Nothing here ever puts a payload into a cache. A change is news that
  * something happened; the query that follows is what decides what, and it goes
  * through RLS like every other read. That is what keeps realtime from becoming
  * a second, unpoliced way to read the database.
  */
-
-/** A row as Postgres Changes delivers it: some columns, or for a delete, an id. */
-export type ChangedRow = Record<string, unknown> | null | undefined
-
-export interface Change {
-  table: string
-  new: ChangedRow
-  old: ChangedRow
-}
 
 export interface Refresh {
   /** Families to invalidate at once. */
@@ -40,28 +38,6 @@ export interface Refresh {
 
 const NOTHING: Refresh = { keys: [], board: false }
 
-/** A column from whichever half of the payload carries it. */
-function field(change: Change, name: string): string | undefined {
-  const fresh = change.new?.[name]
-  if (typeof fresh === 'string') return fresh
-  const stale = change.old?.[name]
-  return typeof stale === 'string' ? stale : undefined
-}
-
-/**
- * Whether a row belongs to somewhere else.
- *
- * Deliberately one-sided. A delete arrives as a primary key and nothing more —
- * replica identity is default, which is the smallest thing the database can
- * say and all a client that refetches needs — so `undefined` means "cannot
- * tell", and cannot-tell is treated as ours. The refetch that follows is
- * scoped by RLS, so guessing wrong costs one read of rows the reader may
- * already see; guessing the other way would leave the screen wrong.
- */
-function elsewhere(value: string | undefined, mine: string): boolean {
-  return typeof value === 'string' && value !== mine
-}
-
 /**
  * One open project: the board, its roster, its labels and its conversations.
  *
@@ -77,18 +53,18 @@ export function routeProjectChange(
 
   switch (change.table) {
     case 'projects': {
-      if (elsewhere(field(change, 'organization_id'), org)) return NOTHING
+      if (elsewhere(fieldOf(change, 'organization_id'), org)) return NOTHING
       // The list is behind whichever project changed; this one's header is
       // behind only if it was this one.
       const keys: (readonly unknown[])[] = [queryKeys.projects.list(org)]
-      if (!elsewhere(field(change, 'id'), projectId)) {
+      if (!elsewhere(fieldOf(change, 'id'), projectId)) {
         keys.push(queryKeys.projects.detail(org, projectId))
       }
       return { keys, board: false }
     }
 
     case 'project_members': {
-      if (elsewhere(field(change, 'project_id'), projectId)) return NOTHING
+      if (elsewhere(fieldOf(change, 'project_id'), projectId)) return NOTHING
       // The roster on screen, and the count the list draws beside each project.
       return {
         keys: [queryKeys.projects.members(org, projectId), queryKeys.projects.list(org)],
@@ -97,12 +73,12 @@ export function routeProjectChange(
     }
 
     case 'tasks': {
-      if (elsewhere(field(change, 'project_id'), projectId)) return NOTHING
+      if (elsewhere(fieldOf(change, 'project_id'), projectId)) return NOTHING
       return { keys: [], board: true }
     }
 
     case 'project_labels': {
-      if (elsewhere(field(change, 'project_id'), projectId)) return NOTHING
+      if (elsewhere(fieldOf(change, 'project_id'), projectId)) return NOTHING
       // The catalogue only. A card holds label ids and reads names from here,
       // so renaming a label does not make the board's rows wrong — and
       // deleting one takes its `task_labels` rows with it, which arrive on
@@ -121,14 +97,14 @@ export function routeProjectChange(
     }
 
     case 'project_review_comments': {
-      if (elsewhere(field(change, 'project_id'), projectId)) return NOTHING
+      if (elsewhere(fieldOf(change, 'project_id'), projectId)) return NOTHING
       // The review conversation only. Saying something about a project does
       // not move it along, so neither the header nor the board is stale.
       return { keys: [queryKeys.projects.review(org, projectId)], board: false }
     }
 
     case 'task_comments': {
-      const taskId = field(change, 'task_id')
+      const taskId = fieldOf(change, 'task_id')
       // Keyed by the task, so a comment on a task nobody has open invalidates
       // a query with no observer and nothing refetches. A soft delete carries
       // its task like any update; a real delete — a cascade when the task
@@ -156,7 +132,7 @@ export function routeProjectChange(
 export function routeProjectsListChange(change: Change, organizationId: string): Refresh {
   switch (change.table) {
     case 'projects': {
-      if (elsewhere(field(change, 'organization_id'), organizationId)) return NOTHING
+      if (elsewhere(fieldOf(change, 'organization_id'), organizationId)) return NOTHING
       return { keys: [queryKeys.projects.list(organizationId)], board: false }
     }
 

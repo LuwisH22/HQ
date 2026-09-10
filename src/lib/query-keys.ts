@@ -150,6 +150,30 @@ export const queryKeys = {
       ['projects', organizationId, 'detail', projectId, 'review'] as const,
   },
 
+  /**
+   * Teams and rosters.
+   *
+   * The same shape projects use, and for the same reason: a roster is its own
+   * family under the team, so putting somebody on a side does not invalidate
+   * the list of sides.
+   */
+  teams: {
+    all: (organizationId: string) => ['teams', organizationId] as const,
+    list: (organizationId: string) => ['teams', organizationId, 'list'] as const,
+    detail: (organizationId: string, teamId: string) =>
+      ['teams', organizationId, 'detail', teamId] as const,
+    members: (organizationId: string, teamId: string) =>
+      ['teams', organizationId, 'detail', teamId, 'members'] as const,
+    /**
+     * Every roster in the organization, for the faces on the list.
+     *
+     * Its own family rather than a read of each team's: the list wants them
+     * all at once, and a page that asked per row would make one request per
+     * team to draw three avatars.
+     */
+    rosters: (organizationId: string) => ['teams', organizationId, 'rosters'] as const,
+  },
+
   calendar: {
     /** One window of one organization's diary. The range is part of the key. */
     range: (organizationId: string, from: string, to: string) =>

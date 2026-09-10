@@ -106,7 +106,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: UsersThree,
     requires: ['teams.view'],
     phase: 3,
-    shipped: false,
+    shipped: true,
     group: 'organization',
   },
   {

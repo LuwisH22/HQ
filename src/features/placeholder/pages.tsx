@@ -4,7 +4,6 @@ import {
   Files,
   Hash,
   ChatTeardropText,
-  UsersThree,
 } from '@phosphor-icons/react'
 import { PhasePlaceholderPage } from './PhasePlaceholderPage'
 
@@ -61,23 +60,6 @@ export function CalendarPage() {
         'Scrim, match, training, meeting and deadline event types',
         'Participants, related team and related project',
         'Project deadlines surfaced alongside events',
-      ]}
-    />
-  )
-}
-
-export function TeamsPage() {
-  return (
-    <PhasePlaceholderPage
-      title="Teams"
-      icon={UsersThree}
-      phase={3}
-      summary="Rosters per title, with player status and staff assignments."
-      capabilities={[
-        'Multiple teams with their own rosters',
-        'Active, substitute, trial and inactive player status',
-        'Coach and staff assignments per team',
-        'Roster notes visible only to permitted roles',
       ]}
     />
   )

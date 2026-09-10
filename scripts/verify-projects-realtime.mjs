@@ -297,16 +297,18 @@ check(
 )
 
 console.log('\n6 · the project itself')
-await author.rpc('update_project', {
+// No status argument: 6.5 removed it, because a routine that accepted one
+// would have made the project lifecycle optional.
+const { error: renameFailed } = await author.rpc('update_project', {
   p_project_id: projectId,
   p_name: `Realtime probe ${stamp} renamed`,
   p_description: null,
-  p_status: null,
   p_start_date: null,
   p_due_date: null,
   p_clear_start_date: false,
   p_clear_due_date: false,
 })
+check('the project can be renamed', !renameFailed, renameFailed?.message ?? '')
 await until(() => rows('member', 'projects', 'UPDATE').length > 0)
 
 const renamed = rows('member', 'projects', 'UPDATE')[0]?.row

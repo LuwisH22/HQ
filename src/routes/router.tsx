@@ -65,11 +65,14 @@ const ProjectsPage = lazy(() =>
 const ProjectDetailPage = lazy(() =>
   import('@/features/projects/ProjectDetailPage').then((m) => ({ default: m.ProjectDetailPage })),
 )
+const TeamsPage = lazy(() =>
+  import('@/features/teams/TeamsPage').then((m) => ({ default: m.TeamsPage })),
+)
+const TeamDetailPage = lazy(() =>
+  import('@/features/teams/TeamDetailPage').then((m) => ({ default: m.TeamDetailPage })),
+)
 const CalendarPage = lazy(() =>
   import('@/features/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })),
-)
-const TeamsPage = lazy(() =>
-  import('@/features/placeholder/pages').then((m) => ({ default: m.TeamsPage })),
 )
 const FilesPage = lazy(() =>
   import('@/features/placeholder/pages').then((m) => ({ default: m.FilesPage })),
@@ -118,8 +121,9 @@ export const router = createHashRouter([
           { path: 'dm/:conversationId', element: <ConversationChatPage /> },
           { path: 'projects', element: <ProjectsPage /> },
           { path: 'projects/:projectId', element: <ProjectDetailPage /> },
-          { path: 'calendar', element: <CalendarPage /> },
           { path: 'teams', element: <TeamsPage /> },
+          { path: 'teams/:teamId', element: <TeamDetailPage /> },
+          { path: 'calendar', element: <CalendarPage /> },
           { path: 'files', element: <FilesPage /> },
           { path: 'notifications', element: <NotificationsPage /> },
           { path: 'members', element: <MembersPage /> },
