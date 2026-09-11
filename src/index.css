@@ -389,6 +389,64 @@
   }
 }
 
+/* The calendar's two longer fades, which are notifications rather than
+   responses to a click: a row that just arrived holds the accent tint for
+   600ms before it fades, and a row somebody else changed gets the tint and a
+   1px accent edge for the same hold. Neither loops. */
+@layer utilities {
+  .calendar-arrive {
+    animation: calendar-arrive 900ms cubic-bezier(0.2, 0, 0, 1) forwards;
+  }
+  .calendar-changed {
+    animation: calendar-changed 1020ms cubic-bezier(0.2, 0, 0, 1) forwards;
+  }
+  /* The 2px route bar across the top of the grid while a window refetches. */
+  .calendar-route-bar {
+    animation: calendar-sweep 1.4s cubic-bezier(0.2, 0, 0, 1) infinite;
+  }
+}
+@keyframes calendar-sweep {
+  from {
+    left: -40%;
+  }
+  to {
+    left: 100%;
+  }
+}
+@keyframes calendar-arrive {
+  0%,
+  66% {
+    background-color: var(--surface-active);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+@keyframes calendar-changed {
+  0% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+  12%,
+  70% {
+    background-color: var(--surface-active);
+    box-shadow: inset 1px 0 0 0 var(--accent-text);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+/* Under reduced motion the hold becomes a still tint, which the calendar
+   removes itself after the same interval. */
+@media (prefers-reduced-motion: reduce) {
+  .calendar-arrive,
+  .calendar-changed {
+    animation: none;
+    background-color: var(--surface-active);
+  }
+}
+
 /* Typing indicator dots. Small vertical travel and a low opacity floor: it
    should read as activity at the edge of vision, not compete with the
    conversation. */
