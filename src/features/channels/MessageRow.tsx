@@ -22,6 +22,7 @@ import { MessageAttachments } from './MessageAttachments'
 import { MessageBody } from './MessageBody'
 import { ThreadSummary } from './ThreadPanel'
 import { ReplyContextLine } from './ReplyContext'
+import type { Arrival } from './message-arrival'
 import { cn } from '@/lib/utils'
 
 /**
@@ -35,6 +36,16 @@ import { cn } from '@/lib/utils'
  * The actions offered are the ones the caller says are permitted. Editing is
  * the author's alone — moderation confers removal, never rewriting somebody
  * else's words — and the database enforces both regardless of what is drawn.
+ *
+ * The words sit in a bubble: the L1 card the rest of the app uses, at the
+ * prose radius, and one step sideways for your own message rather than one
+ * step up. Everyone stays in the same left column — an operations channel is
+ * read as a record of who said what, not as a two-person exchange — so
+ * ownership is the tint and the name line, never the side of the screen.
+ *
+ * The `li` stays a list item and an `article` sits inside it. The message is
+ * the article: it carries the name and the entrance. The list item is the band
+ * around it that tints on hover and holds the gutter.
  */
 
 export interface MessageActions {
@@ -52,6 +63,9 @@ function shortTime(iso: string): string {
 export function MessageRow({
   message,
   grouped,
+  continuesBelow = false,
+  arrival,
+  onSettled,
   actions,
   reactions,
   mentions,
@@ -71,6 +85,21 @@ export function MessageRow({
   message: Message
   /** Continues the message above it: no avatar, no name. */
   grouped: boolean
+  /**
+   * Another message in the same group follows this one.
+   *
+   * Only the corners read it: the edge that faces a sibling tightens. It is
+   * the same `continuesRun` the caller already used for `grouped`, asked about
+   * the message below instead of the one above — there is no second rule here.
+   */
+  continuesBelow?: boolean
+  /**
+   * How this message got here, when it has only just got here. Drives the
+   * entrance on the bubble and nothing else.
+   */
+  arrival?: Arrival
+  /** Called once the entrance has finished, so the class can come off. */
+  onSettled?: () => void
   actions: MessageActions
   reactions: readonly MessageReaction[]
   mentions: readonly MessageMention[]
@@ -115,6 +144,20 @@ export function MessageRow({
   // names you if `message_mentions` says it does.
   const mentionsMe = currentUserId !== null && mentions.some((m) => m.userId === currentUserId)
 
+  // Yours, by the id the session already established. Nothing is sent down to
+  // say so and nothing needs to be: the tint is a fact about who is reading.
+  const isOwn = currentUserId !== null && message.authorId === currentUserId
+
+  // The corners that face a sibling in the same group tighten from 8 to 3.
+  // Bubbles keep their own edges; nothing is merged into a shared card, and
+  // that is the whole of the first/middle/last distinction.
+  const BUBBLE = cn(
+    'chat-bubble',
+    isOwn ? 'chat-bubble-own' : null,
+    grouped ? 'chat-bubble-above' : null,
+    continuesBelow ? 'chat-bubble-below' : null,
+  )
+
   return (
     <li
       data-message-id={message.id}
@@ -125,7 +168,9 @@ export function MessageRow({
         // width of the conversation rather than a card floating in it.
         'group relative mx-2 flex gap-3 rounded-md pr-2 pl-2 transition-colors duration-[120ms] sm:pl-3',
         'hover:bg-surface',
-        grouped ? 'py-0.5' : 'mt-2.5 py-0.5 first:mt-0',
+        // 2px between messages inside a group, 12px before a new one: the
+        // rhythm is what separates one person talking from two.
+        grouped ? 'py-px' : 'mt-3 py-px first:mt-0',
         // Being named is worth noticing across a room: a blade in the gutter
         // and the quietest possible tint behind the words.
         mentionsMe && !removed ? 'bg-primary/6 hover:bg-primary/10' : null,
@@ -144,7 +189,7 @@ export function MessageRow({
       {/* The avatar column, and the hover timestamp's home. Named, because
           measuring it by its width class made a spacing change a test
           failure. */}
-      <div data-message-gutter="" className="relative w-9 shrink-0">
+      <div data-message-gutter="" className="relative w-8 shrink-0 sm:w-9">
         {grouped ? (
           // Out of flow, never wrapped, and anchored by its right edge only.
           //
@@ -157,11 +202,11 @@ export function MessageRow({
           // With only `right` set the box sizes to its text and grows the
           // other way, into the padding the row already has — away from the
           // words rather than over them, whatever the locale writes.
-          <span className="text-2xs text-muted-foreground/0 group-hover:text-muted-foreground absolute top-px right-0 text-right font-mono leading-[22px] whitespace-nowrap tabular-nums transition-colors">
+          <span className="text-3xs text-muted-foreground/0 group-focus-within:text-muted-foreground group-hover:text-muted-foreground absolute top-px right-0 text-right font-mono leading-[22px] whitespace-nowrap tabular-nums transition-colors">
             {shortTime(message.createdAt)}
           </span>
         ) : (
-          <Avatar className="size-9 rounded-md">
+          <Avatar className="size-8 rounded-md sm:size-9">
             {message.authorAvatarUrl ? <AvatarImage src={message.authorAvatarUrl} alt="" /> : null}
             <AvatarFallback className="rounded-md">
               {initialsFor({ displayName: message.authorName })}
@@ -170,10 +215,34 @@ export function MessageRow({
         )}
       </div>
 
-      <div className="min-w-0 flex-1">
+      {/* The message itself. An article inside the list item so a message is
+          one named thing to a screen reader, while the band around it stays
+          the list row that tints on hover and holds the gutter.
+
+          NOT a tab stop, and that is deliberate. Making it one put a focus
+          target around the action chip, and a click on the chip then scrolled
+          the row into view mid-gesture — the message list moved by 53px while
+          the reaction menu was opening, and Radix had already positioned that
+          menu against where the trigger used to be. It landed 100px below the
+          viewport, unreachable by mouse or keyboard. Measured, not guessed:
+          `e2e/direct-messages.spec.ts` fails on it.
+
+          Nothing is lost. Everything a message offers is a real button in the
+          tab order, the chip appears on `focus-within` so the keyboard reaches
+          the same tools the pointer does, and a reader navigates these by
+          article rather than by tabbing through two hundred of them. */}
+      <article
+        aria-label={`${message.authorName}, ${shortTime(message.createdAt)}${
+          removed ? ', deleted message' : ''
+        }`}
+        // A flex column that shrink-wraps its children: a bubble is as wide as
+        // its words and no wider, up to the ceiling. Without this every bubble
+        // is a block and fills the column, which is a card, not a message.
+        className="flex min-w-0 flex-1 flex-col items-start"
+      >
         {grouped ? null : (
-          <p className="flex items-baseline gap-2 leading-[18px]">
-            <span className="text-foreground text-base leading-[18px] font-semibold">
+          <p className="mb-0.5 flex items-baseline gap-2 leading-[18px]">
+            <span className="text-foreground text-sm leading-[18px] font-semibold">
               {message.authorName}
             </span>
             {message.pinnedAt ? (
@@ -189,35 +258,18 @@ export function MessageRow({
           </p>
         )}
 
-        {/* Above the words and below the name: the reply is the message, and
-            this is only what it answers. */}
-        {replyContext !== undefined && !removed ? (
-          onJumpToParent ? (
-            <button
-              type="button"
-              onClick={onJumpToParent}
-              className="hover:bg-accent mb-0.5 flex w-full min-w-0 rounded-sm py-px text-left transition-colors duration-[120ms]"
-              aria-label={
-                replyContext === null
-                  ? 'Go to the message this replies to'
-                  : `Go to the message from ${replyContext.authorName} this replies to`
-              }
-            >
-              <ReplyContextLine context={replyContext} />
-            </button>
-          ) : (
-            <ReplyContextLine context={replyContext} className="mb-0.5" />
-          )
-        ) : null}
-
         {removed ? (
           <>
-            <p className="text-muted-foreground text-base italic">This message was deleted.</p>
+            {/* An outline where words were: no fill, a dashed edge. The row
+                survives so replies to it stay reachable. */}
+            <div className={cn(BUBBLE, 'chat-bubble-deleted')}>
+              <p className="text-sm italic">This message was deleted.</p>
+            </div>
             {onOpenThread ? <ThreadSummary message={message} onOpen={onOpenThread} /> : null}
           </>
         ) : editing ? (
           <form
-            className="mt-1 flex flex-wrap items-center gap-2"
+            className="mt-1 flex w-full flex-wrap items-center gap-2"
             onSubmit={(event) => {
               event.preventDefault()
               if (draft.trim()) {
@@ -245,13 +297,48 @@ export function MessageRow({
           </form>
         ) : (
           <>
-            <MessageBody
-              body={message.body}
-              mentions={mentions}
-              currentUserId={currentUserId}
-              edited={message.editedAt !== null}
-            />
-            <MessageAttachments attachments={attachments} />
+            <div
+              className={cn(BUBBLE, arrival === 'own' ? 'chat-enter-own' : null, arrival === 'incoming' ? 'chat-enter-incoming' : null, arrival !== undefined ? 'chat-arrived' : null)}
+              // The entrance is on the bubble, so the class comes off the
+              // bubble: a settled message carries no transform at all. Only
+              // this element's own animations count — a reaction chip's
+              // transition inside it must not end the message's entrance.
+              onAnimationEnd={(event) => {
+                if (event.currentTarget === event.target) onSettled?.()
+              }}
+            >
+              {/* Above the words and inside the bubble: the reply is the
+                  message, and this is only what it answers. */}
+              {replyContext !== undefined ? (
+                onJumpToParent ? (
+                  <button
+                    type="button"
+                    onClick={onJumpToParent}
+                    className="-mx-1 mb-1 flex w-[calc(100%+0.5rem)] min-w-0 rounded-sm px-1 text-left"
+                    aria-label={
+                      replyContext === null
+                        ? 'Go to the message this replies to'
+                        : `Go to the message from ${replyContext.authorName} this replies to`
+                    }
+                  >
+                    <ReplyContextLine context={replyContext} />
+                  </button>
+                ) : (
+                  <ReplyContextLine context={replyContext} className="mb-1" />
+                )
+              ) : null}
+
+              <MessageBody
+                body={message.body}
+                mentions={mentions}
+                currentUserId={currentUserId}
+                edited={message.editedAt !== null}
+              />
+              <MessageAttachments attachments={attachments} />
+            </div>
+
+            {/* Beneath the bubble, not in it: a reaction and a thread belong
+                to the message without being part of what was said. */}
             <MessageReactions
               reactions={reactions}
               canReact={actions.canReact}
@@ -261,7 +348,7 @@ export function MessageRow({
             {onOpenThread ? <ThreadSummary message={message} onOpen={onOpenThread} /> : null}
           </>
         )}
-      </div>
+      </article>
 
       {showActions && !editing ? (
         <div

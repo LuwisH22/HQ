@@ -17,15 +17,15 @@ export function TypingIndicator({ names }: { names: readonly string[] }) {
     <div className="text-muted-foreground text-2xs flex h-5 items-center gap-1.5 px-5">
       {label ? (
         <>
+          {/* The only loop on screen, and the only continuous animation in
+              the chat: three 4px dots, 2px of travel, 1.2s. Under reduced
+              motion they stop moving and sit still instead. */}
           <span className="flex items-end gap-[3px] pb-[3px]" aria-hidden="true">
             {[0, 1, 2].map((index) => (
               <span
                 key={index}
-                className="bg-muted-foreground/70 size-[3px] rounded-full"
-                style={{
-                  animation: 'lfg-typing 1.1s ease-in-out infinite',
-                  animationDelay: `${String(index * 0.16)}s`,
-                }}
+                className="bg-muted-foreground/70 chat-typing-dot size-1 rounded-full"
+                style={{ animationDelay: `${String(index * 0.15)}s` }}
               />
             ))}
           </span>

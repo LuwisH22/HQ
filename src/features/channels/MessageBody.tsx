@@ -102,7 +102,11 @@ export function MessageBody({
           <span key={index}>{part.text}</span>
         ),
       )}
-      {edited ? <span className="text-2xs text-muted-foreground font-mono"> (edited)</span> : null}
+      {/* Mono 10, inline after the words. The space is a real space rather
+          than a margin: at this size it is already the offset the audit asks
+          for, and it keeps the text copyable and readable aloud as two words
+          rather than one. */}
+      {edited ? <span className="text-3xs text-muted-foreground font-mono"> (edited)</span> : null}
     </p>
   )
 }

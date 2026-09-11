@@ -1,16 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  DownloadSimple,
-  FileArchive,
-  FilePdf,
-  FileText,
-  Image as ImageIcon,
-} from '@phosphor-icons/react'
+import { DownloadSimple } from '@phosphor-icons/react'
 import { attachmentService } from '@/services/attachment.service'
 import type { MessageAttachment } from '@/services/attachment.service'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/utils'
-import { categoryOf, formatBytes, type AttachmentCategory } from './attachments'
+import { categoryOf, formatBytes } from './attachments'
 
 /**
  * The files on a message.
@@ -27,12 +21,11 @@ import { categoryOf, formatBytes, type AttachmentCategory } from './attachments'
  * this page decides that; it asks, and gets a URL or does not.
  */
 
-const ICONS: Record<AttachmentCategory, typeof FileText> = {
-  image: ImageIcon,
-  pdf: FilePdf,
-  text: FileText,
-  archive: FileArchive,
-  other: FileText,
+/** `scrim-notes.pdf` becomes `PDF`; something with no extension becomes `FILE`. */
+function extensionOf(fileName: string): string {
+  const dot = fileName.lastIndexOf('.')
+  if (dot === -1 || dot === fileName.length - 1) return 'FILE'
+  return fileName.slice(dot + 1).toUpperCase().slice(0, 4)
 }
 
 function AttachmentCard({
@@ -42,16 +35,23 @@ function AttachmentCard({
   attachment: MessageAttachment
   href: string | undefined
 }) {
-  const Icon = ICONS[categoryOf(attachment.mimeType)]
-
   const inner = (
     <>
-      <Icon className="text-muted-foreground size-5 shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm leading-tight font-medium">
+      {/* The extension in mono on canvas, not a coloured file-type glyph: a
+          file is a file, and tinting .pdf differently from .zip would be the
+          one place in the app where colour carries meaning nothing else
+          carries. */}
+      <span
+        aria-hidden="true"
+        className="border-border bg-background text-3xs text-secondary-foreground grid size-8 shrink-0 place-items-center rounded-sm border font-mono tracking-wider"
+      >
+        {extensionOf(attachment.fileName)}
+      </span>
+      <span className="grid min-w-0 flex-1">
+        <span className="text-foreground truncate text-sm leading-tight font-medium">
           {attachment.fileName}
         </span>
-        <span className="text-2xs text-muted-foreground block font-mono">
+        <span className="text-2xs text-muted-foreground truncate font-mono">
           {formatBytes(attachment.byteSize)}
         </span>
       </span>
@@ -60,10 +60,10 @@ function AttachmentCard({
   )
 
   const className = cn(
-    'border-border-subtle bg-elevated flex h-10 w-full max-w-sm items-center gap-2.5 rounded-md border px-2.5',
+    'border-border-subtle bg-elevated flex h-11 w-full max-w-[280px] items-center gap-2.5 rounded-md border pr-2.5 pl-2',
     'transition-colors duration-[120ms]',
     href
-      ? 'hover:bg-elevated focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none'
+      ? 'hover:border-border focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none'
       : 'opacity-60',
   )
 
@@ -118,7 +118,7 @@ export function MessageAttachments({ attachments }: { attachments: readonly Mess
   if (attachments.length === 0) return null
 
   return (
-    <ul className="mt-1.5 space-y-1.5" aria-label="Attachments">
+    <ul className="mt-2 space-y-1.5" aria-label="Attachments">
       {attachments.map((attachment) => {
         const isImage = categoryOf(attachment.mimeType) === 'image'
         const preview = previews.data?.get(attachment.storagePath)
@@ -131,7 +131,10 @@ export function MessageAttachments({ attachments }: { attachments: readonly Mess
                 href={download ?? preview}
                 download={attachment.fileName}
                 rel="noreferrer"
-                className="focus-visible:ring-ring inline-block rounded-md focus-visible:ring-2 focus-visible:outline-none"
+                className={cn(
+                  'border-border-subtle bg-background block w-[260px] max-w-full overflow-hidden rounded-md border',
+                  'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+                )}
                 aria-label={`Download ${attachment.fileName}, ${formatBytes(attachment.byteSize)}`}
               >
                 {/* Bounded in both directions so a tall or wide image cannot
@@ -140,8 +143,17 @@ export function MessageAttachments({ attachments }: { attachments: readonly Mess
                   src={preview}
                   alt={attachment.fileName}
                   loading="lazy"
-                  className="border-border-subtle max-h-80 w-auto max-w-[min(400px,100%)] rounded-md border object-contain"
+                  className="block max-h-80 w-full object-contain"
                 />
+                {/* The caption strip says which file this is without a
+                    tooltip, and names it for anybody reading the page rather
+                    than looking at it. */}
+                <span className="border-border-subtle bg-elevated text-2xs text-muted-foreground flex items-center gap-2 border-t px-2 py-1 font-mono">
+                  <span className="text-secondary-foreground min-w-0 flex-1 truncate">
+                    {attachment.fileName}
+                  </span>
+                  <span className="shrink-0">{formatBytes(attachment.byteSize)}</span>
+                </span>
               </a>
             ) : (
               <AttachmentCard attachment={attachment} href={download} />

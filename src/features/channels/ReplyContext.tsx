@@ -16,6 +16,10 @@ import { replyPreviewOf } from './replies'
  * formatting anyway. React escapes it, so there is no path here for markup of
  * any kind — and a `ReplyContext` carries no storage path to leak in the first
  * place, only a count of the files that rode along.
+ *
+ * A 2px accent rule and nothing else — no fill, no border, no radius. Inside a
+ * bubble a bordered box would read as a card inside a card; a rule reads as a
+ * margin note, which is what a quote is.
  */
 
 export function ReplyContextLine({
@@ -29,9 +33,10 @@ export function ReplyContextLine({
   return (
     <span
       className={cn(
-        // A hairline connector rather than an outline: the quote hangs off the
-        // line above it, which is where the message it answers is.
-        'text-muted-foreground border-border-subtle flex min-w-0 items-center gap-1.5 border-l pl-2 text-xs leading-4',
+        // A rule rather than an outline: the quote hangs off the line, which
+        // points at the message it answers. 12/18 muted, and one line only —
+        // a quote is a single glance, not a second message.
+        'text-muted-foreground border-accent-text flex min-w-0 items-center gap-1.5 border-l-2 pl-2.5 text-xs leading-[18px]',
         className,
       )}
     >
@@ -41,10 +46,15 @@ export function ReplyContextLine({
         <span className="truncate italic">Message unavailable</span>
       ) : (
         <>
-          <span className="text-secondary-foreground shrink-0 font-medium">
+          <span className="text-secondary-foreground shrink-0 text-xs font-medium">
             {context.authorName}
           </span>
-          <span className="shrink-0 opacity-50" aria-hidden="true">
+          {/* A separator, not a time. The audit asks for the quoted
+              message's timestamp in mono, but `ReplyContext` is deliberately
+              narrow — a name, a few words and a file count — and putting a
+              `createdAt` on it is a service contract change, which this work
+              is not allowed to make. */}
+          <span className="text-3xs shrink-0 font-mono opacity-60" aria-hidden="true">
             ·
           </span>
           {context.deleted ? (
@@ -61,7 +71,10 @@ export function ReplyContextLine({
                   }
                 />
               ) : null}
-              <span className="truncate">{replyPreviewOf(context.body)}</span>
+              {/* 48ch is the audit's ceiling: long enough to recognise a
+                  message, short enough that the quote never competes with the
+                  reply under it. */}
+              <span className="max-w-[48ch] truncate">{replyPreviewOf(context.body)}</span>
             </>
           )}
         </>

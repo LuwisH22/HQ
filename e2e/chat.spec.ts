@@ -269,6 +269,16 @@ test('never shows your own typing indicator back to you', async ({ page }, testI
   await deleteChannel(page, name)
 })
 
+/**
+ * What a bubble adds around the words, in pixels.
+ *
+ * 6px of padding and a 1px border top and bottom, plus the row's own 1px — the
+ * 2px that separates one message in a group from the next. A message is
+ * therefore its own text plus this and nothing else; a phantom second line
+ * would add a whole 22px line height, which is well clear of it.
+ */
+const BUBBLE_CHROME = 16
+
 test('keeps a run of messages compact and a long one intact', async ({ page }, testInfo) => {
   const name = uniqueName(testInfo.project.name)
   await createChannel(page, name)
@@ -330,10 +340,10 @@ test('keeps a run of messages compact and a long one intact', async ({ page }, t
   expect(lineHeight).toBeGreaterThan(0)
 
   for (const row of oneLiners) {
-    // One line of text, and the row is that line plus its own padding —
+    // One line of text, and the row is that line plus the bubble around it —
     // nothing in it reserves space for a second.
     expect(Math.round(row.body)).toBe(Math.round(lineHeight))
-    expect(row.height).toBeLessThanOrEqual(row.body + 8)
+    expect(row.height).toBeLessThanOrEqual(row.body + BUBBLE_CHROME)
     expect(row.gutterLines).toBe(1)
     // Continuations sit directly under one another; only a new group is spaced.
     expect(row.marginTop).toBe(0)
@@ -344,13 +354,13 @@ test('keeps a run of messages compact and a long one intact', async ({ page }, t
   for (let i = 1; i < oneLiners.length; i += 1) {
     const gap = oneLiners[i].top - oneLiners[i - 1].top
     expect(gap).toBeCloseTo(oneLiners[i - 1].height, 0)
-    expect(gap).toBeLessThanOrEqual(lineHeight + 8)
+    expect(gap).toBeLessThanOrEqual(lineHeight + BUBBLE_CHROME)
   }
 
   // Three lines are three lines tall: the compactness above must not have come
   // from clamping a message to one.
   expect(Math.round(multiLine!.body)).toBe(Math.round(lineHeight * 3))
-  expect(multiLine!.height).toBeLessThanOrEqual(multiLine!.body + 8)
+  expect(multiLine!.height).toBeLessThanOrEqual(multiLine!.body + BUBBLE_CHROME)
 
   // And the message that opened the group keeps the wider separation that
   // marks a change of speaker.
@@ -427,9 +437,9 @@ test('keeps the hover timestamp in the gutter, clear of the words', async ({ pag
   expect(measured.stampRight).toBeLessThanOrEqual(measured.gutterRight)
   expect(measured.bodyLeft - measured.stampRight).toBeGreaterThanOrEqual(8)
 
-  // And none of that cost the row any height.
+  // And none of that cost the row any height beyond the bubble's own.
   expect(Math.round(measured.bodyHeight)).toBe(Math.round(measured.lineHeight))
-  expect(measured.rowHeight).toBeLessThanOrEqual(measured.bodyHeight + 8)
+  expect(measured.rowHeight).toBeLessThanOrEqual(measured.bodyHeight + BUBBLE_CHROME)
 
   await deleteChannel(page, name)
 })

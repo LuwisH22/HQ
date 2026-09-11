@@ -14,6 +14,7 @@ import { errorMessage } from '@/lib/errors'
 import { useAuth } from '@/hooks/use-auth'
 import { usePermission } from '@/hooks/use-permission'
 import { MessageRow } from './MessageRow'
+import { useMessageArrivals } from './message-arrival'
 import { Composer } from './Composer'
 
 /**
@@ -60,6 +61,10 @@ export function ThreadPanel({
   })
 
   const replies = repliesQuery.data ?? []
+
+  // A reply arriving in an open thread gets the same entrance a message in the
+  // room does, from the same view-layer reading of the array.
+  const arrivals = useMessageArrivals(replies, user?.id ?? null)
   const ids = [root.id, ...replies.map((r) => r.id)]
 
   const mentionsQuery = useQuery({
@@ -235,6 +240,18 @@ export function ThreadPanel({
                   message.deletedAt === null &&
                   replies[index - 1]?.deletedAt === null
                 }
+                // The panel's own run predicate, mirrored downwards. Left as it
+                // is rather than switched to `continuesRun`: a thread has no
+                // date dividers and no time window, and changing what a run
+                // means here would be a grouping change.
+                continuesBelow={
+                  index < replies.length - 1 &&
+                  replies[index + 1]?.authorId === message.authorId &&
+                  message.deletedAt === null &&
+                  replies[index + 1]?.deletedAt === null
+                }
+                arrival={arrivals.arrivalOf(message.id)}
+                onSettled={() => arrivals.settle(message.id)}
                 reactions={reactionsQuery.data?.get(message.id) ?? []}
                 mentions={mentionsQuery.data?.get(message.id) ?? []}
                 attachments={attachmentsQuery.data?.get(message.id) ?? []}
@@ -284,12 +301,12 @@ export function ThreadSummary({ message, onOpen }: { message: Message; onOpen: (
     <button
       type="button"
       onClick={onOpen}
-      className="text-accent-text hover:bg-accent mt-1 -ml-1.5 flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-xs font-medium transition-colors duration-[120ms]"
+      className="text-accent-text hover:bg-accent mt-1 -ml-1.5 flex h-6 items-center gap-2 rounded-sm px-1.5 text-xs font-medium transition-colors duration-[120ms]"
     >
       {message.replyCount} {message.replyCount === 1 ? 'reply' : 'replies'}
       {when ? (
-        <span className="text-muted-foreground font-mono font-normal">
-          · {when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        <span className="text-2xs text-muted-foreground font-mono font-normal tabular-nums">
+          last {when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       ) : null}
     </button>

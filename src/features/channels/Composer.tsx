@@ -267,7 +267,7 @@ export function Composer({
       >
         {replyingTo && onCancelReply ? (
           <div
-            className="border-border-subtle flex items-center gap-2 border-b px-2.5 py-1.5"
+            className="border-border-subtle flex h-7 items-center gap-2 border-b px-2.5"
             aria-label="Replying to"
           >
             <ReplyContextLine context={replyingTo} className="min-w-0 flex-1" />

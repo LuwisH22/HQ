@@ -1,0 +1,497 @@
+<title>LFHQ Chat Room Prototype</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap">
+<style>
+:root{
+  --bg:#0C0C12;--sidebar:#07070A;--surface:#14141C;--elev:#1A1A24;--hover:#1F1F2A;--active:#1B1930;--overlay:#1C1C27;
+  --border:#262633;--border-subtle:#1C1C26;--border-strong:#33334A;
+  --t1:#F1F0F7;--t2:#A7A6B8;--t3:#6B6A7E;
+  --accent:#6656F0;--accent-l:#A99CFF;--accent-g:#CFC8FF;--accent-tint:rgba(102,86,240,.14);--mine-border:rgba(102,86,240,.25);
+  --brass:#C9A961;--ok:#3DD68C;--warn:#F2B84B;--bad:#F26D63;--offline:#4B4B5E;
+  --display:'Archivo','Geist',system-ui,sans-serif;--ui:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.2,0,0,1);--ease-exit:cubic-bezier(.4,0,1,1);
+  --d-hover:120ms;--d-enter:160ms;--d-highlight:600ms;
+  color-scheme:dark;
+}
+@media (prefers-reduced-motion:reduce){:root{--d-hover:0ms;--d-enter:0ms}}
+:root.reduce{--d-hover:0ms;--d-enter:0ms}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:#000;color:var(--t2);font:13px/20px var(--ui);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,[tabindex]:focus-visible,textarea:focus-visible,a:focus-visible{outline:none;box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent-l)}
+a{color:var(--accent-l);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+.eyebrow{font-family:var(--display);font-variation-settings:'wdth' 112;font-weight:500;font-size:11px;line-height:16px;letter-spacing:.12em;text-transform:uppercase;color:var(--t3)}
+.mono{font-family:var(--mono);font-size:11px;line-height:16px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- stage: the viewport presets ---------- */
+.stage{position:fixed;inset:0 0 56px;display:grid;place-items:center;overflow:auto}
+.frame{background:var(--bg);display:flex;overflow:hidden;position:relative;transform-origin:center center;border:1px solid var(--border-subtle)}
+.frame.w1440{width:1440px;height:900px}
+.frame.w1280{width:1280px;height:820px}
+.frame.w412{width:412px;height:892px;border-radius:16px}
+.frame.w390{width:390px;height:844px;border-radius:16px}
+.frame.mobile .rail,.frame.mobile .chans,.frame.mobile .rpanel{display:none}
+.frame.mobile .tabbar{display:grid}
+.frame.mobile .hdr .back{display:inline-flex}
+.frame.mobile .hdr .desk{display:none}
+.frame.mobile .row{grid-template-columns:32px 1fr;padding-left:12px;padding-right:12px;gap:10px}
+.frame.mobile .row .av{width:32px;height:32px;font-size:12px}
+.frame.mobile .bubble{max-width:82%}
+.frame.mobile .composer{margin:0 12px 8px}
+.frame.mobile .bubble{max-width:84%}
+.frame.mobile .actions{display:none}
+
+/* ---------- rail + channel sidebar ---------- */
+.rail{width:56px;background:var(--sidebar);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px;flex:none}
+.rail .org{width:32px;height:32px;border-radius:6px;background:rgba(138,147,184,.22);color:#8A93B8;display:grid;place-items:center;font-family:var(--display);font-variation-settings:'wdth' 112;font-weight:700;font-size:11px;margin-bottom:12px}
+.rail a{width:36px;height:32px;border-radius:4px;display:grid;place-items:center;color:var(--t3);position:relative}
+.rail a.on{background:var(--active);color:var(--accent-l)}
+.rail a.on::before{content:"";position:absolute;left:-10px;top:8px;width:2px;height:16px;border-radius:1px;background:var(--accent-l)}
+.rail .me{margin-top:auto;width:28px;height:28px;border-radius:4px;background:rgba(201,169,97,.22);color:var(--brass);display:grid;place-items:center;font-family:var(--display);font-weight:600;font-size:11px;position:relative}
+.rail .me i{position:absolute;right:-2px;bottom:-2px;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px var(--sidebar)}
+.chans{width:240px;background:var(--sidebar);display:flex;flex-direction:column;padding:8px 8px 8px 16px;gap:2px;flex:none}
+.chans .org{display:flex;align-items:center;gap:10px;height:56px;padding:0 8px;margin-bottom:4px}
+.chans .org b{display:block;color:var(--t1);font-weight:600}
+.chans .org span{font-family:var(--mono);font-size:11px;color:var(--t3);display:flex;gap:6px;align-items:center}
+.chans .org span i{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.chans .eyebrow{display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;margin-top:12px;margin-bottom:4px}
+.chans .eyebrow .n{margin-left:auto;font-family:var(--mono);letter-spacing:0;text-transform:none}
+.chans a{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:4px;color:var(--t2);font-weight:500;position:relative;text-decoration:none}
+.chans a:hover{background:var(--hover);color:var(--t1)}
+.chans a.on{background:var(--active);color:var(--t1)}
+.chans a.on::before{content:"";position:absolute;left:-8px;top:7px;width:2px;height:16px;border-radius:1px;background:var(--accent-l)}
+.chans a.on svg{color:var(--accent-l)}
+.chans a svg{color:var(--t3)}
+.chans a.unread{color:var(--t1);font-weight:600}
+.chans a .n{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--t3);font-weight:400}
+.chans .foot{margin-top:auto;display:flex;align-items:center;gap:10px;height:52px;padding:0 8px;border-top:1px solid var(--border-subtle)}
+.chans .foot b{display:block;color:var(--t1);font-weight:600}.chans .foot span{font-size:11px;color:var(--t3)}
+.av{display:inline-grid;place-items:center;font-family:var(--display);font-weight:600;border-radius:6px;flex:none;position:relative;color:var(--accent-l);background:rgba(169,156,255,.22)}
+.av.slate{color:#8A93B8;background:rgba(138,147,184,.22)}.av.teal{color:#6FD3C4;background:rgba(111,211,196,.22)}.av.brass{color:#C9A961;background:rgba(201,169,97,.22)}.av.rose{color:#E08A9A;background:rgba(224,138,154,.22)}
+.av .dot{position:absolute;right:-1px;bottom:-1px;width:7px;height:7px;border-radius:50%;background:var(--offline);box-shadow:0 0 0 2px var(--bg)}
+.av .dot.on{background:var(--ok)}
+
+/* ---------- chat room ---------- */
+.room{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
+.hdr{height:48px;display:flex;align-items:center;gap:8px;padding:0 20px;border-bottom:1px solid var(--border-subtle);flex:none}
+.hdr .back{display:none;width:28px;height:28px;align-items:center;justify-content:center;color:var(--t2);margin-left:-8px}
+.hdr .hash{color:var(--accent-l);font-family:var(--display);font-weight:600;font-size:16px}
+.hdr b{color:var(--t1);font-weight:600;font-size:15px}
+.hdr .topic{color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.hdr .acts{margin-left:auto;display:flex;gap:2px}
+.hdr .acts button{width:28px;height:28px;border-radius:4px;display:grid;place-items:center;color:var(--t3)}
+.hdr .acts button:hover{background:var(--hover);color:var(--t1)}
+.hdr .dm{display:flex;align-items:center;gap:8px;min-width:0}
+.hdr .dm .av{width:24px;height:24px;border-radius:4px;font-size:10px}
+.hdr .dm small{color:var(--t3)}
+.log{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px 0 8px;display:flex;flex-direction:column;justify-content:flex-end}
+.log-inner{display:flex;flex-direction:column;min-height:min-content}
+.divider{display:flex;align-items:center;gap:12px;padding:8px 20px;font-family:var(--mono);font-size:11px;color:var(--t3)}
+.divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--border-subtle)}
+.empty{margin:auto;display:grid;justify-items:center;gap:8px;padding:40px 20px;text-align:center;max-width:36ch}
+.empty .ico{width:40px;height:40px;border-radius:6px;background:var(--elev);border:1px solid var(--border-subtle);display:grid;place-items:center;color:var(--t3)}
+.empty b{color:var(--t1);font-weight:600;font-size:15px}
+.empty p{margin:0;color:var(--t3)}
+
+/* rows and groups */
+.row{display:grid;grid-template-columns:36px 1fr;gap:12px;padding:1px 20px;position:relative;min-width:0}
+.row.g-first{margin-top:12px}
+.row .av{width:36px;height:36px;font-size:14px;align-self:start}
+.row.g-cont .av{visibility:hidden;height:0}
+.row .gutter{position:absolute;left:20px;top:7px;width:36px;text-align:center;font-family:var(--mono);font-size:10px;color:var(--t3);opacity:0;transition:opacity var(--d-hover) var(--ease)}
+.row.g-cont:hover .gutter,.row.g-cont:focus-within .gutter{opacity:1}
+.row .body{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+.meta{display:flex;align-items:baseline;gap:8px;height:20px;margin-bottom:2px}
+.meta b{color:var(--t1);font-weight:600;font-size:13px}
+.meta b.owner{color:var(--brass)}
+.meta time{font-family:var(--mono);font-size:11px;color:var(--t3)}
+.meta .badge{font-size:10px;line-height:14px;font-weight:600;letter-spacing:.02em;padding:0 5px;border-radius:2px;border:1px solid var(--border);color:var(--t3)}
+.meta .badge.brass{color:var(--brass);background:rgba(201,169,97,.12);border-color:rgba(201,169,97,.3)}
+
+/* the bubble */
+.bubble{position:relative;max-width:72%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--t1);font-size:14px;line-height:22px;overflow-wrap:anywhere;transition:border-color var(--d-hover) var(--ease),background-color var(--d-hover) var(--ease)}
+.row.mine .bubble{background:var(--active);border-color:var(--mine-border)}
+.row:hover .bubble{border-color:var(--border-strong)}
+.row.mine:hover .bubble{border-color:rgba(169,156,255,.4)}
+/* grouping: the corners that face a sibling tighten from 8 to 3 */
+.row.g-first.g-more .bubble{border-bottom-left-radius:3px}
+.row.g-mid .bubble{border-top-left-radius:3px;border-bottom-left-radius:3px}
+.row.g-last.g-cont .bubble{border-top-left-radius:3px}
+.bubble p{margin:0}
+.bubble .edited{font-family:var(--mono);font-size:10px;color:var(--t3);margin-left:6px}
+.bubble.deleted{background:transparent;border-style:dashed;border-color:var(--border-subtle);color:var(--t3);font-style:italic;font-size:13px}
+.bubble .mention{background:var(--accent-tint);color:var(--accent-l);border-radius:2px;padding:0 4px;font-weight:500}
+.bubble .quote{display:grid;gap:0;padding:2px 0 4px 10px;margin:0 0 6px;border-left:2px solid var(--accent-l);border-radius:1px}
+.bubble .quote .who{font-family:var(--mono);font-size:11px;color:var(--t3)}
+.bubble .quote .who b{color:var(--t2);font-family:var(--ui);font-weight:500;font-size:12px}
+.bubble .quote .what{font-size:12px;line-height:18px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48ch}
+.bubble .attach{display:grid;gap:6px;margin-top:4px}
+.bubble p+.attach{margin-top:8px}
+.bubble .img{display:block;width:260px;max-width:100%;border-radius:6px;border:1px solid var(--border-subtle);overflow:hidden;background:var(--bg)}
+.bubble .img svg{display:block;width:100%;height:auto}
+.bubble .img .cap{display:flex;align-items:center;gap:8px;padding:4px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-top:1px solid var(--border-subtle);background:var(--elev)}
+.bubble .img .cap span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)}
+.bubble .file{display:flex;align-items:center;gap:10px;height:44px;padding:0 10px 0 8px;border:1px solid var(--border-subtle);background:var(--elev);border-radius:6px;min-width:0;max-width:100%;width:280px}
+.bubble .file .ext{width:32px;height:32px;border-radius:4px;background:var(--bg);border:1px solid var(--border);display:grid;place-items:center;font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--t2);flex:none}
+.bubble .file .nm{flex:1;min-width:0;display:grid}
+.bubble .file .nm b{font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t1)}
+.bubble .file .nm span{font-family:var(--mono);font-size:11px;color:var(--t3)}
+.bubble .file button{width:28px;height:28px;border-radius:4px;display:grid;place-items:center;color:var(--t3)}
+.bubble .file button:hover{background:var(--hover);color:var(--t1)}
+
+/* arrival motion */
+.row.enter-mine .bubble{animation:pop var(--d-enter) var(--ease) both}
+.row.enter-other .bubble{animation:slide var(--d-enter) var(--ease) both}
+.row.arrived .bubble{animation:arrive var(--d-highlight) var(--ease) var(--d-enter) both}
+.row.enter-other.arrived .bubble{animation:slide var(--d-enter) var(--ease) both,arrive var(--d-highlight) var(--ease) var(--d-enter) both}
+@keyframes pop{from{opacity:0;transform:translateY(4px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes slide{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+@keyframes arrive{0%{border-color:rgba(169,156,255,.55);background-color:#181826}40%{border-color:rgba(169,156,255,.55);background-color:#181826}100%{border-color:var(--border);background-color:var(--surface)}}
+@media (prefers-reduced-motion:reduce){
+  .row.enter-mine .bubble,.row.enter-other .bubble,.row.enter-other.arrived .bubble{animation:fade 80ms linear both}
+  .row.arrived .bubble{animation:fade 80ms linear both,arrivestill var(--d-highlight) step-end both}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  @keyframes arrivestill{from{border-color:rgba(169,156,255,.55)}to{border-color:var(--border)}}
+}
+:root.reduce .row.enter-mine .bubble,:root.reduce .row.enter-other .bubble,:root.reduce .row.enter-other.arrived .bubble{animation:fade 80ms linear both}
+:root.reduce .row.arrived .bubble{animation:fade 80ms linear both,arrivestill var(--d-highlight) step-end both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes arrivestill{from{border-color:rgba(169,156,255,.55)}to{border-color:var(--border)}}
+
+/* under the bubble: reactions and threads */
+.reacts{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.reacts button{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 7px;border-radius:4px;background:var(--elev);border:1px solid var(--border);font-size:12px;color:var(--t1);transition:background var(--d-hover) var(--ease),border-color var(--d-hover) var(--ease)}
+.reacts button .n{font-family:var(--mono);font-size:11px;color:var(--t2)}
+.reacts button:hover{background:var(--hover);border-color:var(--border-strong)}
+.reacts button.me{background:var(--accent-tint);border-color:rgba(102,86,240,.3)}
+.reacts button.add{color:var(--t3);padding:0 6px}
+.thread{display:inline-flex;align-items:center;gap:8px;margin-top:4px;height:24px;padding:0 8px 0 6px;border-radius:4px;color:var(--t2);font-size:12px}
+.thread:hover{background:var(--hover);color:var(--t1)}
+.thread .avs{display:flex}
+.thread .avs .av{width:16px;height:16px;border-radius:3px;font-size:7px;margin-right:-3px;box-shadow:0 0 0 1px var(--bg)}
+.thread b{color:var(--accent-l);font-weight:500}
+.thread .last{font-family:var(--mono);font-size:11px;color:var(--t3)}
+
+/* hover actions */
+.actions{position:absolute;right:20px;top:-10px;display:flex;gap:1px;padding:2px;background:var(--overlay);border:1px solid var(--border);border-top-color:var(--border-strong);border-radius:4px;box-shadow:0 12px 32px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity var(--d-hover) var(--ease);z-index:2}
+.row.g-first .actions{top:12px}
+.row:hover .actions,.row:focus-within .actions{opacity:1;pointer-events:auto}
+.actions button{width:24px;height:24px;display:grid;place-items:center;border-radius:2px;color:var(--t2)}
+.actions button:hover{background:var(--hover);color:var(--t1)}
+
+/* typing + composer */
+.typing{height:20px;display:flex;align-items:center;gap:8px;padding:0 20px;font-size:12px;color:var(--t3);visibility:hidden}
+.typing.on{visibility:visible}
+.typing .dots{display:inline-flex;gap:3px}
+.typing .dots i{width:4px;height:4px;border-radius:50%;background:var(--t2);animation:lfg-typing 1.2s var(--ease) infinite}
+.typing .dots i:nth-child(2){animation-delay:.15s}.typing .dots i:nth-child(3){animation-delay:.3s}
+@keyframes lfg-typing{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:.9;transform:translateY(-2px)}}
+@media (prefers-reduced-motion:reduce){.typing .dots i{animation:none;opacity:.6}}
+:root.reduce .typing .dots i{animation:none;opacity:.6}
+.composer{margin:4px 20px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;transition:border-color var(--d-hover) var(--ease);flex:none}
+.composer:focus-within{border-color:var(--accent-l)}
+.composer .replying{display:flex;align-items:center;gap:8px;height:28px;padding:0 10px 0 12px;border-bottom:1px solid var(--border-subtle);font-size:12px;color:var(--t3);border-left:2px solid var(--accent-l);border-top-left-radius:6px}
+.composer .replying b{color:var(--t2);font-weight:500}
+.composer .replying span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.composer .replying button{width:22px;height:22px;border-radius:2px;display:grid;place-items:center;color:var(--t3)}
+.composer .replying button:hover{background:var(--hover);color:var(--t1)}
+.composer .line{display:flex;align-items:flex-end;gap:4px;padding:6px 6px 6px 12px;min-height:44px}
+.composer textarea{all:unset;flex:1;min-width:0;color:var(--t1);font:14px/22px var(--ui);max-height:220px;padding:5px 0;resize:none;overflow:auto}
+.composer textarea::placeholder{color:var(--t3)}
+.composer .ico{width:28px;height:28px;border-radius:4px;display:grid;place-items:center;color:var(--t3);flex:none;margin-bottom:2px}
+.composer .ico:hover{background:var(--hover);color:var(--t1)}
+.composer .send{color:var(--t3)}
+.composer .send.ready{color:var(--accent-l)}
+.hint{padding:0 20px 10px;margin-top:-6px;font-family:var(--mono);font-size:11px;color:var(--t3)}
+
+/* right panel */
+.rpanel{width:288px;flex:none;border-left:1px solid var(--border);padding:16px;display:grid;gap:20px;align-content:start;overflow:auto}
+.rpanel .s{display:grid;gap:8px}
+.rpanel .s b{color:var(--t1);font-weight:600}
+.rpanel .s p{margin:0;color:var(--t3);font-size:12px}
+.rpanel .mem{display:flex;align-items:center;gap:8px;height:28px}
+.rpanel .mem .av{width:24px;height:24px;border-radius:4px;font-size:10px}
+.rpanel .mem span{color:var(--t1)}
+.rpanel .mem.off span{color:var(--t2)}
+.rpanel .mem small{color:var(--t3);font-size:11px;margin-left:auto}
+.rpanel .act{display:flex;gap:8px;align-items:center;font-size:13px}
+.rpanel .act i{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.rpanel .act i.off{background:var(--offline)}
+.rpanel .act small{color:var(--t3);font-size:11px}
+.rpanel .act a{margin-left:auto;font-size:12px}
+.rpanel .profile{display:grid;gap:8px;justify-items:start}
+.rpanel .profile .av{width:64px;height:64px;border-radius:10px;font-size:26px}
+.rpanel .profile b{font-family:var(--display);font-size:18px;color:var(--t1)}
+.rpanel .profile span{font-family:var(--mono);font-size:12px;color:var(--t3)}
+
+/* mobile tab bar */
+.tabbar{display:none;height:56px;background:var(--sidebar);border-top:1px solid var(--border-subtle);grid-template-columns:repeat(5,1fr);flex:none}
+.tabbar a{display:grid;place-items:center;align-content:center;gap:2px;font-size:10px;font-weight:500;color:var(--t3)}
+.tabbar a.on{color:var(--accent-l)}
+
+/* prototype bar */
+.proto{position:fixed;left:0;right:0;bottom:0;height:56px;z-index:30;background:var(--overlay);border-top:1px solid var(--border-strong);display:flex;align-items:center;gap:8px;padding:0 16px;font-family:var(--mono);font-size:11px;color:var(--t3);overflow-x:auto}
+.proto .lab{letter-spacing:.12em;text-transform:uppercase;color:var(--brass);margin-right:4px;flex:none}
+.proto .grp{display:flex;gap:2px;padding:2px;border:1px solid var(--border);border-radius:4px;background:var(--elev);flex:none}
+.proto .grp button,.proto>button{height:24px;padding:0 8px;border-radius:2px;color:var(--t2);font-family:var(--mono);font-size:11px;white-space:nowrap}
+.proto>button{border:1px solid var(--border);background:var(--elev)}
+.proto button:hover{color:var(--t1)}
+.proto button.on{color:var(--accent-l);background:var(--active)}
+.proto .sep{width:1px;height:20px;background:var(--border);margin:0 4px;flex:none}
+</style>
+
+<div class="stage" id="stage">
+<div class="frame w1440" id="frame">
+  <nav class="rail" aria-label="Primary">
+    <div class="org">ES</div>
+    <a href="#" aria-label="Dashboard"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16"><rect x="40" y="40" width="72" height="72" rx="8"/><rect x="144" y="40" width="72" height="72" rx="8"/><rect x="40" y="144" width="72" height="72" rx="8"/><rect x="144" y="144" width="72" height="72" rx="8"/></svg></a>
+    <a href="#" class="on" aria-label="Channels" aria-current="page"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round"><path d="M104 32 72 224M184 32l-32 192M40 96h184M32 160h184"/></svg></a>
+    <a href="#" aria-label="Calendar"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16"><rect x="40" y="48" width="176" height="168" rx="8"/><path d="M40 96h176M88 24v48M168 24v48"/></svg></a>
+    <a href="#" aria-label="Members"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round"><circle cx="88" cy="108" r="52"/><path d="M155 57a52 52 0 1 1 5 100M16 197a88 88 0 0 1 144 0M168 157a88 88 0 0 1 72 40"/></svg></a>
+    <div class="me" title="LuwisH">LU<i></i></div>
+  </nav>
+  <aside class="chans" aria-label="Channels">
+    <div class="org"><span class="av slate" style="width:32px;height:32px;font-size:11px;font-variation-settings:'wdth' 112">ES</span><div><b>Esport Esportan aja</b><span>@lfg &middot; <i></i>3 online</span></div></div>
+    <div class="eyebrow">Channels<span class="n">+</span></div>
+    <div class="eyebrow" style="margin-top:0">Chattingan aja<span class="n">1</span></div>
+    <a href="#" class="on" id="navChan"><svg width="16" height="16" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round"><path d="M104 32 72 224M184 32l-32 192M40 96h184M32 160h184"/></svg>slurpies</a>
+    <a href="#" class="unread"><svg width="16" height="16" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round"><path d="M104 32 72 224M184 32l-32 192M40 96h184M32 160h184"/></svg>announcements<span class="n">2</span></a>
+    <a href="#"><svg width="16" height="16" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M80 168H32V88h48l72-56v192Z"/><path d="M192 104a32 32 0 0 1 0 48"/></svg>Voice &middot; Slurpies<span class="n">2</span></a>
+    <div class="eyebrow">Direct messages<span class="n">+</span></div>
+    <a href="#" id="navDm"><span class="av slate" style="width:20px;height:20px;border-radius:4px;font-size:8px">AD<span class="dot on" style="width:6px;height:6px;box-shadow:0 0 0 2px var(--sidebar)"></span></span>Adit</a>
+    <a href="#"><span class="av teal" style="width:20px;height:20px;border-radius:4px;font-size:8px">RM<span class="dot" style="width:6px;height:6px;box-shadow:0 0 0 2px var(--sidebar)"></span></span>Rama</a>
+    <div class="foot"><span class="av brass" style="width:28px;height:28px;font-size:11px">LU<span class="dot on" style="box-shadow:0 0 0 2px var(--sidebar)"></span></span><div><b>LuwisH</b><span>Owner</span></div></div>
+  </aside>
+
+  <main class="room" aria-label="Chat room">
+    <header class="hdr" id="hdr"></header>
+    <div class="log" id="log" role="log" aria-live="polite" aria-relevant="additions"><div class="log-inner" id="logInner"></div></div>
+    <div class="typing" id="typing"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="typingText">Rama is typing</span></div>
+    <div class="composer" id="composer">
+      <div class="replying" id="replying" hidden><b>Replying to Adit</b><span>&ldquo;jam 8 ya?&rdquo;</span><button id="replyClear" aria-label="Stop replying">&#x2715;</button></div>
+      <div class="line">
+        <textarea id="input" rows="1" placeholder="Message #slurpies" aria-label="Message"></textarea>
+        <button class="ico" aria-label="Add emoji"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16"><circle cx="128" cy="128" r="96"/><circle cx="92" cy="108" r="6" fill="currentColor"/><circle cx="164" cy="108" r="6" fill="currentColor"/><path d="M84 152a56 56 0 0 0 88 0" stroke-linecap="round"/></svg></button>
+        <button class="ico" aria-label="Attach a file"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round"><path d="m208 112-96 96a48 48 0 0 1-68-68l104-104a32 32 0 0 1 45 45L89 185a16 16 0 0 1-23-23l88-88"/></svg></button>
+        <button class="ico send" id="send" aria-label="Send"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M224 128 40 224l24-96-24-96ZM64 128h64"/></svg></button>
+      </div>
+    </div>
+    <div class="hint">Enter to send &middot; Shift+Enter for a new line</div>
+    <nav class="tabbar" aria-label="Mobile navigation"><a href="#">Home</a><a href="#" class="on">Channels</a><a href="#">Messages</a><a href="#">Calendar</a><a href="#">You</a></nav>
+  </main>
+
+  <aside class="rpanel" id="rpanel" aria-label="Context"></aside>
+</div>
+</div>
+
+<div class="proto" role="group" aria-label="Prototype controls">
+  <span class="lab">Prototype</span>
+  <div class="grp" id="vp"><button data-vp="w1440" class="on">1440</button><button data-vp="w1280">1280</button><button data-vp="w412">412</button><button data-vp="w390">390</button></div>
+  <div class="grp" id="ctx"><button data-ctx="channel" class="on">#slurpies</button><button data-ctx="dm">DM &middot; Adit</button></div>
+  <div class="grp" id="preset"><button data-preset="empty">Empty</button><button data-preset="single">Single</button><button data-preset="grouped" class="on">Conversation</button><button data-preset="long">Long</button></div>
+  <span class="sep"></span>
+  <button id="bIncoming">Incoming message</button>
+  <button id="bTyping">Typing</button>
+  <button id="bReply">Reply state</button>
+  <button id="bReduce" aria-pressed="false">Reduced motion</button>
+  <button id="bReset">Reset</button>
+</div>
+<div class="sr" aria-live="polite" id="live"></div>
+
+<script>
+(function(){
+'use strict';
+const $=(s,r)=>(r||document).querySelector(s);
+const root=document.documentElement;
+const reduced=()=>root.classList.contains('reduce')||matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- people ---------- */
+const P={
+  me:{id:'me',name:'LuwisH',ini:'LU',tone:'brass',role:'Owner',on:true},
+  adit:{id:'adit',name:'Adit',ini:'AD',tone:'slate',role:'Admin',on:true},
+  rama:{id:'rama',name:'Rama',ini:'RM',tone:'teal',role:'Admin',on:false},
+  ager:{id:'ager',name:'AGER',ini:'AG',tone:'rose',role:'Member',on:true},
+};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let seq=1;
+function msg(author,time,text,extra){return Object.assign({id:'m'+(seq++),author,time,text},extra||{})}
+
+/* ---------- seeds ---------- */
+const IMAGE=`<svg viewBox="0 0 260 146" aria-label="Map callouts image"><rect width="260" height="146" fill="#0F0F16"/><g stroke="#262633" stroke-width="1"><path d="M0 36h260M0 73h260M0 110h260M52 0v146M104 0v146M156 0v146M208 0v146"/></g><path d="M30 120 L90 70 L140 90 L200 30" fill="none" stroke="#A99CFF" stroke-width="2"/><circle cx="30" cy="120" r="4" fill="#A99CFF"/><circle cx="90" cy="70" r="4" fill="#A99CFF"/><circle cx="140" cy="90" r="4" fill="#A99CFF"/><circle cx="200" cy="30" r="4" fill="#C9A961"/><text x="210" y="26" font-family="Geist Mono, monospace" font-size="9" fill="#C9A961">A SITE</text><text x="12" y="138" font-family="Geist Mono, monospace" font-size="9" fill="#6B6A7E">ASCENT &middot; DEFAULT</text></svg>`;
+
+function seedConversation(){
+  return [
+    {divider:'Today'},
+    msg('adit','14:31','bro scrim jadi?'),
+    msg('adit','14:31','jam 8 ya?'),
+    msg('adit','14:31','jangan lupa recording'),
+    msg('me','14:32','iya jadi bro',{reply:{who:'Adit',time:'14:31',text:'jam 8 ya?'}}),
+    msg('me','14:32','@Rama bisa handle recording? Pakai OBS yang di PC 2',{mentions:['Rama'],reacts:[{e:'\u{1F44D}',n:2,me:true}]}),
+    msg('rama','14:33','siap, nanti gue setup. Callouts buat map pool minggu ini:',{image:{name:'map-callouts.png',size:'412 KB'},reacts:[{e:'\u{1F525}',n:3},{e:'\u{1F440}',n:1}]}),
+    msg('rama','14:34','',{files:[{ext:'PDF',name:'scrim-plan-week-3.pdf',size:'1.2 MB'},{ext:'ZIP',name:'vod-highlights.zip',size:'340 MB'}]}),
+    msg('ager','14:36','Setuju. Tapi kita harus stop default-ing ke A setiap kali pistol round. Kemarin kelihatan banget, mereka udah baca dari round 3 dan stack A terus. Coba kita pakai split B lewat mid dua ronde pertama, terus baru rotate default kalau info-nya jelas. Recording juga penting supaya reviewnya nggak ngandelin ingatan.',{edited:true}),
+    msg('ager','14:37','',{deleted:true}),
+    msg('me','14:38','Noted. Thread buat diskusi map pool di bawah ya',{thread:{n:4,who:['rama','adit'],last:'14:52'}}),
+    msg('adit','14:40','VOD kemarin udah gue upload: https://app.lfghqesports.online/vods/12',{link:'https://app.lfghqesports.online/vods/12'}),
+  ];
+}
+function seedDm(){
+  return [
+    {divider:'Today'},
+    msg('adit','13:02','bro, roster page-nya udah bisa dilihat?'),
+    msg('me','13:05','udah, cek link ini https://app.lfghqesports.online/teams/main',{link:'https://app.lfghqesports.online/teams/main'}),
+    msg('adit','13:06','mantap'),
+    msg('adit','13:06','posisi Rama masih kosong'),
+    msg('me','13:10','iya nanti sore gue isi',{reply:{who:'Adit',time:'13:06',text:'posisi Rama masih kosong'},reacts:[{e:'\u{1F44C}',n:1}]}),
+    msg('adit','13:11','',{files:[{ext:'PDF',name:'contract-rama-draft.pdf',size:'88 KB'}]}),
+  ];
+}
+function seedLong(){
+  const base=seedConversation();
+  const lines=['gg','next map?','satu lagi','kita coba split B','ok','recording jalan?','jalan','rotate lebih cepat','info dulu baru rotate','oke noted','break 5 menit','lanjut','siap','ada yang lag?','aman','gue rekam dari awal','mantap'];
+  const who=['adit','rama','me','ager','adit','adit','me','rama'];
+  const out=[{divider:'Yesterday'}];
+  for(let i=0;i<34;i++){const h=19+Math.floor(i/12);const m=String((i*5)%60).padStart(2,'0');out.push(msg(who[i%who.length],`${h}:${m}`,lines[i%lines.length]))}
+  return out.concat(base);
+}
+
+/* ---------- state ---------- */
+const state={ctx:'channel',preset:'grouped',items:[],typing:false,replying:false};
+function load(){
+  if(state.preset==='empty')state.items=[];
+  else if(state.preset==='single')state.items=[{divider:'Today'},msg('adit','14:31','bro scrim jadi?')];
+  else if(state.preset==='long')state.items=seedLong();
+  else state.items=state.ctx==='dm'?seedDm():seedConversation();
+}
+
+/* ---------- render ---------- */
+function person(id){return P[id]}
+function avatar(p,size,cls){return `<span class="av ${p.tone} ${cls||''}" style="width:${size}px;height:${size}px;font-size:${Math.round(size*.39)}px" aria-hidden="true">${p.ini}${size>=24?`<span class="dot ${p.on?'on':''}"></span>`:''}</span>`}
+
+function bodyHtml(m){
+  if(m.deleted)return `<div class="bubble deleted">This message was deleted.</div>`;
+  let text=esc(m.text);
+  if(m.mentions)for(const n of m.mentions)text=text.replace('@'+n,`<span class="mention">@${n}</span>`);
+  if(m.link)text=text.replace(esc(m.link),`<a href="#" onclick="return false">${esc(m.link)}</a>`);
+  const quote=m.reply?`<div class="quote"><span class="who"><b>${esc(m.reply.who)}</b> &middot; ${m.reply.time}</span><span class="what">${esc(m.reply.text)}</span></div>`:'';
+  const para=text?`<p>${text}${m.edited?'<span class="edited">(edited)</span>':''}</p>`:'';
+  let attach='';
+  if(m.image)attach+=`<a class="img" href="#" onclick="return false" aria-label="${esc(m.image.name)}, image">${IMAGE}<span class="cap"><span>${esc(m.image.name)}</span>${m.image.size}</span></a>`;
+  if(m.files)attach+=m.files.map(f=>`<div class="file"><span class="ext">${f.ext}</span><span class="nm"><b>${esc(f.name)}</b><span>${f.size}</span></span><button aria-label="Download ${esc(f.name)}"><svg width="16" height="16" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M128 32v128M80 112l48 48 48-48M40 184v32h176v-32"/></svg></button></div>`).join('');
+  if(attach)attach=`<div class="attach">${attach}</div>`;
+  return `<div class="bubble">${quote}${para}${attach}</div>`;
+}
+function underHtml(m){
+  let out='';
+  if(m.reacts){out+=`<div class="reacts" aria-label="Reactions">${m.reacts.map(r=>`<button class="${r.me?'me':''}" aria-pressed="${!!r.me}" aria-label="${r.n} ${r.e}">${r.e}<span class="n">${r.n}</span></button>`).join('')}<button class="add" aria-label="Add a reaction">+</button></div>`}
+  if(m.thread){out+=`<button class="thread"><span class="avs">${m.thread.who.map(w=>avatar(person(w),16)).join('')}</span><b>${m.thread.n} replies</b><span class="last">last ${m.thread.last}</span><svg width="12" height="12" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"><path d="m96 48 80 80-80 80"/></svg></button>`}
+  return out;
+}
+function actionsHtml(m){
+  if(m.deleted)return '';
+  return `<div class="actions" role="toolbar" aria-label="Message actions"><button aria-label="Add reaction">&#x263A;</button><button aria-label="Reply">&#x21A9;</button><button aria-label="Open thread">&#x2637;</button>${m.author==='me'?'<button aria-label="Edit">&#x270E;</button>':''}<button aria-label="More">&#x2026;</button></div>`;
+}
+function rowHtml(m,pos,enter){
+  const p=person(m.author);const mine=m.author==='me';
+  const cls=['row',mine?'mine':'',pos.first?'g-first':'g-cont',pos.last?'g-last':'',pos.first&&!pos.last?'g-more':'',!pos.first&&!pos.last?'g-mid':'',enter||''].filter(Boolean).join(' ');
+  const head=pos.first?`<div class="meta"><b class="${p.role==='Owner'?'owner':''}">${p.name}</b>${p.role==='Owner'?'<span class="badge brass">Owner</span>':''}<time>${m.time}</time></div>`:'';
+  return `<article class="${cls}" data-id="${m.id}" tabindex="0" aria-label="${p.name}, ${m.time}${m.deleted?', deleted message':''}">${pos.first?avatar(p,36):'<span class="av" aria-hidden="true"></span><span class="gutter">'+m.time+'</span>'}<div class="body">${head}${bodyHtml(m)}${underHtml(m)}</div>${actionsHtml(m)}</article>`;
+}
+function positions(items){
+  // consecutive messages from one person, within five minutes, are a group
+  const out=[];
+  for(let i=0;i<items.length;i++){
+    const m=items[i];if(m.divider){out.push(null);continue}
+    const prev=items[i-1],next=items[i+1];
+    const same=(a,b)=>a&&b&&!a.divider&&!b.divider&&a.author===b.author&&mins(b.time)-mins(a.time)<=5;
+    out.push({first:!same(prev,m),last:!same(m,next)});
+  }
+  return out;
+}
+const mins=t=>{const[h,m]=t.split(':').map(Number);return h*60+m};
+
+function render(enterId,enterKind){
+  const inner=$('#logInner');
+  if(state.items.length===0){
+    inner.innerHTML=state.ctx==='dm'
+      ?`<div class="empty">${avatar(P.adit,48)}<b>Adit</b><p>This is the start of your conversation. Nothing here leaves the two of you.</p></div>`
+      :`<div class="empty"><div class="ico"><svg width="20" height="20" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round"><path d="M104 32 72 224M184 32l-32 192M40 96h184M32 160h184"/></svg></div><b>This is the start of #slurpies</b><p>Scrims, VODs and everything the team says to each other. Say something.</p></div>`;
+    return;
+  }
+  const pos=positions(state.items);
+  inner.innerHTML=state.items.map((m,i)=>m.divider?`<div class="divider" role="separator">${m.divider}</div>`:rowHtml(m,pos[i],m.id===enterId?enterKind:'')).join('');
+  const log=$('#log');log.scrollTop=log.scrollHeight;
+}
+function renderHeader(){
+  const h=$('#hdr');
+  const back=`<button class="back" aria-label="Back"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"><path d="m160 48-80 80 80 80"/></svg></button>`;
+  const acts=`<div class="acts"><button aria-label="Search"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round"><circle cx="116" cy="116" r="76"/><path d="m176 176 52 52"/></svg></button><button class="desk" aria-label="Pinned"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="m56 200 48-48M136 32l88 88-32 8-32 32 8 40-48-48-8-40-32-32Z"/></svg></button><button aria-label="Details"><svg width="18" height="18" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="20" stroke-linecap="round"><path d="m96 48 80 80-80 80"/></svg></button></div>`;
+  if(state.ctx==='dm'){h.innerHTML=`${back}<div class="dm">${avatar(P.adit,24)}<b>Adit</b><small>&middot; Admin &middot; Online</small></div>${acts}`;$('#input').placeholder='Message Adit'}
+  else{h.innerHTML=`${back}<span class="hash">#</span><b>slurpies</b><span class="topic desk">&middot; Scrim coordination and VOD review</span>${acts}`;$('#input').placeholder='Message #slurpies'}
+}
+function renderPanel(){
+  const r=$('#rpanel');
+  if(state.ctx==='dm'){
+    r.innerHTML=`<div class="profile">${avatar(P.adit,64)}<b>Adit</b><span>Admin &middot; Asia/Jakarta &middot; 14:41 local</span></div>
+      <div class="s"><span class="eyebrow">Shared files</span><p>2 files in this conversation.</p></div>
+      <div class="s"><span class="eyebrow">Notifications</span><p>All messages.</p></div>`;
+    return;
+  }
+  const mem=(p)=>`<div class="mem ${p.on?'':'off'}">${avatar(p,24)}<span>${p.name}</span><small>${p.role}</small></div>`;
+  r.innerHTML=`<div class="s"><span class="eyebrow">Channel</span><b># slurpies</b><p>Scrim coordination and VOD review.</p></div>
+    <div class="s"><span class="eyebrow">Pinned &middot; 1</span><p>Rama &middot; scrim-plan-week-3.pdf</p></div>
+    <div class="s"><span class="eyebrow">Members &middot; 4</span>${mem(P.me)}${mem(P.adit)}${mem(P.ager)}${mem(P.rama)}</div>
+    <div class="s"><span class="eyebrow">Activity</span><div class="act"><i></i>Voice<small>2 connected</small><a href="#" onclick="return false">Join</a></div><div class="act"><i class="off"></i>Streaming<small>No active stream</small></div></div>`;
+}
+
+/* ---------- actions ---------- */
+const liveEl=$('#live');
+function announce(t){liveEl.textContent='';setTimeout(()=>{liveEl.textContent=t},40)}
+function nowClock(){const d=new Date();return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}
+function send(){
+  const ta=$('#input');const text=ta.value.trim();if(!text)return;
+  const m=msg('me',nowClock(),text,state.replying?{reply:{who:'Adit',time:'14:31',text:'jam 8 ya?'}}:null);
+  if(state.items.length===0)state.items.push({divider:'Today'});
+  state.items.push(m);ta.value='';ta.style.height='';setReply(false);updateSend();
+  render(m.id,'enter-mine');
+  setTimeout(()=>{const el=$(`[data-id="${m.id}"]`);el&&el.classList.remove('enter-mine')},400);
+}
+let incomingIdx=0;
+const INCOMING=[['rama','recording jalan, gue rekam dari lobby'],['adit','oke gas jam 8'],['ager','gue telat 10 menit, mulai duluan'],['rama','PC 2 udah nyala']];
+function incoming(){
+  const [who,text]=INCOMING[incomingIdx++%INCOMING.length];
+  const m=msg(who,nowClock(),text);
+  if(state.items.length===0)state.items.push({divider:'Today'});
+  state.items.push(m);
+  render(m.id,'enter-other arrived');
+  announce(`${person(who).name}: ${text}`);
+  setTimeout(()=>{const el=$(`[data-id="${m.id}"]`);el&&el.classList.remove('enter-other','arrived')},1000);
+}
+function setReply(on){state.replying=on;$('#replying').hidden=!on;$('#bReply').classList.toggle('on',on)}
+function updateSend(){$('#send').classList.toggle('ready',$('#input').value.trim().length>0)}
+
+/* ---------- wiring ---------- */
+$('#input').addEventListener('input',e=>{const t=e.target;t.style.height='';t.style.height=Math.min(220,t.scrollHeight)+'px';updateSend()});
+$('#input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}if(e.key==='Escape'&&state.replying){setReply(false)}});
+$('#send').addEventListener('click',send);
+$('#replyClear').addEventListener('click',()=>setReply(false));
+document.addEventListener('click',e=>{const b=e.target.closest('.actions button');if(!b)return;if(b.getAttribute('aria-label')==='Reply'){setReply(true);$('#input').focus()}});
+$('#log').addEventListener('keydown',e=>{if(e.key==='r'&&e.target.classList.contains('row')){setReply(true);$('#input').focus()}});
+$('#vp').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('#vp .on').classList.remove('on');b.classList.add('on');const f=$('#frame');f.className='frame '+b.dataset.vp+(b.dataset.vp==='w412'||b.dataset.vp==='w390'?' mobile':'');fit()});
+$('#ctx').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('#ctx .on').classList.remove('on');b.classList.add('on');state.ctx=b.dataset.ctx;$('#navChan').classList.toggle('on',state.ctx==='channel');$('#navDm').classList.toggle('on',state.ctx==='dm');load();renderHeader();renderPanel();render()});
+$('#preset').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('#preset .on').classList.remove('on');b.classList.add('on');state.preset=b.dataset.preset;load();render()});
+$('#bIncoming').addEventListener('click',incoming);
+$('#bTyping').addEventListener('click',function(){state.typing=!state.typing;$('#typing').classList.toggle('on',state.typing);this.classList.toggle('on',state.typing)});
+$('#bReply').addEventListener('click',()=>{setReply(!state.replying);$('#input').focus()});
+$('#bReduce').addEventListener('click',function(){const on=!root.classList.contains('reduce');root.classList.toggle('reduce',on);this.setAttribute('aria-pressed',String(on));this.classList.toggle('on',on)});
+$('#bReset').addEventListener('click',()=>{seq=1;incomingIdx=0;state.preset='grouped';$('#preset .on').classList.remove('on');$('#preset [data-preset=grouped]').classList.add('on');load();setReply(false);state.typing=false;$('#typing').classList.remove('on');$('#bTyping').classList.remove('on');render()});
+
+function fit(){const f=$('#frame');const w=f.offsetWidth,h=f.offsetHeight;const s=Math.min(1,(innerWidth-32)/w,(innerHeight-56-32)/h);f.style.transform=`scale(${s})`;f.style.margin=s<1?`${(h*s-h)/2}px ${(w*s-w)/2}px`:'0'}
+addEventListener('resize',fit);
+
+load();renderHeader();renderPanel();render();fit();
+})();
+</script>

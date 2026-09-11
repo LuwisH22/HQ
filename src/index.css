@@ -65,6 +65,12 @@
   --color-brass: var(--brass);
   --color-live: var(--live);
 
+  /* The prose-container radius, added by the chat bubble audit: 6 reads as a
+     control and 10 as a dialog around a single line of text, so a paragraph
+     wrapper sits between them. The one radius off Blackout's scale, recorded
+     here as a token rather than left as an exception in a component. */
+  --radius-bubble: 8px;
+
   /* Blackout's radii: 2 / 4 / 6 / 10 / 16. Buttons, inputs and rows are r-2;
      cards and popovers r-3; dialogs r-4; bottom sheets r-5. */
   --radius-xs: 2px;
@@ -149,6 +155,10 @@
   --primary: #6656f0;
   --primary-foreground: #ffffff;
   --accent-text: #a99cff;
+  /* The edge of your own message. Quieter than a badge border (30%) on
+     purpose: ownership is a tint you notice once, not a highlight. Named by
+     the chat bubble audit so the value lives here rather than in a class. */
+  --mine-border: rgb(102 86 240 / 0.25);
   --accent-glow: #cfc8ff;
   --accent-deep: #5343d1;
 
@@ -460,5 +470,215 @@
   30% {
     opacity: 0.9;
     transform: translateY(-2px);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The chat bubble.
+   From `docs/design/CHAT-BUBBLE-AUDIT.md`, whose prototype is
+   `docs/design/prototypes/chat.html`.
+
+   A bubble is the L1 card the dashboard and the calendar panel already use —
+   `surface` on `canvas` with a hairline — applied to a paragraph instead of a
+   control, which is the whole of why it gets its own radius. Your own message
+   is one step sideways rather than one step up: `surface/active` with the
+   accent at 25% on the edge, the same "mine" signal as a selected nav row or
+   your own reaction. The accent never fills the shape.
+
+   Everyone stays in one left column. Ownership is the tint, not the side.
+--------------------------------------------------------------------------- */
+@layer components {
+  .chat-bubble {
+    position: relative;
+    max-width: 84%;
+    border-radius: var(--radius-bubble);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 6px 10px;
+    color: var(--foreground);
+    /* The bubble's own type, so anything placed in it reads as prose without
+       having to say so. The body paragraph sets the same 14/22; the deleted
+       line and the quote deliberately step down from it. */
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    /* Anywhere rather than break-word: a pasted URL with no spaces in it is
+       the one thing that can widen a column past the screen. */
+    overflow-wrap: anywhere;
+    transition:
+      border-color 120ms var(--ease-standard),
+      background-color 120ms var(--ease-standard);
+  }
+  @media (width >= 40rem) {
+    .chat-bubble {
+      max-width: 72%;
+    }
+  }
+  .chat-bubble-own {
+    border-color: var(--mine-border);
+    background: var(--surface-active);
+  }
+  /* The hover step belongs to the row, so a pointer anywhere on the band
+     lifts the edge — the same band that already tints on hover. */
+  .group:hover .chat-bubble {
+    border-color: var(--border-strong);
+  }
+  .group:hover .chat-bubble-own {
+    border-color: rgb(169 156 255 / 0.4);
+  }
+
+  /* Grouping: the corners that face a sibling tighten from 8 to 3. Bubbles
+     keep their own edges — nothing is merged into one card, and the first /
+     middle / last distinction reads only when you look for it. */
+  .chat-bubble-above {
+    border-top-left-radius: 3px;
+  }
+  .chat-bubble-below {
+    border-bottom-left-radius: 3px;
+  }
+
+  /* A deleted message is an outline where words were: no fill, a dashed edge,
+     and the sentence in italic. The row survives so replies stay reachable. */
+  .chat-bubble-deleted {
+    border-style: dashed;
+    border-color: var(--border-subtle);
+    background: transparent;
+    color: var(--muted-foreground);
+  }
+  .group:hover .chat-bubble-deleted {
+    border-color: var(--border-subtle);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Message motion.
+
+   The entrance animates the BUBBLE and nothing else, so the avatar and the
+   author line do not move and neither do the messages around it. Transforms
+   stay inside the audit's envelope — 4px vertical, 6px horizontal, 3% scale —
+   and no easing overshoots. Classes are taken off on `animationend`, so a
+   settled message carries no transform at all.
+
+   The arrival tint is the one thing longer than Blackout's 80-220ms band: it
+   is a notification rather than a response to a click, and it runs once.
+--------------------------------------------------------------------------- */
+@layer utilities {
+  /* Your own message: a settle, not a pop-out. */
+  .chat-enter-own {
+    animation: chat-enter-own 160ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+  /* Somebody else's: it comes in from the column's edge. */
+  .chat-enter-incoming {
+    animation: chat-enter-incoming 160ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+  /* Held for 40% of its 600ms, then eased back. Never a loop, and it waits
+     for the entrance rather than fighting it. */
+  .chat-arrived {
+    animation: chat-arrive 600ms cubic-bezier(0.2, 0, 0, 1) 160ms both;
+  }
+  .chat-enter-incoming.chat-arrived {
+    animation:
+      chat-enter-incoming 160ms cubic-bezier(0.2, 0, 0, 1) both,
+      chat-arrive 600ms cubic-bezier(0.2, 0, 0, 1) 160ms both;
+  }
+}
+@keyframes chat-enter-own {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes chat-enter-incoming {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes chat-arrive {
+  0%,
+  40% {
+    border-color: rgb(169 156 255 / 0.55);
+    background-color: #181826;
+  }
+  100% {
+    border-color: var(--border);
+    background-color: var(--surface);
+  }
+}
+/* Your own bubble returns to its own tint rather than to `surface`. */
+@keyframes chat-arrive-own {
+  0%,
+  40% {
+    border-color: rgb(169 156 255 / 0.55);
+    background-color: #181826;
+  }
+  100% {
+    border-color: var(--mine-border);
+    background-color: var(--surface-active);
+  }
+}
+@layer utilities {
+  .chat-bubble-own.chat-arrived {
+    animation: chat-arrive-own 600ms cubic-bezier(0.2, 0, 0, 1) 160ms both;
+  }
+}
+
+/* Reduced motion: the entrance is an opacity fade with no transform at all,
+   and the arrival tint is a still tint that steps back rather than easing.
+   Nothing else changes — grouping, tints and state are identical. */
+@media (prefers-reduced-motion: reduce) {
+  .chat-enter-own,
+  .chat-enter-incoming,
+  .chat-enter-incoming.chat-arrived {
+    animation: chat-fade-in 80ms linear both;
+  }
+  .chat-arrived,
+  .chat-bubble-own.chat-arrived {
+    animation:
+      chat-fade-in 80ms linear both,
+      chat-arrive-still 600ms step-end both;
+  }
+  .chat-bubble {
+    transition-duration: 0ms;
+  }
+}
+@keyframes chat-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* Only the hold is declared. At 100% the property is absent from the
+   keyframe, so it falls back to whatever the bubble's own border is — which
+   is `border` for an incoming one and `--mine-border` for your own, without
+   this having to know which it is drawing. */
+@keyframes chat-arrive-still {
+  0%,
+  99.9% {
+    border-color: rgb(169 156 255 / 0.55);
+  }
+}
+
+/* The typing dots. 1.2s, 2px of travel, and under reduced motion they stop
+   moving and sit at 60% rather than disappearing: the line still says somebody
+   is there, it just stops waving. */
+@layer utilities {
+  .chat-typing-dot {
+    animation: lfg-typing 1.2s cubic-bezier(0.2, 0, 0, 1) infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-typing-dot {
+    animation: none;
+    opacity: 0.6;
   }
 }

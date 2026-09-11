@@ -116,7 +116,7 @@ export function MessageReactions({
   if (reactions.length === 0) return null
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1">
+    <div className="mt-1 flex flex-wrap items-center gap-1" aria-label="Reactions">
       {reactions.map((reaction) => (
         <button
           key={reaction.emoji}
@@ -126,11 +126,11 @@ export function MessageReactions({
           aria-label={`${reaction.emoji} ${String(reaction.count)}${reaction.mine ? ', including you' : ''}`}
           onClick={() => onToggle(reaction.emoji, reaction.mine)}
           className={cn(
-            'flex h-6 items-center gap-1.5 rounded-sm border px-1.5 text-xs transition-colors duration-[120ms]',
+            'flex h-[22px] items-center gap-1.5 rounded-sm border px-1.5 text-xs transition-colors duration-[120ms]',
             'disabled:cursor-not-allowed disabled:opacity-60',
             reaction.mine
               ? 'border-primary/30 bg-primary/14 text-foreground'
-              : 'bg-elevated border-border-subtle text-secondary-foreground hover:border-border hover:text-foreground',
+              : 'bg-elevated border-border text-secondary-foreground hover:border-border-strong hover:text-foreground',
           )}
         >
           <span aria-hidden="true">{reaction.emoji}</span>
@@ -139,7 +139,11 @@ export function MessageReactions({
       ))}
 
       {canReact ? (
-        <ReactionPicker onPick={onPick} label="Add a reaction" className="size-6 rounded-sm" />
+        <ReactionPicker
+          onPick={onPick}
+          label="Add a reaction"
+          className="size-[22px] rounded-sm"
+        />
       ) : null}
     </div>
   )

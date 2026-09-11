@@ -41,6 +41,7 @@ import { MessageSearch } from './MessageSearch'
 import { ThreadPanel } from './ThreadPanel'
 import { ChannelPanelColumn, ChannelPanelContent } from './ChannelPanel'
 import { continuesRun, sameDay } from './grouping'
+import { useMessageArrivals } from './message-arrival'
 
 /**
  * One channel's conversation, and the primary surface of the product.
@@ -164,6 +165,11 @@ export function ChannelChatPage() {
   }, [realtime.typingUserIds, membersQuery.data])
 
   const messages = useMemo(() => messagesQuery.data?.messages ?? [], [messagesQuery.data])
+
+  // Which of those have only just turned up. A view-layer reading of the array
+  // the query already produced: the realtime flow is untouched, and the only
+  // thing this decides is whether a bubble animates in.
+  const arrivals = useMessageArrivals(messages, user?.id ?? null)
 
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages])
 
@@ -495,7 +501,18 @@ export function ChannelChatPage() {
               hover background fills — so the row reads as the width of the
               conversation rather than as a card floating in it.
               `justify-end` keeps a short conversation on the composer. */}
-          <div className="flex min-h-full w-full flex-col justify-end py-4">
+          {/* The live region is the log, not the list inside it. A reader
+              is told about messages that are added without the focus moving,
+              and `additions` keeps a refetch of the same fifty from being read
+              out again. Deliberately here rather than on the `ul`: that
+              element is the list, and a role of `log` on it would stop it
+              being one. */}
+          <div
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+            className="flex min-h-full w-full flex-col justify-end py-4"
+          >
             {messagesQuery.isPending ? (
               <div className="px-4 sm:px-5">
                 <CardSkeleton lines={6} />
@@ -520,6 +537,7 @@ export function ChannelChatPage() {
               <ul aria-label="Messages">
                 {messages.map((message, index) => {
                   const previous = messages[index - 1]
+                  const next = messages[index + 1]
                   const isMine = message.authorId === user?.id
 
                   return (
@@ -530,6 +548,12 @@ export function ChannelChatPage() {
                       <MessageRow
                         message={message}
                         grouped={continuesRun(previous, message)}
+                        // The same rule, asked about the message below: the
+                        // corner that faces a sibling is the only thing that
+                        // reads it.
+                        continuesBelow={next !== undefined && continuesRun(message, next)}
+                        arrival={arrivals.arrivalOf(message.id)}
+                        onSettled={() => arrivals.settle(message.id)}
                         reactions={reactionsQuery.data?.get(message.id) ?? []}
                         mentions={mentionsQuery.data?.get(message.id) ?? []}
                         attachments={attachmentsQuery.data?.get(message.id) ?? []}
